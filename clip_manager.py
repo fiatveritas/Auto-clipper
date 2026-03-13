@@ -19,14 +19,36 @@ class ClipManager:
         last_progress = [0]
 
         def progress_hook(d):
-            if d["status"] == "downloading" and progress_callback:
+            if progress_callback and d["status"] == "downloading":
+                pct = None
+
+                # Method 1: total bytes known
                 total = d.get("total_bytes") or d.get("total_bytes_estimate", 0)
                 downloaded = d.get("downloaded_bytes", 0)
                 if total > 0:
                     pct = downloaded / total
-                    if pct - last_progress[0] >= 0.02:
-                        last_progress[0] = pct
-                        progress_callback(pct)
+
+                # Method 2: fragment-based (used with download_ranges)
+                if pct is None:
+                    frag_idx = d.get("fragment_index")
+                    frag_count = d.get("fragment_count")
+                    if frag_idx and frag_count and frag_count > 0:
+                        pct = frag_idx / frag_count
+
+                # Method 3: parse _percent_str from yt-dlp
+                if pct is None:
+                    pct_str = d.get("_percent_str", "").strip().rstrip("%")
+                    try:
+                        pct = float(pct_str) / 100
+                    except (ValueError, TypeError):
+                        pass
+
+                if pct is not None and pct - last_progress[0] >= 0.02:
+                    last_progress[0] = pct
+                    progress_callback(min(pct, 1.0))
+
+            elif progress_callback and d["status"] == "finished":
+                progress_callback(1.0)
 
         ydl_opts = {
             "format": "best[height<=720]/best",
