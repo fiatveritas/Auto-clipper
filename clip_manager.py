@@ -252,6 +252,94 @@ class ClipManager:
             if os.path.exists(thumb_path):
                 os.remove(thumb_path)
 
+    def make_tiktok(self, clip_path, job_id, clip_id, gameplay_region, webcam_region, layout="stacked"):
+        """
+        Convert a clip to TikTok vertical format (1080x1920) by cropping
+        gameplay and webcam regions and compositing them.
+
+        Args:
+            clip_path: Path to the source clip
+            job_id: Job identifier
+            clip_id: Clip identifier
+            gameplay_region: {"x": float, "y": float, "w": float, "h": float} as 0-1 ratios
+            webcam_region: {"x": float, "y": float, "w": float, "h": float} as 0-1 ratios, or None
+            layout: "stacked" (gameplay top, webcam bottom) or "gameplay_only"
+
+        Returns:
+            {"filename": str} or None on failure
+        """
+        if not os.path.exists(clip_path):
+            return None
+
+        # Get source video dimensions
+        probe_cmd = [
+            "ffprobe", "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=width,height",
+            "-of", "csv=p=0",
+            clip_path,
+        ]
+        probe = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=10)
+        if probe.returncode != 0:
+            return None
+        src_w, src_h = [int(x) for x in probe.stdout.strip().split(",")]
+
+        out_w, out_h = 1080, 1920
+        filename = f"{job_id}_{clip_id}_tiktok.mp4"
+        out_path = os.path.join(self.clips_dir, filename)
+
+        # Convert ratio-based regions to pixel coordinates
+        gx = int(gameplay_region["x"] * src_w)
+        gy = int(gameplay_region["y"] * src_h)
+        gw = int(gameplay_region["w"] * src_w)
+        gh = int(gameplay_region["h"] * src_h)
+
+        if webcam_region and layout == "stacked":
+            wx = int(webcam_region["x"] * src_w)
+            wy = int(webcam_region["y"] * src_h)
+            ww = int(webcam_region["w"] * src_w)
+            wh = int(webcam_region["h"] * src_h)
+
+            # Gameplay takes top 70%, webcam takes bottom 30%
+            gameplay_h = int(out_h * 0.70)
+            webcam_h = out_h - gameplay_h
+
+            filter_complex = (
+                f"[0:v]crop={gw}:{gh}:{gx}:{gy},scale={out_w}:{gameplay_h}:force_original_aspect_ratio=decrease,"
+                f"pad={out_w}:{gameplay_h}:(ow-iw)/2:(oh-ih)/2:color=black[top];"
+                f"[0:v]crop={ww}:{wh}:{wx}:{wy},scale={out_w}:{webcam_h}:force_original_aspect_ratio=decrease,"
+                f"pad={out_w}:{webcam_h}:(ow-iw)/2:(oh-ih)/2:color=black[bot];"
+                f"[top][bot]vstack=inputs=2[out]"
+            )
+        else:
+            # Gameplay only - fill the whole vertical frame
+            filter_complex = (
+                f"[0:v]crop={gw}:{gh}:{gx}:{gy},scale={out_w}:{out_h}:force_original_aspect_ratio=decrease,"
+                f"pad={out_w}:{out_h}:(ow-iw)/2:(oh-ih)/2:color=black[out]"
+            )
+
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", clip_path,
+            "-filter_complex", filter_complex,
+            "-map", "[out]",
+            "-map", "0:a?",
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "20",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-movflags", "+faststart",
+            out_path,
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, timeout=300)
+        if result.returncode != 0 or not os.path.exists(out_path):
+            print(f"  [TikTok] ffmpeg error: {result.stderr.decode('utf-8', errors='replace')[-300:]}")
+            return None
+
+        return {"filename": filename}
+
     def cleanup_download(self, video_path):
         """Remove the downloaded VOD file."""
         if video_path and os.path.exists(video_path):

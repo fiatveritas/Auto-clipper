@@ -699,3 +699,139 @@ header h1 {
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }
+
+/* TikTok Button */
+.btn-tiktok {
+    padding: 10px 24px;
+    background: linear-gradient(135deg, #ff0050, #00f2ea);
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.btn-tiktok:hover {
+    opacity: 0.85;
+}
+
+/* TikTok Editor */
+.tiktok-editor {
+    max-width: 900px;
+    padding: 24px;
+}
+
+.tiktok-title {
+    font-size: 1.2rem;
+    margin-bottom: 4px;
+}
+
+.tiktok-subtitle {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-bottom: 16px;
+}
+
+.tiktok-layout-presets {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.preset-btn {
+    padding: 8px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.preset-btn:hover {
+    border-color: var(--accent);
+    color: var(--text);
+}
+
+.preset-btn.active {
+    background: rgba(145, 71, 255, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.tiktok-canvas-wrap {
+    display: inline-block;
+    vertical-align: top;
+    margin-right: 20px;
+}
+
+#tiktok-canvas {
+    width: 100%;
+    max-width: 580px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: crosshair;
+    display: block;
+}
+
+.tiktok-canvas-legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+}
+
+.legend-gameplay {
+    color: #00ff00;
+}
+
+.legend-webcam {
+    color: #00aaff;
+}
+
+.tiktok-preview-wrap {
+    display: inline-block;
+    vertical-align: top;
+    text-align: center;
+}
+
+.tiktok-preview-label {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+#tiktok-preview {
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    background: #000;
+}
+
+.tiktok-footer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+/* Clip card TikTok button */
+.clip-actions .btn-tiktok-sm {
+    background: linear-gradient(135deg, #ff0050, #00f2ea);
+    color: white;
+    border: none;
+    font-weight: 600;
+}
+
+.clip-actions .btn-tiktok-sm:hover {
+    opacity: 0.85;
+}

@@ -407,5 +407,266 @@ function formatTime(seconds) {
 }
 
 document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closePreview();
+    if (e.key === "Escape") {
+        if (!document.getElementById("tiktok-modal").classList.contains("hidden")) {
+            closeTikTok();
+        } else {
+            closePreview();
+        }
+    }
 });
+
+// ===== TikTok Editor =====
+let tiktokFrame = null; // captured video frame as ImageData
+let tiktokDrawing = null; // "gameplay" or "webcam"
+let tiktokDragStart = null;
+let tiktokRegions = { gameplay: null, webcam: null };
+let tiktokCurrentPreset = "cam-top-right";
+
+function openTikTokEditor() {
+    if (!previewClipData) return;
+
+    const video = document.getElementById("preview-video");
+    const canvas = document.getElementById("tiktok-canvas");
+    const ctx = canvas.getContext("2d");
+
+    // Capture current frame from video
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 360;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    tiktokFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    // Default drawing mode
+    tiktokDrawing = "gameplay";
+
+    // Apply default preset
+    setPreset("cam-top-right");
+
+    document.getElementById("tiktok-modal").classList.remove("hidden");
+    document.getElementById("tiktok-status").textContent = "";
+    document.getElementById("tiktok-status").className = "trim-status";
+
+    drawTikTokOverlay();
+}
+
+function closeTikTok() {
+    document.getElementById("tiktok-modal").classList.add("hidden");
+}
+
+function setPreset(name) {
+    tiktokCurrentPreset = name;
+
+    // Update active button
+    document.querySelectorAll(".preset-btn").forEach(b => b.classList.remove("active"));
+    event.target.classList.add("active");
+
+    if (name === "cam-top-right") {
+        tiktokRegions.gameplay = { x: 0, y: 0, w: 1, h: 1 };
+        tiktokRegions.webcam = { x: 0.72, y: 0.02, w: 0.26, h: 0.30 };
+    } else if (name === "cam-top-left") {
+        tiktokRegions.gameplay = { x: 0, y: 0, w: 1, h: 1 };
+        tiktokRegions.webcam = { x: 0.02, y: 0.02, w: 0.26, h: 0.30 };
+    } else if (name === "cam-bottom-left") {
+        tiktokRegions.gameplay = { x: 0, y: 0, w: 1, h: 1 };
+        tiktokRegions.webcam = { x: 0.02, y: 0.68, w: 0.26, h: 0.30 };
+    } else if (name === "no-cam") {
+        tiktokRegions.gameplay = { x: 0, y: 0, w: 1, h: 1 };
+        tiktokRegions.webcam = null;
+    } else if (name === "custom") {
+        tiktokRegions.gameplay = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 };
+        tiktokRegions.webcam = { x: 0.7, y: 0.02, w: 0.28, h: 0.30 };
+    }
+
+    drawTikTokOverlay();
+    drawTikTokPreview();
+}
+
+function drawTikTokOverlay() {
+    const canvas = document.getElementById("tiktok-canvas");
+    const ctx = canvas.getContext("2d");
+
+    // Restore original frame
+    if (tiktokFrame) ctx.putImageData(tiktokFrame, 0, 0);
+
+    const w = canvas.width, h = canvas.height;
+
+    // Draw gameplay region (green)
+    if (tiktokRegions.gameplay) {
+        const r = tiktokRegions.gameplay;
+        ctx.strokeStyle = "#00ff00";
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 4]);
+        ctx.strokeRect(r.x * w, r.y * h, r.w * w, r.h * h);
+        ctx.setLineDash([]);
+        ctx.fillStyle = "rgba(0, 255, 0, 0.1)";
+        ctx.fillRect(r.x * w, r.y * h, r.w * w, r.h * h);
+        ctx.fillStyle = "#00ff00";
+        ctx.font = "bold 14px sans-serif";
+        ctx.fillText("GAMEPLAY", r.x * w + 6, r.y * h + 18);
+    }
+
+    // Draw webcam region (blue)
+    if (tiktokRegions.webcam) {
+        const r = tiktokRegions.webcam;
+        ctx.strokeStyle = "#00aaff";
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 4]);
+        ctx.strokeRect(r.x * w, r.y * h, r.w * w, r.h * h);
+        ctx.setLineDash([]);
+        ctx.fillStyle = "rgba(0, 170, 255, 0.15)";
+        ctx.fillRect(r.x * w, r.y * h, r.w * w, r.h * h);
+        ctx.fillStyle = "#00aaff";
+        ctx.font = "bold 14px sans-serif";
+        ctx.fillText("WEBCAM", r.x * w + 6, r.y * h + 18);
+    }
+}
+
+function drawTikTokPreview() {
+    const srcCanvas = document.getElementById("tiktok-canvas");
+    const preview = document.getElementById("tiktok-preview");
+    const ctx = preview.getContext("2d");
+    const sw = srcCanvas.width, sh = srcCanvas.height;
+
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, 180, 320);
+
+    if (tiktokRegions.webcam) {
+        // Stacked: gameplay 70%, webcam 30%
+        const gpH = 224; // 70% of 320
+        const wcH = 96;  // 30% of 320
+
+        if (tiktokFrame) {
+            // Draw gameplay crop
+            const g = tiktokRegions.gameplay;
+            const tempCanvas = document.createElement("canvas");
+            tempCanvas.width = sw; tempCanvas.height = sh;
+            tempCanvas.getContext("2d").putImageData(tiktokFrame, 0, 0);
+
+            ctx.drawImage(tempCanvas,
+                g.x * sw, g.y * sh, g.w * sw, g.h * sh,
+                0, 0, 180, gpH);
+
+            // Draw webcam crop
+            const w = tiktokRegions.webcam;
+            ctx.drawImage(tempCanvas,
+                w.x * sw, w.y * sh, w.w * sw, w.h * sh,
+                0, gpH, 180, wcH);
+
+            // Divider line
+            ctx.strokeStyle = "#333";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, gpH);
+            ctx.lineTo(180, gpH);
+            ctx.stroke();
+        }
+    } else {
+        // Gameplay only
+        if (tiktokFrame) {
+            const g = tiktokRegions.gameplay;
+            const tempCanvas = document.createElement("canvas");
+            tempCanvas.width = sw; tempCanvas.height = sh;
+            tempCanvas.getContext("2d").putImageData(tiktokFrame, 0, 0);
+
+            ctx.drawImage(tempCanvas,
+                g.x * sw, g.y * sh, g.w * sw, g.h * sh,
+                0, 0, 180, 320);
+        }
+    }
+}
+
+// Canvas mouse interaction for custom drawing
+(function() {
+    let drawing = false;
+    let startX, startY;
+
+    document.addEventListener("DOMContentLoaded", () => {
+        const canvas = document.getElementById("tiktok-canvas");
+
+        canvas.addEventListener("mousedown", (e) => {
+            if (tiktokCurrentPreset !== "custom") return;
+            drawing = true;
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            startX = (e.clientX - rect.left) * scaleX;
+            startY = (e.clientY - rect.top) * scaleY;
+        });
+
+        canvas.addEventListener("mousemove", (e) => {
+            if (!drawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const curX = (e.clientX - rect.left) * scaleX;
+            const curY = (e.clientY - rect.top) * scaleY;
+
+            const x = Math.min(startX, curX) / canvas.width;
+            const y = Math.min(startY, curY) / canvas.height;
+            const w = Math.abs(curX - startX) / canvas.width;
+            const h = Math.abs(curY - startY) / canvas.height;
+
+            tiktokRegions[tiktokDrawing] = { x, y, w, h };
+            drawTikTokOverlay();
+            drawTikTokPreview();
+        });
+
+        canvas.addEventListener("mouseup", () => { drawing = false; });
+
+        canvas.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            tiktokDrawing = tiktokDrawing === "gameplay" ? "webcam" : "gameplay";
+            const status = document.getElementById("tiktok-status");
+            status.textContent = `Now drawing: ${tiktokDrawing}`;
+            status.className = "trim-status";
+        });
+    });
+})();
+
+function exportTikTok() {
+    if (!previewClipData || !currentJobId) return;
+
+    const statusEl = document.getElementById("tiktok-status");
+    const btn = document.getElementById("tiktok-export-btn");
+    statusEl.textContent = "Creating TikTok version...";
+    statusEl.className = "trim-status working";
+    btn.disabled = true;
+
+    const layout = tiktokRegions.webcam ? "stacked" : "gameplay_only";
+
+    fetch(`/api/clips/${currentJobId}/${previewClipData.id}/tiktok`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            gameplay: tiktokRegions.gameplay,
+            webcam: tiktokRegions.webcam,
+            layout: layout,
+        }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        btn.disabled = false;
+        if (data.error) {
+            statusEl.textContent = data.error;
+            statusEl.className = "trim-status error";
+            return;
+        }
+        if (data.success) {
+            statusEl.textContent = "Done! Downloading...";
+            statusEl.className = "trim-status success";
+
+            // Trigger download
+            const a = document.createElement("a");
+            a.href = `/static/clips/${data.filename}`;
+            a.download = data.filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    })
+    .catch(() => {
+        btn.disabled = false;
+        statusEl.textContent = "Failed to create TikTok version";
+        statusEl.className = "trim-status error";
+    });
+}

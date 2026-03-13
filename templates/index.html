@@ -132,6 +132,43 @@
 
                 <div class="modal-actions">
                     <button class="btn-download" onclick="downloadFromModal()">Download Clip</button>
+                    <button class="btn-tiktok" onclick="openTikTokEditor()">Make TikTok</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TikTok Editor Modal -->
+        <div id="tiktok-modal" class="modal hidden" onclick="if(event.target===this)closeTikTok()">
+            <div class="modal-content tiktok-editor">
+                <button class="modal-close" onclick="closeTikTok()">&times;</button>
+                <h3 class="tiktok-title">TikTok Editor</h3>
+                <p class="tiktok-subtitle">Draw boxes on the frame to select gameplay and webcam regions</p>
+
+                <div class="tiktok-layout-presets">
+                    <button class="preset-btn active" onclick="setPreset('cam-top-right')">Cam: Top-Right</button>
+                    <button class="preset-btn" onclick="setPreset('cam-top-left')">Cam: Top-Left</button>
+                    <button class="preset-btn" onclick="setPreset('cam-bottom-left')">Cam: Bottom-Left</button>
+                    <button class="preset-btn" onclick="setPreset('no-cam')">No Webcam</button>
+                    <button class="preset-btn" onclick="setPreset('custom')">Custom</button>
+                </div>
+
+                <div class="tiktok-canvas-wrap">
+                    <canvas id="tiktok-canvas"></canvas>
+                    <div class="tiktok-canvas-legend">
+                        <span class="legend-gameplay">Green = Gameplay</span>
+                        <span class="legend-webcam">Blue = Webcam</span>
+                        <span>Click + drag to draw. Right-click to switch region.</span>
+                    </div>
+                </div>
+
+                <div class="tiktok-preview-wrap">
+                    <div class="tiktok-preview-label">Preview</div>
+                    <canvas id="tiktok-preview" width="180" height="320"></canvas>
+                </div>
+
+                <div class="tiktok-footer">
+                    <span id="tiktok-status" class="trim-status"></span>
+                    <button id="tiktok-export-btn" class="btn-apply-trim" onclick="exportTikTok()">Export TikTok Video</button>
                 </div>
             </div>
         </div>

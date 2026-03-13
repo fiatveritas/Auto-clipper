@@ -146,6 +146,38 @@ def trim_clip(job_id, clip_id):
     return jsonify({"error": "Clip not found"}), 404
 
 
+@app.route("/api/clips/<job_id>/<clip_id>/tiktok", methods=["POST"])
+def make_tiktok(job_id, clip_id):
+    """Convert a clip to TikTok vertical format."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    data = request.get_json()
+    gameplay_region = data.get("gameplay")
+    webcam_region = data.get("webcam")
+    layout = data.get("layout", "stacked")
+
+    if not gameplay_region:
+        return jsonify({"error": "Gameplay region is required"}), 400
+
+    for clip in job["clips"]:
+        if clip["id"] == clip_id:
+            clip_path = os.path.join(CLIPS_DIR, clip["filename"])
+            if not os.path.exists(clip_path):
+                return jsonify({"error": "Clip file not found"}), 404
+
+            result = clip_manager.make_tiktok(
+                clip_path, job_id, clip_id, gameplay_region, webcam_region, layout
+            )
+            if not result:
+                return jsonify({"error": "Failed to create TikTok version"}), 500
+
+            return jsonify({"success": True, "filename": result["filename"]})
+
+    return jsonify({"error": "Clip not found"}), 404
+
+
 @app.route("/api/clips/<job_id>/<clip_id>/delete", methods=["POST"])
 def delete_clip(job_id, clip_id):
     job = jobs.get(job_id)
