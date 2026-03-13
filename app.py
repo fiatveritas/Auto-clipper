@@ -5,7 +5,8 @@ import shutil
 import uuid
 import threading
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify, send_from_directory
+import glob as glob_mod
+from flask import Flask, render_template, request, jsonify, send_from_directory, send_file
 
 from analysis.detector import GameDetector
 from analysis.ai_analyzer import GrokVisionAnalyzer
@@ -31,7 +32,17 @@ os.makedirs(LIBRARY_DIR, exist_ok=True)
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 os.makedirs(SESSIONS_DIR, exist_ok=True)
 
+WATERMARKS_DIR = os.path.join(BASE_DIR, "static", "watermarks")
+SFX_DIR = os.path.join(BASE_DIR, "static", "sfx")
+PRESETS_FILE = os.path.join(BASE_DIR, "export_presets.json")
+ANALYTICS_FILE = os.path.join(BASE_DIR, "analytics.json")
+HIGHLIGHT_RULES_FILE = os.path.join(BASE_DIR, "highlight_rules.json")
+os.makedirs(WATERMARKS_DIR, exist_ok=True)
+os.makedirs(SFX_DIR, exist_ok=True)
+
 jobs = {}
+watch_folder_thread = None
+watch_folder_running = False
 clip_manager = ClipManager(CLIPS_DIR, THUMBNAILS_DIR, DOWNLOADS_DIR)
 
 
