@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="600" height="400">
+  <defs>
+    <linearGradient id="bg1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0e0e10"/>
+      <stop offset="100%" style="stop-color:#1a1a2e"/>
+    </linearGradient>
+    <linearGradient id="a1" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#9147ff"/>
+      <stop offset="100%" style="stop-color:#bf94ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="400" rx="16" fill="url(#bg1)"/>
+  <rect x="0" y="0" width="600" height="3" rx="1.5" fill="url(#a1)"/>
+
+  <!-- Mock editor UI -->
+  <g transform="translate(40, 50)">
+    <!-- Video frame -->
+    <rect x="0" y="0" width="340" height="190" rx="8" fill="#000" stroke="#2f2f35" stroke-width="1"/>
+    <polygon points="145,70 195,95 145,120" fill="url(#a1)" opacity="0.7"/>
+    <!-- Progress bar -->
+    <rect x="0" y="198" width="340" height="4" rx="2" fill="#2f2f35"/>
+    <rect x="0" y="198" width="180" height="4" rx="2" fill="url(#a1)"/>
+
+    <!-- Side panel -->
+    <g transform="translate(360, 0)">
+      <!-- Tabs -->
+      <rect x="0" y="0" width="50" height="24" rx="4" fill="rgba(145,71,255,0.15)" stroke="#9147ff" stroke-width="1"/>
+      <text x="25" y="16" text-anchor="middle" font-family="Arial" font-size="10" fill="#9147ff">Trim</text>
+      <rect x="55" y="0" width="50" height="24" rx="4" fill="rgba(47,47,53,0.5)"/>
+      <text x="80" y="16" text-anchor="middle" font-family="Arial" font-size="10" fill="#adadb8">Crop</text>
+      <rect x="110" y="0" width="50" height="24" rx="4" fill="rgba(47,47,53,0.5)"/>
+      <text x="135" y="16" text-anchor="middle" font-family="Arial" font-size="10" fill="#adadb8">FX</text>
+
+      <!-- Timeline -->
+      <rect x="0" y="40" width="160" height="20" rx="4" fill="#0e0e10" stroke="#2f2f35" stroke-width="1"/>
+      <rect x="30" y="42" width="80" height="16" rx="3" fill="rgba(145,71,255,0.25)"/>
+      <rect x="28" y="38" width="6" height="24" rx="2" fill="#9147ff"/>
+      <rect x="108" y="38" width="6" height="24" rx="2" fill="#9147ff"/>
+
+      <!-- Controls -->
+      <rect x="0" y="75" width="70" height="20" rx="4" fill="#2f2f35"/>
+      <text x="35" y="89" text-anchor="middle" font-family="monospace" font-size="9" fill="#adadb8">0:15.5</text>
+      <rect x="80" y="75" width="70" height="20" rx="4" fill="#2f2f35"/>
+      <text x="115" y="89" text-anchor="middle" font-family="monospace" font-size="9" fill="#adadb8">0:45.2</text>
+
+      <!-- Effects sliders -->
+      <g transform="translate(0, 115)">
+        <text x="0" y="0" font-family="Arial" font-size="9" fill="#adadb8">SPEED</text>
+        <rect x="0" y="8" width="160" height="4" rx="2" fill="#2f2f35"/>
+        <rect x="0" y="8" width="80" height="4" rx="2" fill="url(#a1)"/>
+        <circle cx="80" cy="10" r="6" fill="#9147ff"/>
+
+        <text x="0" y="30" font-family="Arial" font-size="9" fill="#adadb8">BRIGHTNESS</text>
+        <rect x="0" y="38" width="160" height="4" rx="2" fill="#2f2f35"/>
+        <rect x="0" y="38" width="100" height="4" rx="2" fill="url(#a1)"/>
+        <circle cx="100" cy="40" r="6" fill="#9147ff"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- Label -->
+  <text x="300" y="320" text-anchor="middle" font-family="Arial Black, Arial" font-size="28" font-weight="900" fill="url(#a1)">Full Clip Editor</text>
+  <text x="300" y="350" text-anchor="middle" font-family="Arial" font-size="16" fill="#adadb8">Trim, Crop, Effects, Captions, Zoom/Pan</text>
+  <text x="300" y="375" text-anchor="middle" font-family="Arial" font-size="14" fill="#636369">Watermark, Sound Effects, Split, Merge</text>
+</svg>

@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="600" height="400">
+  <defs>
+    <linearGradient id="bg3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0e0e10"/>
+      <stop offset="100%" style="stop-color:#0e1a10"/>
+    </linearGradient>
+    <linearGradient id="a3" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00c853"/>
+      <stop offset="100%" style="stop-color:#69f0ae"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="400" rx="16" fill="url(#bg3)"/>
+  <rect x="0" y="0" width="600" height="3" rx="1.5" fill="url(#a3)"/>
+
+  <!-- Game grid -->
+  <g transform="translate(40, 45)">
+    <!-- Row 1 -->
+    <rect x="0" y="0" width="150" height="44" rx="8" fill="rgba(0,200,83,0.08)" stroke="#2f2f35" stroke-width="1"/>
+    <text x="75" y="27" text-anchor="middle" font-family="Arial" font-size="13" font-weight="600" fill="#efeff1">Fortnite</text>
+
+    <rect x="165" y="0" width="150" height="44" rx="8" fill="rgba(0,200,83,0.08)" stroke="#2f2f35" stroke-width="1"/>
+    <text x="240" y="27" text-anchor="middle" font-family="Arial" font-size="13" font-weight="600" fill="#efeff1">Apex Legends</text>
+
+    <rect x="330" y="0" width="150" height="44" rx="8" fill="rgba(0,200,83,0.08)" stroke="#2f2f35" stroke-width="1"/>
+    <text x="405" y="27" text-anchor="middle" font-family="Arial" font-size="13" font-weight="600" fill="#efeff1">Valorant</text>
+
+    <!-- Row 2 -->
+    <rect x="0" y="55" width="150" height="44" rx="8" fill="rgba(0,200,83,0.08)" stroke="#2f2f35" stroke-width="1"/>
+    <text x="75" y="82" text-anchor="middle" font-family="Arial" font-size="13" font-weight="600" fill="#efeff1">Call of Duty</text>
+
+    <rect x="165" y="55" width="150" height="44" rx="8" fill="rgba(0,200,83,0.08)" stroke="#2f2f35" stroke-width="1"/>
+    <text x="240" y="82" text-anchor="middle" font-family="Arial" font-size="12" font-weight="600" fill="#efeff1">League of Legends</text>
+
+    <rect x="330" y="55" width="150" height="44" rx="8" fill="rgba(0,200,83,0.08)" stroke="#2f2f35" stroke-width="1"/>
+    <text x="405" y="82" text-anchor="middle" font-family="Arial" font-size="13" font-weight="600" fill="#efeff1">CS2</text>
+
+    <!-- Row 3 -->
+    <rect x="0" y="110" width="150" height="44" rx="8" fill="rgba(0,200,83,0.08)" stroke="#2f2f35" stroke-width="1"/>
+    <text x="75" y="137" text-anchor="middle" font-family="Arial" font-size="13" font-weight="600" fill="#efeff1">Minecraft</text>
+
+    <rect x="165" y="110" width="150" height="44" rx="8" fill="rgba(0,200,83,0.08)" stroke="#2f2f35" stroke-width="1"/>
+    <text x="240" y="137" text-anchor="middle" font-family="Arial" font-size="13" font-weight="600" fill="#efeff1">GTA V</text>
+
+    <rect x="330" y="110" width="150" height="44" rx="8" fill="rgba(0,200,83,0.08)" stroke="#2f2f35" stroke-width="1"/>
+    <text x="405" y="137" text-anchor="middle" font-family="Arial" font-size="13" font-weight="600" fill="#efeff1">Overwatch 2</text>
+
+    <!-- Row 4 -->
+    <rect x="0" y="165" width="150" height="44" rx="8" fill="rgba(0,200,83,0.08)" stroke="#2f2f35" stroke-width="1"/>
+    <text x="75" y="192" text-anchor="middle" font-family="Arial" font-size="13" font-weight="600" fill="#efeff1">Rocket League</text>
+
+    <rect x="165" y="165" width="150" height="44" rx="8" fill="rgba(0,200,83,0.08)" stroke="#2f2f35" stroke-width="1"/>
+    <text x="240" y="192" text-anchor="middle" font-family="Arial" font-size="13" font-weight="600" fill="#efeff1">Elden Ring</text>
+
+    <rect x="330" y="165" width="150" height="44" rx="8" fill="rgba(0,200,83,0.08)" stroke="#2f2f35" stroke-width="1"/>
+    <text x="405" y="192" text-anchor="middle" font-family="Arial" font-size="13" font-weight="600" fill="#efeff1">Helldivers 2</text>
+  </g>
+
+  <!-- More games row -->
+  <g transform="translate(40, 265)">
+    <text x="0" y="14" font-family="Arial" font-size="12" fill="#adadb8">+ PUBG, Dead by Daylight, Escape from Tarkov, Destiny 2, Rainbow Six Siege, Arc Raiders, War Thunder</text>
+  </g>
+
+  <text x="300" y="320" text-anchor="middle" font-family="Arial Black, Arial" font-size="28" font-weight="900" fill="url(#a3)">17 Games Supported</text>
+  <text x="300" y="352" text-anchor="middle" font-family="Arial" font-size="16" fill="#adadb8">Game-specific AI detection for each title</text>
+  <text x="300" y="378" text-anchor="middle" font-family="Arial" font-size="14" fill="#636369">Custom HSV detectors, kill feeds, health bars, abilities</text>
+</svg>
