@@ -110,8 +110,10 @@ Score guide: 0.0 = nothing happening, 0.3 = minor action, 0.6 = good combat, 0.8
                 result = self._call_grok(frame_data["b64"])
                 result["timestamp"] = frame_data["timestamp"]
                 results.append(result)
+                ts = frame_data["timestamp"]
+                print(f"  [AI] {ts:.0f}s - score:{result.get('score',0)} exciting:{result.get('exciting')} - {result.get('label','')}")
             except Exception as e:
-                # If API call fails, skip this frame
+                print(f"  [AI] {frame_data['timestamp']:.0f}s - ERROR: {e}")
                 results.append({
                     "timestamp": frame_data["timestamp"],
                     "exciting": False,
@@ -159,8 +161,12 @@ Score guide: 0.0 = nothing happening, 0.3 = minor action, 0.6 = good combat, 0.8
             method="POST",
         )
 
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            result = json.loads(resp.read().decode('utf-8'))
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                result = json.loads(resp.read().decode('utf-8'))
+        except urllib.error.HTTPError as e:
+            body = e.read().decode('utf-8', errors='replace')
+            raise Exception(f"Grok API {e.code}: {body[:200]}")
 
         content = result["choices"][0]["message"]["content"].strip()
 
@@ -168,7 +174,11 @@ Score guide: 0.0 = nothing happening, 0.3 = minor action, 0.6 = good combat, 0.8
         if content.startswith("```"):
             content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
 
-        return json.loads(content)
+        parsed = json.loads(content)
+        # Normalize types
+        parsed["exciting"] = bool(parsed.get("exciting", False))
+        parsed["score"] = float(parsed.get("score", 0))
+        return parsed
 
     def _build_highlights(self, results, sample_interval):
         """Convert analysis results into highlight timestamps."""
