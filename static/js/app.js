@@ -117,7 +117,94 @@ window.addEventListener("DOMContentLoaded", () => {
     restoreState();
     loadGames();
     hookAutoSave();
+    loadLibrary();
 });
+
+// ===== VOD Library =====
+function loadLibrary() {
+    fetch("/api/library")
+        .then(res => res.json())
+        .then(data => {
+            const vods = data.vods || [];
+            const section = document.getElementById("library-section");
+            const list = document.getElementById("library-list");
+            const count = document.getElementById("library-count");
+
+            if (vods.length === 0) {
+                section.classList.add("hidden");
+                return;
+            }
+
+            section.classList.remove("hidden");
+            count.textContent = vods.length;
+
+            list.innerHTML = vods.map(vod => `
+                <div class="library-item">
+                    <div class="library-item-info" onclick="analyzeFromLibrary('${escapeHtml(vod.filename)}')">
+                        <span class="library-item-name">${escapeHtml(vod.filename)}</span>
+                        <span class="library-item-meta">
+                            ${formatFileSize(vod.size)}
+                            ${vod.duration ? ' &middot; ' + formatTime(vod.duration) : ''}
+                        </span>
+                    </div>
+                    <button class="library-item-delete" onclick="deleteLibraryVod('${escapeHtml(vod.filename)}')" title="Delete">&times;</button>
+                </div>
+            `).join("");
+        })
+        .catch(() => {});
+}
+
+function analyzeFromLibrary(filename) {
+    hideError();
+    setAnalyzing(true);
+    showProgress();
+
+    const apiKey = document.getElementById("api-key").value.trim();
+    const timeStart = document.getElementById("time-start").value.trim();
+    const timeEnd = document.getElementById("time-end").value.trim();
+
+    fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            library_file: filename,
+            api_key: apiKey,
+            time_start: timeStart,
+            time_end: timeEnd,
+            game: selectedGame,
+        }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            showError(data.error);
+            resetUI();
+            return;
+        }
+        currentJobId = data.job_id;
+        startPolling();
+    })
+    .catch(() => {
+        showError("Failed to start analysis.");
+        resetUI();
+    });
+}
+
+function deleteLibraryVod(filename) {
+    if (!confirm("Delete this saved VOD? This frees up storage.")) return;
+
+    fetch(`/api/library/${encodeURIComponent(filename)}/delete`, { method: "POST" })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) loadLibrary();
+        });
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
+}
 
 // Start analysis
 function startAnalysis() {
@@ -241,6 +328,7 @@ function fetchClips(jobId) {
             vodDuration = data.vod_duration || 0;
             renderClips();
             setAnalyzing(false);
+            loadLibrary(); // Refresh — new VOD may have been saved
         })
         .catch(() => {
             showError("Failed to load clips");

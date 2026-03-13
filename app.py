@@ -1,4 +1,6 @@
 import os
+import re
+import shutil
 import uuid
 import threading
 from flask import Flask, render_template, request, jsonify, send_from_directory
@@ -16,10 +18,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIPS_DIR = os.path.join(BASE_DIR, "static", "clips")
 THUMBNAILS_DIR = os.path.join(BASE_DIR, "static", "thumbnails")
 DOWNLOADS_DIR = os.path.join(BASE_DIR, "downloads")
+LIBRARY_DIR = os.path.join(BASE_DIR, "library")
 
 os.makedirs(CLIPS_DIR, exist_ok=True)
 os.makedirs(THUMBNAILS_DIR, exist_ok=True)
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+os.makedirs(LIBRARY_DIR, exist_ok=True)
 
 jobs = {}
 clip_manager = ClipManager(CLIPS_DIR, THUMBNAILS_DIR, DOWNLOADS_DIR)
@@ -40,11 +44,38 @@ def list_games():
 def start_analysis():
     data = request.get_json()
     url = data.get("url", "").strip()
+    library_file = data.get("library_file", "").strip()
     api_key = data.get("api_key", "").strip()
     time_start = data.get("time_start", "").strip()
     time_end = data.get("time_end", "").strip()
     game_id = data.get("game", "arc_raiders").strip()
 
+    # Option 1: Re-analyze a saved VOD from the library
+    if library_file:
+        safe_name = os.path.basename(library_file)
+        lib_path = os.path.join(LIBRARY_DIR, safe_name)
+        if not os.path.exists(lib_path):
+            return jsonify({"error": "Saved VOD not found"}), 404
+
+        job_id = str(uuid.uuid4())[:8]
+        jobs[job_id] = {
+            "status": "analyzing",
+            "progress": 42,
+            "message": "Loading saved VOD...",
+            "clips": [],
+            "error": None,
+            "url": f"library:{safe_name}",
+            "vod_path": lib_path,
+            "vod_duration": 0,
+        }
+
+        thread = threading.Thread(
+            target=_run_analysis_on_file, args=(job_id, lib_path, api_key, time_start, time_end, game_id), daemon=True
+        )
+        thread.start()
+        return jsonify({"job_id": job_id})
+
+    # Option 2: Download from URL
     if not url:
         return jsonify({"error": "No URL provided"}), 400
 
@@ -69,6 +100,34 @@ def start_analysis():
     thread.start()
 
     return jsonify({"job_id": job_id})
+
+
+@app.route("/api/library")
+def list_library():
+    """List all saved VODs in the library."""
+    vods = []
+    for f in sorted(os.listdir(LIBRARY_DIR)):
+        fpath = os.path.join(LIBRARY_DIR, f)
+        if os.path.isfile(fpath):
+            size = os.path.getsize(fpath)
+            duration = clip_manager.get_vod_duration(fpath)
+            vods.append({
+                "filename": f,
+                "size": size,
+                "duration": duration,
+            })
+    return jsonify({"vods": vods})
+
+
+@app.route("/api/library/<filename>/delete", methods=["POST"])
+def delete_library_vod(filename):
+    """Delete a saved VOD from the library."""
+    safe_name = os.path.basename(filename)
+    fpath = os.path.join(LIBRARY_DIR, safe_name)
+    if os.path.exists(fpath):
+        os.remove(fpath)
+        return jsonify({"success": True})
+    return jsonify({"error": "File not found"}), 404
 
 
 @app.route("/api/jobs/<job_id>")
@@ -206,6 +265,28 @@ def _is_valid_twitch_url(url):
     return any(pattern in url.lower() for pattern in valid_patterns)
 
 
+def _save_to_library(url, video_path):
+    """Move a downloaded VOD to the library with a readable name."""
+    # Extract VOD ID from URL for the filename
+    vod_id = re.search(r'videos/(\d+)', url)
+    if vod_id:
+        name = f"twitch_{vod_id.group(1)}.mp4"
+    else:
+        name = f"vod_{os.path.basename(video_path)}"
+
+    lib_path = os.path.join(LIBRARY_DIR, name)
+
+    # Don't overwrite if already saved
+    if os.path.exists(lib_path):
+        # Already in library, delete the temp download
+        if video_path != lib_path:
+            os.remove(video_path)
+        return lib_path
+
+    shutil.move(video_path, lib_path)
+    return lib_path
+
+
 def _run_analysis(job_id, url, api_key="", time_start="", time_end="", game_id="arc_raiders"):
     job = jobs[job_id]
 
@@ -233,7 +314,27 @@ def _run_analysis(job_id, url, api_key="", time_start="", time_end="", game_id="
         if not video_path:
             raise Exception("Failed to download VOD. Check the URL and try again.")
 
-        # Keep VOD for trimming later
+        # Save to library so user doesn't have to re-download
+        update("downloading", 40, "Saving to library...")
+        video_path = _save_to_library(url, video_path)
+
+        _run_analysis_on_file(job_id, video_path, api_key, time_start, time_end, game_id)
+
+    except Exception as e:
+        job["error"] = str(e)
+        update("error", 0, str(e))
+
+
+def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_end="", game_id="arc_raiders"):
+    """Run analysis on a local video file (from library or download)."""
+    job = jobs[job_id]
+
+    def update(status, progress, message=""):
+        job["status"] = status
+        job["progress"] = progress
+        job["message"] = message
+
+    try:
         job["vod_path"] = video_path
         job["vod_duration"] = clip_manager.get_vod_duration(video_path)
 
@@ -277,8 +378,6 @@ def _run_analysis(job_id, url, api_key="", time_start="", time_end="", game_id="
 
         job["clips"] = clips
         update("complete", 100, f"Done! Found {len(clips)} highlight clips")
-
-        # NOTE: We keep the VOD so users can trim clips
 
     except Exception as e:
         job["error"] = str(e)
