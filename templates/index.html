@@ -19,6 +19,7 @@
     <div class="app hidden" id="app-container">
         <header>
             <h1>Auto-Clipper</h1>
+            <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">&#9788;</button>
             <p class="subtitle">Upload your VOD or paste a link — AI finds the best moments</p>
         </header>
 
@@ -112,6 +113,7 @@
             <div class="library-header">
                 <h2>Saved VODs</h2>
                 <span id="library-count" class="badge">0</span>
+                <button id="watch-folder-btn" class="trim-btn" onclick="toggleWatchFolder()">Watch Folder: Off</button>
             </div>
             <p class="library-hint">Previously downloaded VODs. Click one to re-analyze without re-downloading.</p>
             <div id="library-list" class="library-list"></div>
@@ -125,6 +127,34 @@
             </div>
             <p class="library-hint">Previously analyzed clips — click to resume editing.</p>
             <div id="sessions-list" class="library-list"></div>
+        </section>
+
+        <!-- Analytics Dashboard -->
+        <section id="analytics-section" class="card hidden">
+            <div class="library-header">
+                <h2>Analytics</h2>
+                <button class="trim-btn" onclick="toggleAnalytics()">Show/Hide</button>
+            </div>
+            <div id="analytics-content" class="hidden">
+                <div class="analytics-grid">
+                    <div class="analytics-stat">
+                        <div class="analytics-stat-value" id="stat-total-clips">0</div>
+                        <div class="analytics-stat-label">Total Clips</div>
+                    </div>
+                    <div class="analytics-stat">
+                        <div class="analytics-stat-value" id="stat-total-exports">0</div>
+                        <div class="analytics-stat-label">Exports</div>
+                    </div>
+                    <div class="analytics-stat">
+                        <div class="analytics-stat-value" id="stat-total-tiktoks">0</div>
+                        <div class="analytics-stat-label">TikToks Made</div>
+                    </div>
+                    <div class="analytics-stat">
+                        <div class="analytics-stat-value" id="stat-total-gifs">0</div>
+                        <div class="analytics-stat-label">GIFs Made</div>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- Progress Section -->
@@ -144,6 +174,30 @@
             <div class="clips-header">
                 <h2>Detected Highlights</h2>
                 <span id="clip-count" class="badge">0 clips</span>
+            </div>
+            <div class="clips-toolbar">
+                <div class="clips-sort">
+                    <label>Sort:</label>
+                    <select id="clips-sort" onchange="sortClips(this.value)">
+                        <option value="time">Time</option>
+                        <option value="confidence">Confidence</option>
+                        <option value="duration">Duration</option>
+                    </select>
+                </div>
+                <div class="clips-filter">
+                    <label>Filter:</label>
+                    <select id="clips-filter" onchange="filterClips(this.value)">
+                        <option value="all">All</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="pending">Pending Review</option>
+                    </select>
+                </div>
+                <div class="clips-actions-bulk">
+                    <button class="trim-btn" onclick="batchTikTok()">Batch TikTok</button>
+                    <button class="trim-btn" onclick="findDuplicates()">Find Duplicates</button>
+                    <button class="trim-btn" onclick="showMergePanel()">Merge Selected</button>
+                </div>
             </div>
             <div id="clips-grid" class="clips-grid"></div>
             <div id="no-clips" class="no-clips hidden">
@@ -166,6 +220,8 @@
                     <button class="editor-tab active" data-tab="trim" onclick="switchEditorTab('trim')">Trim</button>
                     <button class="editor-tab" data-tab="crop" onclick="switchEditorTab('crop')">Crop</button>
                     <button class="editor-tab" data-tab="effects" onclick="switchEditorTab('effects')">Effects</button>
+                    <button class="editor-tab" data-tab="captions" onclick="switchEditorTab('captions')">Captions</button>
+                    <button class="editor-tab" data-tab="more" onclick="switchEditorTab('more')">More</button>
                 </div>
 
                 <!-- TRIM TAB -->
@@ -284,9 +340,232 @@
                     </div>
                 </div>
 
+                <!-- CAPTIONS TAB -->
+                <div id="tab-captions" class="editor-tab-content">
+                    <div class="caption-controls">
+                        <div class="caption-field">
+                            <label>Caption Text</label>
+                            <textarea id="caption-text" rows="2" placeholder="Enter caption text..."></textarea>
+                        </div>
+                        <div class="caption-options">
+                            <div class="caption-option">
+                                <label>Position</label>
+                                <select id="caption-position">
+                                    <option value="bottom">Bottom</option>
+                                    <option value="top">Top</option>
+                                    <option value="center">Center</option>
+                                </select>
+                            </div>
+                            <div class="caption-option">
+                                <label>Size</label>
+                                <input type="range" id="caption-size" min="24" max="96" value="48" oninput="document.getElementById('caption-size-val').textContent=this.value+'px'">
+                                <span id="caption-size-val" class="effect-val">48px</span>
+                            </div>
+                            <div class="caption-option">
+                                <label>Color</label>
+                                <select id="caption-color">
+                                    <option value="white">White</option>
+                                    <option value="yellow">Yellow</option>
+                                    <option value="red">Red</option>
+                                    <option value="cyan">Cyan</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="caption-footer">
+                        <span id="caption-status" class="trim-status"></span>
+                        <button id="caption-export-btn" class="btn-apply-trim" onclick="exportCaptions()">Export with Captions</button>
+                    </div>
+                </div>
+
+                <!-- MORE TAB -->
+                <div id="tab-more" class="editor-tab-content">
+                    <div class="more-tools-grid">
+                        <div class="more-tool-card" onclick="showWatermarkPanel()">
+                            <div class="more-tool-icon">&#128247;</div>
+                            <div class="more-tool-name">Watermark</div>
+                            <div class="more-tool-desc">Add logo overlay</div>
+                        </div>
+                        <div class="more-tool-card" onclick="showZoomPanPanel()">
+                            <div class="more-tool-icon">&#128269;</div>
+                            <div class="more-tool-name">Zoom/Pan</div>
+                            <div class="more-tool-desc">Ken Burns effect</div>
+                        </div>
+                        <div class="more-tool-card" onclick="showSfxPanel()">
+                            <div class="more-tool-icon">&#127925;</div>
+                            <div class="more-tool-name">Sound FX</div>
+                            <div class="more-tool-desc">Add sound effects</div>
+                        </div>
+                        <div class="more-tool-card" onclick="showGifPanel()">
+                            <div class="more-tool-icon">&#127910;</div>
+                            <div class="more-tool-name">GIF</div>
+                            <div class="more-tool-desc">Export as GIF</div>
+                        </div>
+                        <div class="more-tool-card" onclick="splitClipUI()">
+                            <div class="more-tool-icon">&#9986;</div>
+                            <div class="more-tool-name">Split</div>
+                            <div class="more-tool-desc">Cut clip in two</div>
+                        </div>
+                        <div class="more-tool-card" onclick="showMergePanel()">
+                            <div class="more-tool-icon">&#128279;</div>
+                            <div class="more-tool-name">Merge</div>
+                            <div class="more-tool-desc">Combine clips</div>
+                        </div>
+                    </div>
+
+                    <!-- Sub-panels (hidden by default, shown when tool card clicked) -->
+                    <div id="watermark-panel" class="more-sub-panel hidden">
+                        <h4>Watermark</h4>
+                        <div class="watermark-controls">
+                            <div class="watermark-upload-row">
+                                <input type="file" id="watermark-file" accept=".png,.jpg,.jpeg" hidden>
+                                <button class="trim-btn" onclick="document.getElementById('watermark-file').click()">Upload Logo</button>
+                                <select id="watermark-select"><option value="">Select watermark...</option></select>
+                            </div>
+                            <div class="watermark-options">
+                                <div class="caption-option">
+                                    <label>Position</label>
+                                    <select id="watermark-position">
+                                        <option value="bottom-right">Bottom Right</option>
+                                        <option value="bottom-left">Bottom Left</option>
+                                        <option value="top-right">Top Right</option>
+                                        <option value="top-left">Top Left</option>
+                                        <option value="center">Center</option>
+                                    </select>
+                                </div>
+                                <div class="caption-option">
+                                    <label>Opacity</label>
+                                    <input type="range" id="watermark-opacity" min="0.1" max="1" step="0.1" value="0.7" oninput="document.getElementById('wm-opacity-val').textContent=Math.round(this.value*100)+'%'">
+                                    <span id="wm-opacity-val" class="effect-val">70%</span>
+                                </div>
+                                <div class="caption-option">
+                                    <label>Size</label>
+                                    <input type="range" id="watermark-scale" min="0.05" max="0.4" step="0.05" value="0.15" oninput="document.getElementById('wm-scale-val').textContent=Math.round(this.value*100)+'%'">
+                                    <span id="wm-scale-val" class="effect-val">15%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="more-panel-footer">
+                            <span id="watermark-status" class="trim-status"></span>
+                            <button class="btn-apply-trim" onclick="exportWatermark()">Apply Watermark</button>
+                        </div>
+                    </div>
+
+                    <div id="zoompan-panel" class="more-sub-panel hidden">
+                        <h4>Zoom / Pan Effect</h4>
+                        <div class="zoompan-controls">
+                            <div class="caption-option">
+                                <label>Start Zoom</label>
+                                <input type="range" id="zoom-start" min="1" max="2" step="0.1" value="1" oninput="document.getElementById('zoom-start-val').textContent=this.value+'x'">
+                                <span id="zoom-start-val" class="effect-val">1x</span>
+                            </div>
+                            <div class="caption-option">
+                                <label>End Zoom</label>
+                                <input type="range" id="zoom-end" min="1" max="2" step="0.1" value="1.3" oninput="document.getElementById('zoom-end-val').textContent=this.value+'x'">
+                                <span id="zoom-end-val" class="effect-val">1.3x</span>
+                            </div>
+                        </div>
+                        <div class="more-panel-footer">
+                            <span id="zoompan-status" class="trim-status"></span>
+                            <button class="btn-apply-trim" onclick="exportZoomPan()">Export with Zoom</button>
+                        </div>
+                    </div>
+
+                    <div id="sfx-panel" class="more-sub-panel hidden">
+                        <h4>Sound Effects</h4>
+                        <div class="sfx-controls">
+                            <div class="sfx-upload-row">
+                                <input type="file" id="sfx-file" accept=".mp3,.wav,.ogg" hidden>
+                                <button class="trim-btn" onclick="document.getElementById('sfx-file').click()">Upload SFX</button>
+                                <select id="sfx-select"><option value="">Select sound...</option></select>
+                            </div>
+                            <div class="caption-option">
+                                <label>At Time (s)</label>
+                                <input type="number" id="sfx-timestamp" value="0" min="0" step="0.5" class="trim-input-row input">
+                            </div>
+                            <div class="caption-option">
+                                <label>Volume</label>
+                                <input type="range" id="sfx-volume" min="0.1" max="2" step="0.1" value="0.8" oninput="document.getElementById('sfx-vol-val').textContent=Math.round(this.value*100)+'%'">
+                                <span id="sfx-vol-val" class="effect-val">80%</span>
+                            </div>
+                        </div>
+                        <div class="more-panel-footer">
+                            <span id="sfx-status" class="trim-status"></span>
+                            <button class="btn-apply-trim" onclick="exportSfx()">Add Sound Effect</button>
+                        </div>
+                    </div>
+
+                    <div id="gif-panel" class="more-sub-panel hidden">
+                        <h4>GIF Export</h4>
+                        <div class="gif-controls">
+                            <div class="caption-option">
+                                <label>Start Offset (s)</label>
+                                <input type="number" id="gif-start" value="0" min="0" step="0.5">
+                            </div>
+                            <div class="caption-option">
+                                <label>Duration (s)</label>
+                                <input type="number" id="gif-duration" value="5" min="1" max="30" step="1">
+                            </div>
+                            <div class="caption-option">
+                                <label>FPS</label>
+                                <input type="range" id="gif-fps" min="8" max="30" value="15" oninput="document.getElementById('gif-fps-val').textContent=this.value">
+                                <span id="gif-fps-val" class="effect-val">15</span>
+                            </div>
+                            <div class="caption-option">
+                                <label>Width</label>
+                                <select id="gif-width">
+                                    <option value="320">320px</option>
+                                    <option value="480" selected>480px</option>
+                                    <option value="640">640px</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="more-panel-footer">
+                            <span id="gif-status" class="trim-status"></span>
+                            <button class="btn-apply-trim" onclick="exportGif()">Export GIF</button>
+                        </div>
+                    </div>
+
+                    <div id="split-panel" class="more-sub-panel hidden">
+                        <h4>Split Clip</h4>
+                        <div class="split-controls">
+                            <div class="caption-option">
+                                <label>Split At (seconds)</label>
+                                <input type="number" id="split-time" value="5" min="0.5" step="0.5">
+                            </div>
+                            <p class="api-hint">Splits the clip into two parts at the specified time. Both parts will appear in your clips list.</p>
+                        </div>
+                        <div class="more-panel-footer">
+                            <span id="split-status" class="trim-status"></span>
+                            <button class="btn-apply-trim" onclick="splitClip()">Split Clip</button>
+                        </div>
+                    </div>
+
+                    <div id="merge-panel" class="more-sub-panel hidden">
+                        <h4>Merge Clips</h4>
+                        <div class="merge-controls">
+                            <p class="api-hint">Select clips to merge into one highlight reel:</p>
+                            <div id="merge-clip-list" class="merge-clip-list"></div>
+                            <div class="caption-option">
+                                <label>Transition</label>
+                                <select id="merge-transition">
+                                    <option value="none">None (hard cut)</option>
+                                    <option value="fade">Fade</option>
+                                    <option value="wipe">Wipe</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="more-panel-footer">
+                            <span id="merge-status" class="trim-status"></span>
+                            <button class="btn-apply-trim" onclick="mergeClips()">Merge Selected</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="modal-actions">
                     <button class="btn-download" onclick="downloadFromModal()">Download Clip</button>
                     <button class="btn-tiktok" onclick="openTikTokEditor()">Make TikTok</button>
+                    <button class="btn-youtube" onclick="openYouTubeShortEditor()">YouTube Short</button>
                 </div>
             </div>
         </div>
@@ -323,6 +602,14 @@
                 <div class="tiktok-preview-wrap">
                     <div class="tiktok-preview-label">Preview</div>
                     <canvas id="tiktok-preview" width="180" height="320"></canvas>
+                </div>
+
+                <div class="tiktok-presets-bar">
+                    <label>Presets:</label>
+                    <select id="export-preset-select" onchange="loadExportPreset(this.value)">
+                        <option value="">None</option>
+                    </select>
+                    <button class="trim-btn" onclick="saveExportPreset()">Save Preset</button>
                 </div>
 
                 <div class="tiktok-footer">
