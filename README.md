@@ -37,8 +37,7 @@ Your browser opens to **http://localhost:8080** — that's the app. Next time, j
 4. Run these commands:
 
 ```bash
-mv ~/Downloads/Auto-clipper-main ~/Auto-clipper
-cd ~/Auto-clipper
+cd ~/Downloads/Auto-clipper-main
 chmod +x install.sh run.sh
 ./install.sh
 ```
@@ -55,7 +54,7 @@ Your browser opens to **http://localhost:8080** — that's the app.
 
 **Next time**, just open Terminal and run:
 ```bash
-cd ~/Auto-clipper && ./run.sh
+cd ~/Downloads/Auto-clipper-main && ./run.sh
 ```
 
 ---
