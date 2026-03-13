@@ -1,83 +1,97 @@
-# Arc Raiders Auto-Clipper
+# Auto-Clipper
 
 Automatically find the best moments in your Twitch VODs — kills, combat, explosions, and more. Paste a link, get highlight clips.
+
+**Supports:** Arc Raiders, War Thunder (more coming)
 
 ---
 
 ## What It Does
 
-1. **Paste** a Twitch VOD link
-2. **Wait** while it downloads and analyzes the video
-3. **Review** detected highlights with preview thumbnails
-4. **Download** the clips you want — or convert them to TikTok vertical format
+1. **Pick** your game from the menu
+2. **Paste** a Twitch VOD link
+3. **Wait** while it downloads and analyzes the video
+4. **Review** detected highlights with preview thumbnails
+5. **Download** the clips you want — or convert them to TikTok vertical format
 
-### What It Detects
-
-- Kill feed / elimination text
-- Damage indicators (red vignette)
-- Hit markers (crosshair flashes)
-- Explosions / muzzle flash
-- Arc enemy glow (blue glow)
-- Scene chaos (rapid motion during combat)
+Your settings (game, API key, everything) are saved automatically — even if you close the tab.
 
 ---
 
-## Windows Installation (From Scratch)
+## Quick Install (Recommended)
 
-### Step 1: Install Python
+Only two things you need to install by hand: **Python** and **Git**. The installer handles everything else.
 
+### Windows
+
+**Step 1:** Install Python from [python.org/downloads](https://www.python.org/downloads/)
+- **CHECK THE BOX** that says **"Add python.exe to PATH"** at the bottom of the installer!
+
+**Step 2:** Install Git from [git-scm.com/download/win](https://git-scm.com/download/win)
+- Click Next through everything, defaults are fine
+
+**Step 3:** Open Command Prompt and run:
+```
+git clone https://github.com/bendawg2010/Auto-clipper.git
+cd Auto-clipper
+install.bat
+```
+
+**Step 4:** To run it anytime, just double-click **`run.bat`**
+
+That's it. The installer downloads FFmpeg and sets up everything automatically.
+
+### Mac
+
+**Step 1:** Open Terminal (Command + Space, type "Terminal", press Enter)
+
+**Step 2:** Run these commands:
+```bash
+git clone https://github.com/bendawg2010/Auto-clipper.git
+cd Auto-clipper
+chmod +x install.sh run.sh
+./install.sh
+```
+
+The installer will set up Homebrew, Python, Git, FFmpeg, and all dependencies automatically. It may ask for your Mac password.
+
+**Step 3:** To run it anytime:
+```bash
+./run.sh
+```
+
+---
+
+## Manual Install (If Quick Install Doesn't Work)
+
+<details>
+<summary>Click to expand full manual instructions</summary>
+
+### Windows - Manual
+
+#### Install Python
 1. Go to [python.org/downloads](https://www.python.org/downloads/)
 2. Click the big yellow **"Download Python 3.x.x"** button
 3. Open the downloaded file
 4. **IMPORTANT: Check the box at the bottom that says "Add python.exe to PATH"**
 5. Click **"Install Now"**
-6. Wait for it to finish, then click **Close**
 
-**Verify it worked:**
-- Press the **Windows key**, type **cmd**, and press Enter
-- Type `python --version` and press Enter
-- You should see something like `Python 3.12.x`
-
-### Step 2: Install Git
-
+#### Install Git
 1. Go to [git-scm.com/download/win](https://git-scm.com/download/win)
-2. The download should start automatically — if not, click **"Click here to download manually"**
-3. Open the downloaded file
-4. Click **Next** through everything — the default settings are fine
-5. Click **Install**, then **Finish**
+2. Download and install with default settings
 
-**Verify it worked:**
-- Open a **new** Command Prompt (close the old one first)
-- Type `git --version` and press Enter
-- You should see something like `git version 2.x.x`
-
-### Step 3: Install FFmpeg
-
+#### Install FFmpeg
 1. Go to [github.com/BtbN/FFmpeg-Builds/releases](https://github.com/BtbN/FFmpeg-Builds/releases)
-2. Scroll down and download **ffmpeg-master-latest-win64-gpl.zip**
-3. Right-click the downloaded zip → **Extract All** → **Extract**
-4. Open the extracted folder, then open the **bin** folder inside it
-5. You should see three files: `ffmpeg.exe`, `ffprobe.exe`, `ffplay.exe`
-6. Copy the full path from the address bar at the top (something like `C:\Users\YourName\Downloads\ffmpeg-master-latest-win64-gpl\bin`)
+2. Download **ffmpeg-master-latest-win64-gpl.zip**
+3. Extract it somewhere (like `C:\ffmpeg`)
+4. Add the `bin` folder to your PATH:
+   - Windows key → type "Environment Variables" → click it
+   - Click "Environment Variables..." at the bottom
+   - Find "Path" in System variables → double-click → New
+   - Paste the path to the `bin` folder
+   - Click OK on all windows
 
-**Now add it to your PATH so your computer can find it:**
-
-7. Press the **Windows key**, type **Environment Variables**, and click **"Edit the system environment variables"**
-8. Click the **"Environment Variables..."** button at the bottom
-9. In the bottom section ("System variables"), find **Path** and double-click it
-10. Click **New**
-11. Paste the path you copied (the one ending in `\bin`)
-12. Click **OK** on all three windows
-
-**Verify it worked:**
-- Open a **new** Command Prompt (close the old one first)
-- Type `ffmpeg -version` and press Enter
-- You should see version info, not an error
-
-### Step 4: Download and Run Auto-Clipper
-
-Open a **new** Command Prompt and type these commands one at a time, pressing Enter after each:
-
+#### Run Auto-Clipper
 ```
 git clone https://github.com/bendawg2010/Auto-clipper.git
 cd Auto-clipper
@@ -87,78 +101,22 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Now open your browser (Chrome, Edge, Firefox, whatever) and go to:
-**http://localhost:8080**
+Open **http://localhost:8080** in your browser.
 
-You should see the Auto-Clipper interface. Paste a Twitch VOD link and go!
+### Mac - Manual
 
-### Running It Again Later
-
-Every time you want to use Auto-Clipper again, open Command Prompt and type:
-```
-cd Auto-clipper
-venv\Scripts\activate
-python app.py
-```
-
----
-
-## Mac Installation (From Scratch)
-
-### Step 1: Open Terminal
-
-1. Press **Command + Space** to open Spotlight
-2. Type **Terminal** and press Enter
-3. A black/white window will open — this is where you type all the commands below
-
-### Step 2: Install Homebrew (Mac's Package Manager)
-
-Homebrew makes installing everything else easy. Paste this entire line into Terminal and press Enter:
-
+#### Install Homebrew
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
+Run the "Next steps" commands it shows you after installing.
 
-- It will ask for your **Mac password** — type it and press Enter (you won't see the characters, that's normal)
-- If it asks you to press Enter to continue, press Enter
-- Wait for it to finish (this can take a few minutes)
-
-**IMPORTANT — After it finishes**, it will show you two commands to run under "Next steps". They look something like this:
-```bash
-echo >> /Users/yourname/.zprofile
-echo 'eval "$(/opt/homebrew/bin/brew shellpath)"' >> /Users/yourname/.zprofile
-eval "$(/opt/homebrew/bin/brew shellpath)"
-```
-**Copy and paste those exact commands** it shows you into Terminal and press Enter. This makes Homebrew work.
-
-**Verify it worked:**
-```bash
-brew --version
-```
-You should see something like `Homebrew 4.x.x`.
-
-### Step 3: Install Python, Git, and FFmpeg
-
-Now that you have Homebrew, installing everything else is one command:
-
+#### Install dependencies
 ```bash
 brew install python git ffmpeg
 ```
 
-Wait for it to finish (this can take a few minutes).
-
-**Verify they all worked:**
-```bash
-python3 --version
-git --version
-ffmpeg -version
-```
-Each one should show version info, not an error.
-
-### Step 4: Download and Run Auto-Clipper
-
-Type these commands one at a time, pressing Enter after each:
-
+#### Run Auto-Clipper
 ```bash
 git clone https://github.com/bendawg2010/Auto-clipper.git
 cd Auto-clipper
@@ -168,88 +126,41 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Now open your browser (Safari, Chrome, whatever) and go to:
-**http://localhost:8080**
+Open **http://localhost:8080** in your browser.
 
-You should see the Auto-Clipper interface. Paste a Twitch VOD link and go!
-
-### Optional: Create a Desktop App
-
-Run this to create an app icon on your Desktop you can double-click:
-```bash
-chmod +x create_mac_app.sh
-./create_mac_app.sh
-```
-
-### Running It Again Later
-
-Every time you want to use Auto-Clipper again, open Terminal and type:
-```bash
-cd Auto-clipper
-source venv/bin/activate
-python app.py
-```
+</details>
 
 ---
 
 ## iPhone / iPad
 
-Auto-Clipper runs on your computer — you just view it on your phone through Safari.
+Auto-Clipper runs on your computer — you view it on your phone through Safari.
 
-### Step 1: Set Up on Your Computer First
+1. Get Auto-Clipper running on your computer first (see above)
+2. Find your computer's IP address:
+   - **Windows:** Open Command Prompt → type `ipconfig` → look for "IPv4 Address" (something like `192.168.1.42`)
+   - **Mac:** Open Terminal → type `ipconfig getifaddr en0`
+3. On your iPhone (same Wi-Fi), open Safari and go to `http://192.168.1.42:8080` (use YOUR IP)
+4. Optional: Tap Share → "Add to Home Screen" to save it like an app
 
-Follow the **Windows** or **Mac** guide above to get Auto-Clipper running on your computer.
+---
 
-### Step 2: Find Your Computer's IP Address
+## Supported Games
 
-**Windows:**
-- Open Command Prompt
-- Type `ipconfig`
-- Look for **"IPv4 Address"** — it's something like `192.168.1.42`
+| Game | What It Detects |
+|------|----------------|
+| **Arc Raiders** | Kill feed, damage indicators, hit markers, explosions, Arc enemy glow, combat chaos |
+| **War Thunder** | Target destroyed, critical hits, bomb hits, vehicle fires, explosions, air kills |
 
-**Mac:**
-- Open Terminal
-- Type `ipconfig getifaddr en0`
-- It will show something like `192.168.1.42`
-
-Write this number down.
-
-### Step 3: Open on Your iPhone
-
-1. Make sure your iPhone is on the **same Wi-Fi** as your computer
-2. Open **Safari**
-3. In the address bar, type: `http://192.168.1.42:8080` (replace with YOUR number from Step 2)
-4. You should see the Auto-Clipper interface
-
-### Step 4: Save It Like an App (Optional)
-
-1. Tap the **Share** button (the square with an arrow pointing up)
-2. Scroll down and tap **"Add to Home Screen"**
-3. Name it **Auto-Clipper**
-4. Tap **Add**
-
-Now you have an icon on your home screen. Just make sure Auto-Clipper is running on your computer when you tap it.
+More games can be added — each game has its own detection profile tuned for that game's specific visual elements.
 
 ---
 
 ## Optional: AI-Powered Analysis
 
-By default Auto-Clipper uses computer vision to detect highlights. For smarter detection you can enable AI analysis:
+By default Auto-Clipper uses computer vision. For smarter detection, enter an xAI API key in the app (click "AI Mode" to expand the field). Get a free key from [x.ai](https://x.ai/).
 
-1. Get a free API key from [x.ai](https://x.ai/)
-2. Set it before running:
-
-**Windows:**
-```
-set XAI_API_KEY=your-key-here
-python app.py
-```
-
-**Mac:**
-```bash
-export XAI_API_KEY=your-key-here
-python app.py
-```
+The AI actually understands what's happening in your gameplay — not just colors and motion.
 
 ---
 
@@ -262,19 +173,18 @@ Reinstall Python. Make sure you check **"Add python.exe to PATH"** at the bottom
 Close your Command Prompt and open a new one. If it still doesn't work, reinstall Git.
 
 **"ffmpeg is not recognized"**
-You probably didn't add it to PATH correctly. Go back to the FFmpeg step and redo the PATH part. Make sure you open a **new** Command Prompt after.
+Run `install.bat` (Windows) or `./install.sh` (Mac) again — it will install FFmpeg for you.
 
 **"brew: command not found" (Mac)**
-You need to run the "Next steps" commands that Homebrew showed you after installation. If you closed Terminal, reinstall Homebrew.
+Run the "Next steps" commands that Homebrew showed you after installation, or run `./install.sh` again.
 
 **Clips won't download from Twitch**
 Make sure the VOD is **public** (not subscriber-only or deleted).
 
 **Can't connect from iPhone**
-- Are both devices on the **same Wi-Fi network**?
-- Is Auto-Clipper actually running on your computer?
-- Try turning off VPN on both devices
-- Windows: Check if your firewall is blocking port 8080
+- Both devices on the **same Wi-Fi**?
+- Is Auto-Clipper running on your computer?
+- Windows: Firewall might be blocking port 8080
 
 **Port 8080 already in use**
-Something else is using that port. Close other apps or change the port number in `app.py`.
+Something else is using that port. Close other apps or change the port in `app.py`.
