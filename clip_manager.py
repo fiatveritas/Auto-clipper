@@ -44,7 +44,7 @@ class ClipManager:
             if end_sec is None:
                 end_sec = float("inf")
             ydl_opts["download_ranges"] = yt_dlp.utils.download_range_func(
-                None, [{"start_time": start_sec, "end_time": end_sec}]
+                None, [(start_sec, end_sec)]
             )
             ydl_opts["force_keyframes_at_cuts"] = True
 
