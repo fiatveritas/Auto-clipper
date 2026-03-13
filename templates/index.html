@@ -16,34 +16,25 @@
         <!-- URL Input Section -->
         <section id="input-section" class="card">
             <div class="input-group">
-                <input
-                    type="text"
-                    id="vod-url"
+                <input type="text" id="vod-url"
                     placeholder="Paste Twitch VOD link (e.g. https://www.twitch.tv/videos/2720880233)"
-                    autocomplete="off"
-                >
+                    autocomplete="off">
                 <button id="analyze-btn" onclick="startAnalysis()">
                     <span class="btn-text">Analyze</span>
                     <span class="btn-icon">&#9654;</span>
                 </button>
             </div>
-
-            <!-- API Key (optional) -->
             <div class="api-key-section">
                 <button class="toggle-api" onclick="toggleApiKey()">
                     <span id="api-toggle-icon">+</span> AI Mode (xAI Grok Vision)
                 </button>
                 <div id="api-key-wrapper" class="hidden">
-                    <input
-                        type="password"
-                        id="api-key"
+                    <input type="password" id="api-key"
                         placeholder="Paste your xAI API key for AI-powered analysis"
-                        autocomplete="off"
-                    >
-                    <p class="api-hint">Without an API key, the app uses computer vision (still works, just less accurate). With Grok, AI actually watches and understands your gameplay.</p>
+                        autocomplete="off">
+                    <p class="api-hint">Without a key, uses computer vision detection. With Grok, AI actually understands your gameplay.</p>
                 </div>
             </div>
-
             <div id="error-msg" class="error-msg hidden"></div>
         </section>
 
@@ -67,11 +58,11 @@
             </div>
             <div id="clips-grid" class="clips-grid"></div>
             <div id="no-clips" class="no-clips hidden">
-                <p>No highlights were detected in this VOD. Try a different stream with more action!</p>
+                <p>No highlights were detected. Try a different stream with more action!</p>
             </div>
         </section>
 
-        <!-- Clip Preview Modal -->
+        <!-- Clip Preview + Trim Modal -->
         <div id="preview-modal" class="modal hidden" onclick="closeModal(event)">
             <div class="modal-content">
                 <button class="modal-close" onclick="closePreview()">&times;</button>
@@ -80,8 +71,45 @@
                     <h3 id="modal-label"></h3>
                     <p id="modal-time"></p>
                 </div>
+
+                <!-- Trim Controls -->
+                <div class="trim-section">
+                    <h4>Adjust Clip Length</h4>
+                    <div class="trim-controls">
+                        <div class="trim-field">
+                            <label>Start</label>
+                            <div class="trim-input-row">
+                                <button class="trim-btn" onclick="adjustTrim('start', -5)">-5s</button>
+                                <button class="trim-btn" onclick="adjustTrim('start', -1)">-1s</button>
+                                <input type="number" id="trim-start" step="0.5" min="0"
+                                    onchange="onTrimInputChange()" oninput="onTrimInputChange()">
+                                <button class="trim-btn" onclick="adjustTrim('start', 1)">+1s</button>
+                                <button class="trim-btn" onclick="adjustTrim('start', 5)">+5s</button>
+                            </div>
+                            <span class="trim-time" id="trim-start-display">0:00</span>
+                        </div>
+                        <div class="trim-field">
+                            <label>End</label>
+                            <div class="trim-input-row">
+                                <button class="trim-btn" onclick="adjustTrim('end', -5)">-5s</button>
+                                <button class="trim-btn" onclick="adjustTrim('end', -1)">-1s</button>
+                                <input type="number" id="trim-end" step="0.5" min="0"
+                                    onchange="onTrimInputChange()" oninput="onTrimInputChange()">
+                                <button class="trim-btn" onclick="adjustTrim('end', 1)">+1s</button>
+                                <button class="trim-btn" onclick="adjustTrim('end', 5)">+5s</button>
+                            </div>
+                            <span class="trim-time" id="trim-end-display">0:00</span>
+                        </div>
+                    </div>
+                    <div class="trim-footer">
+                        <span class="trim-duration">Duration: <strong id="trim-duration-display">0s</strong></span>
+                        <span id="trim-status" class="trim-status"></span>
+                        <button id="trim-apply-btn" class="btn-apply-trim" onclick="applyTrim()">Re-cut Clip</button>
+                    </div>
+                </div>
+
                 <div class="modal-actions">
-                    <button id="modal-download" class="btn-download" onclick="downloadFromModal()">Download Clip</button>
+                    <button class="btn-download" onclick="downloadFromModal()">Download Clip</button>
                 </div>
             </div>
         </div>

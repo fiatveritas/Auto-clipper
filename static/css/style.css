@@ -441,6 +441,141 @@ header h1 {
     font-size: 0.9rem;
 }
 
+/* Trim Section */
+.trim-section {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+}
+
+.trim-section h4 {
+    font-size: 0.9rem;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    font-weight: 500;
+}
+
+.trim-controls {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 12px;
+}
+
+.trim-field {
+    flex: 1;
+}
+
+.trim-field label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.trim-input-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.trim-input-row input {
+    width: 80px;
+    padding: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.85rem;
+    text-align: center;
+    outline: none;
+}
+
+.trim-input-row input:focus {
+    border-color: var(--accent);
+}
+
+.trim-btn {
+    padding: 6px 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.trim-btn:hover {
+    background: var(--surface-hover);
+    border-color: var(--accent);
+    color: var(--text);
+}
+
+.trim-time {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--accent);
+    margin-top: 4px;
+    font-family: monospace;
+}
+
+.trim-footer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.trim-duration {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+}
+
+.trim-duration strong {
+    color: var(--text);
+}
+
+.trim-status {
+    flex: 1;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+}
+
+.trim-status.error {
+    color: var(--danger);
+}
+
+.trim-status.success {
+    color: var(--success);
+}
+
+.trim-status.working {
+    color: var(--warning);
+}
+
+.btn-apply-trim {
+    padding: 8px 20px;
+    background: var(--surface-hover);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    color: var(--accent);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.btn-apply-trim:hover {
+    background: rgba(145, 71, 255, 0.15);
+}
+
+.btn-apply-trim:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .modal-actions {
     padding: 8px 20px 20px;
     display: flex;
@@ -461,6 +596,19 @@ header h1 {
 
 .modal-actions .btn-download:hover {
     background: var(--accent-hover);
+}
+
+/* Trim button in clip cards */
+.clip-actions .btn-trim:hover {
+    background: rgba(145, 71, 255, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* Modal scroll for smaller screens */
+.modal-content {
+    max-height: 90vh;
+    overflow-y: auto;
 }
 
 /* Responsive */

@@ -45,6 +45,24 @@ class ClipManager:
 
         return None
 
+    def get_vod_path(self, job_id):
+        """Get the path to a downloaded VOD if it still exists."""
+        path = os.path.join(self.downloads_dir, f"{job_id}.mp4")
+        return path if os.path.exists(path) else None
+
+    def get_vod_duration(self, video_path):
+        """Get the duration of a video file in seconds."""
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            video_path,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode == 0 and result.stdout.strip():
+            return float(result.stdout.strip())
+        return 0
+
     def extract_clips(self, video_path, highlights, job_id, progress_callback=None):
         """Extract clip segments from the downloaded video using ffmpeg."""
         clips = []
@@ -56,8 +74,8 @@ class ClipManager:
             thumb_filename = f"{job_id}_{clip_id}.jpg"
             thumb_path = os.path.join(self.thumbnails_dir, thumb_filename)
 
-            start_time = max(0, highlight["timestamp"] - highlight.get("pre_pad", 3))
-            duration = highlight.get("duration", 15)
+            start_time = max(0, highlight["timestamp"] - highlight.get("pre_pad", 8))
+            duration = highlight.get("duration", 25)
 
             # Extract clip with ffmpeg
             cmd = [
@@ -74,7 +92,7 @@ class ClipManager:
                 clip_path,
             ]
 
-            result = subprocess.run(cmd, capture_output=True, timeout=120)
+            result = subprocess.run(cmd, capture_output=True, timeout=180)
 
             if result.returncode != 0 or not os.path.exists(clip_path):
                 continue
@@ -95,8 +113,9 @@ class ClipManager:
                 "id": clip_id,
                 "filename": filename,
                 "thumbnail": thumb_filename if os.path.exists(thumb_path) else None,
-                "start_time": start_time,
-                "duration": duration,
+                "start_time": round(start_time, 1),
+                "end_time": round(start_time + duration, 1),
+                "duration": round(duration, 1),
                 "label": highlight.get("label", "Highlight"),
                 "confidence": highlight.get("confidence", 0.5),
                 "timestamp_display": _format_time(start_time),
@@ -107,6 +126,55 @@ class ClipManager:
                 progress_callback((i + 1) / len(highlights))
 
         return clips
+
+    def reclip(self, video_path, job_id, clip_id, new_start, new_end):
+        """Re-extract a clip with new start/end times from the VOD."""
+        duration = new_end - new_start
+        if duration <= 0 or duration > 300:
+            return None
+
+        filename = f"{job_id}_{clip_id}_trim.mp4"
+        clip_path = os.path.join(self.clips_dir, filename)
+        thumb_filename = f"{job_id}_{clip_id}_trim.jpg"
+        thumb_path = os.path.join(self.thumbnails_dir, thumb_filename)
+
+        cmd = [
+            "ffmpeg", "-y",
+            "-ss", str(new_start),
+            "-i", video_path,
+            "-t", str(duration),
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "23",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-movflags", "+faststart",
+            clip_path,
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, timeout=180)
+        if result.returncode != 0 or not os.path.exists(clip_path):
+            return None
+
+        # Thumbnail
+        thumb_cmd = [
+            "ffmpeg", "-y",
+            "-ss", str(new_start + duration / 2),
+            "-i", video_path,
+            "-frames:v", "1",
+            "-q:v", "5",
+            thumb_path,
+        ]
+        subprocess.run(thumb_cmd, capture_output=True, timeout=30)
+
+        return {
+            "filename": filename,
+            "thumbnail": thumb_filename if os.path.exists(thumb_path) else None,
+            "start_time": round(new_start, 1),
+            "end_time": round(new_end, 1),
+            "duration": round(duration, 1),
+            "timestamp_display": _format_time(new_start),
+        }
 
     def delete_clip(self, clip):
         """Delete a clip and its thumbnail."""

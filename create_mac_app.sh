@@ -55,11 +55,8 @@ fi
 # Kill any existing instance
 lsof -ti:8080 | xargs kill -9 2>/dev/null
 
-# Open browser
-(sleep 2 && open "http://localhost:8080") &
-
-# Run server (keep Terminal-like window open)
-python3 app.py
+# Run as standalone desktop app (native window)
+python3 desktop.py
 LAUNCHER
 
 chmod +x "$APP_DIR/Contents/MacOS/launcher"

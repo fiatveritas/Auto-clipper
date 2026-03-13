@@ -220,12 +220,12 @@ Score guide: 0.0 = nothing happening, 0.3 = minor action, 0.6 = good combat, 0.8
     def _finalize(self, highlight):
         """Format a merged highlight for clip extraction."""
         duration = highlight["end_time"] - highlight["timestamp"]
-        duration = max(10, min(30, duration + 5))
+        duration = max(20, min(60, duration + 10))
 
         return {
             "timestamp": highlight["timestamp"],
             "duration": duration,
-            "pre_pad": 5,
+            "pre_pad": 8,
             "label": highlight["label"],
             "confidence": round(min(highlight["confidence"], 1.0), 2),
         }

@@ -290,13 +290,13 @@ class ArcRaidersDetector:
     def _finalize_highlight(self, highlight):
         """Convert a merged highlight window into the output format."""
         duration = highlight["end_time"] - highlight["timestamp"]
-        # Clip duration between 8 and 30 seconds
-        duration = max(8, min(30, duration + 4))
+        # Clip duration between 20 and 60 seconds (default longer)
+        duration = max(20, min(60, duration + 10))
 
         return {
             "timestamp": highlight["timestamp"],
             "duration": duration,
-            "pre_pad": 3,
+            "pre_pad": 8,
             "label": highlight["label"],
             "confidence": round(min(highlight["confidence"] * 1.5, 1.0), 2),
         }

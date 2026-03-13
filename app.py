@@ -20,9 +20,7 @@ os.makedirs(CLIPS_DIR, exist_ok=True)
 os.makedirs(THUMBNAILS_DIR, exist_ok=True)
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 
-# Track active jobs
 jobs = {}
-
 clip_manager = ClipManager(CLIPS_DIR, THUMBNAILS_DIR, DOWNLOADS_DIR)
 
 
@@ -51,6 +49,8 @@ def start_analysis():
         "clips": [],
         "error": None,
         "url": url,
+        "vod_path": None,
+        "vod_duration": 0,
     }
 
     thread = threading.Thread(
@@ -63,11 +63,12 @@ def start_analysis():
 
 @app.route("/api/jobs/<job_id>")
 def get_job(job_id):
-    """Polling endpoint for job status."""
     job = jobs.get(job_id)
     if not job:
         return jsonify({"error": "Job not found"}), 404
-    return jsonify(job)
+    # Don't expose vod_path to frontend
+    safe = {k: v for k, v in job.items() if k != "vod_path"}
+    return jsonify(safe)
 
 
 @app.route("/api/clips/<job_id>")
@@ -75,7 +76,7 @@ def get_clips(job_id):
     job = jobs.get(job_id)
     if not job:
         return jsonify({"error": "Job not found"}), 404
-    return jsonify({"clips": job["clips"]})
+    return jsonify({"clips": job["clips"], "vod_duration": job.get("vod_duration", 0)})
 
 
 @app.route("/api/clips/<job_id>/<clip_id>/download")
@@ -91,6 +92,54 @@ def download_clip(job_id, clip_id):
                 as_attachment=True,
                 download_name=clip["filename"]
             )
+
+    return jsonify({"error": "Clip not found"}), 404
+
+
+@app.route("/api/clips/<job_id>/<clip_id>/trim", methods=["POST"])
+def trim_clip(job_id, clip_id):
+    """Re-extract a clip with new start/end times."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    vod_path = job.get("vod_path")
+    if not vod_path or not os.path.exists(vod_path):
+        return jsonify({"error": "VOD no longer available. Re-analyze to trim clips."}), 400
+
+    data = request.get_json()
+    new_start = data.get("start")
+    new_end = data.get("end")
+
+    if new_start is None or new_end is None:
+        return jsonify({"error": "start and end required"}), 400
+
+    new_start = max(0, float(new_start))
+    new_end = float(new_end)
+
+    if new_end <= new_start:
+        return jsonify({"error": "End must be after start"}), 400
+
+    # Find the clip to update
+    for i, clip in enumerate(job["clips"]):
+        if clip["id"] == clip_id:
+            # Delete old clip file
+            clip_manager.delete_clip(clip)
+
+            # Re-extract with new times
+            result = clip_manager.reclip(vod_path, job_id, clip_id, new_start, new_end)
+            if not result:
+                return jsonify({"error": "Failed to re-extract clip"}), 500
+
+            # Update clip info
+            clip["filename"] = result["filename"]
+            clip["thumbnail"] = result["thumbnail"]
+            clip["start_time"] = result["start_time"]
+            clip["end_time"] = result["end_time"]
+            clip["duration"] = result["duration"]
+            clip["timestamp_display"] = result["timestamp_display"]
+
+            return jsonify({"success": True, "clip": clip})
 
     return jsonify({"error": "Clip not found"}), 404
 
@@ -116,7 +165,6 @@ def _is_valid_twitch_url(url):
 
 
 def _run_analysis(job_id, url, api_key=""):
-    """Background worker that downloads, analyzes, and clips the VOD."""
     job = jobs[job_id]
 
     def update(status, progress, message=""):
@@ -125,7 +173,6 @@ def _run_analysis(job_id, url, api_key=""):
         job["message"] = message
 
     try:
-        # Step 1: Download VOD
         update("downloading", 5, "Downloading Twitch VOD...")
         video_path = clip_manager.download_vod(
             url, job_id,
@@ -138,7 +185,10 @@ def _run_analysis(job_id, url, api_key=""):
         if not video_path:
             raise Exception("Failed to download VOD. Check the URL and try again.")
 
-        # Step 2: Analyze video for highlights
+        # Keep VOD for trimming later
+        job["vod_path"] = video_path
+        job["vod_duration"] = clip_manager.get_vod_duration(video_path)
+
         use_ai = bool(api_key)
 
         if use_ai:
@@ -168,7 +218,6 @@ def _run_analysis(job_id, url, api_key=""):
             job["clips"] = []
             return
 
-        # Step 3: Extract clips
         update("clipping", 82, f"Extracting {len(highlights)} clips...")
         clips = clip_manager.extract_clips(
             video_path, highlights, job_id,
@@ -181,7 +230,7 @@ def _run_analysis(job_id, url, api_key=""):
         job["clips"] = clips
         update("complete", 100, f"Done! Found {len(clips)} highlight clips")
 
-        clip_manager.cleanup_download(video_path)
+        # NOTE: We keep the VOD so users can trim clips
 
     except Exception as e:
         job["error"] = str(e)

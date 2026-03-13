@@ -2,7 +2,9 @@
 let currentJobId = null;
 let currentClips = [];
 let previewClipData = null;
+let previewClipIndex = -1;
 let pollTimer = null;
+let vodDuration = 0;
 
 // Start analysis
 function startAnalysis() {
@@ -15,7 +17,7 @@ function startAnalysis() {
     }
 
     if (!url.includes("twitch.tv")) {
-        showError("That doesn't look like a Twitch URL. Please use a link like https://www.twitch.tv/videos/...");
+        showError("That doesn't look like a Twitch URL");
         return;
     }
 
@@ -44,22 +46,18 @@ function startAnalysis() {
     });
 }
 
-// Enter key to submit
 document.getElementById("vod-url").addEventListener("keydown", (e) => {
     if (e.key === "Enter") startAnalysis();
 });
 
-// Polling for progress (much more reliable than WebSocket)
+// Polling
 function startPolling() {
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(pollJob, 1500);
 }
 
 function stopPolling() {
-    if (pollTimer) {
-        clearInterval(pollTimer);
-        pollTimer = null;
-    }
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 }
 
 function pollJob() {
@@ -79,39 +77,26 @@ function pollJob() {
 
             if (data.status === "complete") {
                 stopPolling();
-                if (data.clips && data.clips.length > 0) {
-                    currentClips = data.clips;
-                    renderClips();
-                } else {
-                    fetchClips(currentJobId);
-                }
-                setAnalyzing(false);
+                fetchClips(currentJobId);
             } else if (data.status === "error") {
                 stopPolling();
                 showError(data.message || data.error || "An error occurred");
                 resetUI();
             }
         })
-        .catch(() => {
-            // Network blip, keep polling
-        });
+        .catch(() => {});
 }
 
-// Progress UI
+// Progress
 function showProgress() {
     document.getElementById("progress-section").classList.remove("hidden");
     document.getElementById("clips-section").classList.add("hidden");
 }
 
 function updateProgress(status, progress, message) {
-    const bar = document.getElementById("progress-bar");
-    const pct = document.getElementById("progress-pct");
-    const title = document.getElementById("progress-title");
-    const msg = document.getElementById("progress-message");
-
-    bar.style.width = progress + "%";
-    pct.textContent = progress + "%";
-    msg.textContent = message || "";
+    document.getElementById("progress-bar").style.width = progress + "%";
+    document.getElementById("progress-pct").textContent = progress + "%";
+    document.getElementById("progress-message").textContent = message || "";
 
     const titles = {
         queued: "Queued...",
@@ -121,15 +106,16 @@ function updateProgress(status, progress, message) {
         complete: "Complete!",
         error: "Error",
     };
-    title.textContent = titles[status] || "Processing...";
+    document.getElementById("progress-title").textContent = titles[status] || "Processing...";
 }
 
-// Fetch and display clips
+// Clips
 function fetchClips(jobId) {
     fetch(`/api/clips/${jobId}`)
         .then((res) => res.json())
         .then((data) => {
             currentClips = data.clips || [];
+            vodDuration = data.vod_duration || 0;
             renderClips();
             setAnalyzing(false);
         })
@@ -161,7 +147,7 @@ function renderClips() {
         <div class="clip-card" data-index="${i}">
             <div class="clip-thumb" onclick="previewClip(${i})">
                 ${clip.thumbnail
-                    ? `<img src="/static/thumbnails/${clip.thumbnail}" alt="${escapeHtml(clip.label)}">`
+                    ? `<img src="/static/thumbnails/${clip.thumbnail}?t=${Date.now()}" alt="${escapeHtml(clip.label)}">`
                     : `<div style="width:100%;height:100%;background:#1a1a2e;display:flex;align-items:center;justify-content:center;color:#666">No Preview</div>`
                 }
                 <div class="play-overlay"><span>&#9654;</span></div>
@@ -177,27 +163,132 @@ function renderClips() {
             </div>
             <div class="clip-actions">
                 <button class="btn-download" onclick="event.stopPropagation(); downloadClip('${clip.id}', '${clip.filename}')">Download</button>
+                <button class="btn-trim" onclick="event.stopPropagation(); previewClip(${i})">Trim</button>
                 <button class="btn-delete" onclick="event.stopPropagation(); deleteClip('${clip.id}', ${i})">Remove</button>
             </div>
         </div>
     `).join("");
 }
 
-// Preview modal
+// Preview + Trim modal
 function previewClip(index) {
     const clip = currentClips[index];
     if (!clip) return;
 
     previewClipData = clip;
+    previewClipIndex = index;
     const modal = document.getElementById("preview-modal");
     const video = document.getElementById("preview-video");
 
-    video.src = `/static/clips/${clip.filename}`;
+    video.src = `/static/clips/${clip.filename}?t=${Date.now()}`;
     document.getElementById("modal-label").textContent = clip.label;
     document.getElementById("modal-time").textContent = `${clip.timestamp_display} - Duration: ${clip.duration}s`;
 
+    // Set up trim controls
+    const startInput = document.getElementById("trim-start");
+    const endInput = document.getElementById("trim-end");
+    const maxTime = vodDuration || clip.end_time + 120;
+
+    startInput.value = clip.start_time;
+    endInput.value = clip.end_time;
+    startInput.max = maxTime;
+    endInput.max = maxTime;
+
+    document.getElementById("trim-start-display").textContent = formatTime(clip.start_time);
+    document.getElementById("trim-end-display").textContent = formatTime(clip.end_time);
+    document.getElementById("trim-duration-display").textContent = clip.duration + "s";
+
+    document.getElementById("trim-status").textContent = "";
+    document.getElementById("trim-status").className = "trim-status";
+
     modal.classList.remove("hidden");
     video.play().catch(() => {});
+}
+
+function onTrimInputChange() {
+    const startInput = document.getElementById("trim-start");
+    const endInput = document.getElementById("trim-end");
+    const start = parseFloat(startInput.value);
+    const end = parseFloat(endInput.value);
+
+    document.getElementById("trim-start-display").textContent = formatTime(start);
+    document.getElementById("trim-end-display").textContent = formatTime(end);
+    document.getElementById("trim-duration-display").textContent = Math.max(0, (end - start)).toFixed(1) + "s";
+}
+
+function adjustTrim(field, delta) {
+    const input = document.getElementById(`trim-${field}`);
+    let val = parseFloat(input.value) + delta;
+    val = Math.max(0, val);
+    if (vodDuration > 0) val = Math.min(vodDuration, val);
+    input.value = val.toFixed(1);
+    onTrimInputChange();
+}
+
+function applyTrim() {
+    if (!previewClipData || !currentJobId) return;
+
+    const start = parseFloat(document.getElementById("trim-start").value);
+    const end = parseFloat(document.getElementById("trim-end").value);
+
+    if (end <= start) {
+        document.getElementById("trim-status").textContent = "End must be after start";
+        document.getElementById("trim-status").className = "trim-status error";
+        return;
+    }
+
+    if (end - start > 300) {
+        document.getElementById("trim-status").textContent = "Max clip length is 5 minutes";
+        document.getElementById("trim-status").className = "trim-status error";
+        return;
+    }
+
+    const statusEl = document.getElementById("trim-status");
+    statusEl.textContent = "Re-cutting clip...";
+    statusEl.className = "trim-status working";
+
+    const trimBtn = document.getElementById("trim-apply-btn");
+    trimBtn.disabled = true;
+
+    fetch(`/api/clips/${currentJobId}/${previewClipData.id}/trim`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start, end }),
+    })
+    .then((res) => res.json())
+    .then((data) => {
+        trimBtn.disabled = false;
+
+        if (data.error) {
+            statusEl.textContent = data.error;
+            statusEl.className = "trim-status error";
+            return;
+        }
+
+        if (data.success && data.clip) {
+            // Update local state
+            currentClips[previewClipIndex] = data.clip;
+            previewClipData = data.clip;
+
+            // Refresh video
+            const video = document.getElementById("preview-video");
+            video.src = `/static/clips/${data.clip.filename}?t=${Date.now()}`;
+            video.play().catch(() => {});
+
+            document.getElementById("modal-time").textContent =
+                `${data.clip.timestamp_display} - Duration: ${data.clip.duration}s`;
+
+            statusEl.textContent = "Clip updated!";
+            statusEl.className = "trim-status success";
+
+            renderClips();
+        }
+    })
+    .catch(() => {
+        trimBtn.disabled = false;
+        statusEl.textContent = "Failed to trim clip";
+        statusEl.className = "trim-status error";
+    });
 }
 
 function closePreview() {
@@ -207,6 +298,7 @@ function closePreview() {
     video.src = "";
     modal.classList.add("hidden");
     previewClipData = null;
+    previewClipIndex = -1;
 }
 
 function closeModal(event) {
@@ -217,7 +309,6 @@ function downloadFromModal() {
     if (previewClipData) downloadClip(previewClipData.id, previewClipData.filename);
 }
 
-// Clip actions
 function downloadClip(clipId, filename) {
     const a = document.createElement("a");
     a.href = `/api/clips/${currentJobId}/${clipId}/download`;
@@ -244,24 +335,19 @@ function deleteClip(clipId, index) {
 function toggleApiKey() {
     const wrapper = document.getElementById("api-key-wrapper");
     const icon = document.getElementById("api-toggle-icon");
-    const isHidden = wrapper.classList.contains("hidden");
     wrapper.classList.toggle("hidden");
-    icon.textContent = isHidden ? "-" : "+";
+    icon.textContent = wrapper.classList.contains("hidden") ? "+" : "-";
 }
 
-// UI helpers
+// Helpers
 function setAnalyzing(analyzing) {
     const btn = document.getElementById("analyze-btn");
     const input = document.getElementById("vod-url");
-
     btn.disabled = analyzing;
     input.disabled = analyzing;
-
-    if (analyzing) {
-        btn.innerHTML = '<span class="spinner"></span> Analyzing';
-    } else {
-        btn.innerHTML = '<span class="btn-text">Analyze</span><span class="btn-icon">&#9654;</span>';
-    }
+    btn.innerHTML = analyzing
+        ? '<span class="spinner"></span> Analyzing'
+        : '<span class="btn-text">Analyze</span><span class="btn-icon">&#9654;</span>';
 }
 
 function showError(msg) {
@@ -284,6 +370,15 @@ function escapeHtml(str) {
     const div = document.createElement("div");
     div.textContent = str;
     return div.innerHTML;
+}
+
+function formatTime(seconds) {
+    seconds = Math.round(seconds);
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 document.addEventListener("keydown", (e) => {
