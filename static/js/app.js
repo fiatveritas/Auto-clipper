@@ -575,44 +575,74 @@ function drawTikTokPreview() {
     }
 }
 
-// Canvas mouse interaction for custom drawing
+// Canvas mouse + touch interaction for custom drawing
 (function() {
     let drawing = false;
     let startX, startY;
 
+    function getPos(e, canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        let clientX, clientY;
+        if (e.touches && e.touches.length > 0) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else if (e.changedTouches && e.changedTouches.length > 0) {
+            clientX = e.changedTouches[0].clientX;
+            clientY = e.changedTouches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+        return {
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY,
+        };
+    }
+
+    function onStart(e) {
+        if (tiktokCurrentPreset !== "custom") return;
+        e.preventDefault();
+        drawing = true;
+        const canvas = document.getElementById("tiktok-canvas");
+        const pos = getPos(e, canvas);
+        startX = pos.x;
+        startY = pos.y;
+    }
+
+    function onMove(e) {
+        if (!drawing) return;
+        e.preventDefault();
+        const canvas = document.getElementById("tiktok-canvas");
+        const pos = getPos(e, canvas);
+
+        const x = Math.min(startX, pos.x) / canvas.width;
+        const y = Math.min(startY, pos.y) / canvas.height;
+        const w = Math.abs(pos.x - startX) / canvas.width;
+        const h = Math.abs(pos.y - startY) / canvas.height;
+
+        tiktokRegions[tiktokDrawing] = { x, y, w, h };
+        drawTikTokOverlay();
+        drawTikTokPreview();
+    }
+
+    function onEnd() { drawing = false; }
+
     document.addEventListener("DOMContentLoaded", () => {
         const canvas = document.getElementById("tiktok-canvas");
 
-        canvas.addEventListener("mousedown", (e) => {
-            if (tiktokCurrentPreset !== "custom") return;
-            drawing = true;
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            startX = (e.clientX - rect.left) * scaleX;
-            startY = (e.clientY - rect.top) * scaleY;
-        });
+        // Mouse events
+        canvas.addEventListener("mousedown", onStart);
+        canvas.addEventListener("mousemove", onMove);
+        canvas.addEventListener("mouseup", onEnd);
 
-        canvas.addEventListener("mousemove", (e) => {
-            if (!drawing) return;
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            const curX = (e.clientX - rect.left) * scaleX;
-            const curY = (e.clientY - rect.top) * scaleY;
+        // Touch events
+        canvas.addEventListener("touchstart", onStart, { passive: false });
+        canvas.addEventListener("touchmove", onMove, { passive: false });
+        canvas.addEventListener("touchend", onEnd);
 
-            const x = Math.min(startX, curX) / canvas.width;
-            const y = Math.min(startY, curY) / canvas.height;
-            const w = Math.abs(curX - startX) / canvas.width;
-            const h = Math.abs(curY - startY) / canvas.height;
-
-            tiktokRegions[tiktokDrawing] = { x, y, w, h };
-            drawTikTokOverlay();
-            drawTikTokPreview();
-        });
-
-        canvas.addEventListener("mouseup", () => { drawing = false; });
-
+        // Right-click / long-press to switch region
         canvas.addEventListener("contextmenu", (e) => {
             e.preventDefault();
             tiktokDrawing = tiktokDrawing === "gameplay" ? "webcam" : "gameplay";
@@ -620,8 +650,31 @@ function drawTikTokPreview() {
             status.textContent = `Now drawing: ${tiktokDrawing}`;
             status.className = "trim-status";
         });
+
+        // Long press for touch (switch region)
+        let longPressTimer = null;
+        canvas.addEventListener("touchstart", (e) => {
+            longPressTimer = setTimeout(() => {
+                tiktokDrawing = tiktokDrawing === "gameplay" ? "webcam" : "gameplay";
+                const status = document.getElementById("tiktok-status");
+                status.textContent = `Now drawing: ${tiktokDrawing}`;
+                status.className = "trim-status";
+                drawing = false; // cancel the draw
+            }, 600);
+        });
+        canvas.addEventListener("touchend", () => { clearTimeout(longPressTimer); });
+        canvas.addEventListener("touchmove", () => { clearTimeout(longPressTimer); });
     });
 })();
+
+function switchDrawingRegion() {
+    tiktokDrawing = tiktokDrawing === "gameplay" ? "webcam" : "gameplay";
+    document.getElementById("tiktok-drawing-label").textContent =
+        tiktokDrawing.charAt(0).toUpperCase() + tiktokDrawing.slice(1);
+    const status = document.getElementById("tiktok-status");
+    status.textContent = `Now drawing: ${tiktokDrawing}`;
+    status.className = "trim-status";
+}
 
 function exportTikTok() {
     if (!previewClipData || !currentJobId) return;

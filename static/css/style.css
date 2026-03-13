@@ -662,26 +662,219 @@ header h1 {
     overflow-y: auto;
 }
 
+/* Mobile-only and desktop-only hints */
+.mobile-hint,
+.btn-switch-region {
+    display: none;
+}
+
+.desktop-hint {
+    display: inline;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
     .app {
-        padding: 20px 12px;
+        padding: 16px 10px;
+    }
+
+    header {
+        margin-bottom: 20px;
+    }
+
+    header h1 {
+        font-size: 1.4rem;
+    }
+
+    .subtitle {
+        font-size: 0.85rem;
+    }
+
+    .card {
+        padding: 16px;
+        margin-bottom: 16px;
     }
 
     .input-group {
         flex-direction: column;
     }
 
+    .input-group input {
+        padding: 12px 14px;
+        font-size: 0.9rem;
+    }
+
     #analyze-btn {
         justify-content: center;
+        padding: 12px 20px;
+    }
+
+    .time-range-inputs {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .time-arrow {
+        padding: 0;
+        text-align: center;
     }
 
     .clips-grid {
         grid-template-columns: 1fr;
+        gap: 12px;
     }
 
-    header h1 {
-        font-size: 1.5rem;
+    /* Modal mobile */
+    .modal {
+        padding: 8px;
+        align-items: flex-start;
+    }
+
+    .modal-content {
+        max-height: 95vh;
+        border-radius: 12px;
+    }
+
+    .modal-info {
+        padding: 12px 14px 6px;
+    }
+
+    .modal-actions {
+        padding: 8px 14px 14px;
+        flex-direction: column;
+    }
+
+    .modal-actions .btn-download,
+    .modal-actions .btn-tiktok {
+        width: 100%;
+        text-align: center;
+    }
+
+    /* Trim controls mobile */
+    .trim-section {
+        padding: 12px 14px;
+    }
+
+    .trim-controls {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .trim-input-row {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .trim-footer {
+        flex-direction: column;
+        gap: 8px;
+        align-items: stretch;
+    }
+
+    .btn-apply-trim {
+        text-align: center;
+    }
+
+    /* Clip card actions */
+    .clip-actions {
+        flex-wrap: wrap;
+    }
+
+    /* TikTok editor mobile */
+    .tiktok-editor {
+        padding: 16px;
+        max-width: 100%;
+    }
+
+    .tiktok-title {
+        font-size: 1.1rem;
+        padding-right: 36px;
+    }
+
+    .tiktok-layout-presets {
+        gap: 6px;
+        margin-bottom: 12px;
+    }
+
+    .preset-btn {
+        padding: 6px 10px;
+        font-size: 0.78rem;
+    }
+
+    .tiktok-canvas-wrap {
+        display: block;
+        margin-right: 0;
+        margin-bottom: 12px;
+    }
+
+    #tiktok-canvas {
+        max-width: 100%;
+    }
+
+    .tiktok-canvas-legend {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .desktop-hint {
+        display: none;
+    }
+
+    .mobile-hint {
+        display: inline;
+    }
+
+    .btn-switch-region {
+        display: block;
+        width: 100%;
+        margin-top: 10px;
+        padding: 10px;
+        background: var(--surface-hover);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-size: 0.85rem;
+        cursor: pointer;
+        text-align: center;
+    }
+
+    .tiktok-preview-wrap {
+        display: block;
+        text-align: center;
+        margin-bottom: 12px;
+    }
+
+    #tiktok-preview {
+        width: 120px;
+        height: 213px;
+    }
+
+    .tiktok-footer {
+        flex-direction: column;
+        gap: 8px;
+        align-items: stretch;
+    }
+
+    .tiktok-footer .btn-apply-trim {
+        text-align: center;
+    }
+}
+
+/* Medium screens - side by side but tighter */
+@media (min-width: 601px) and (max-width: 900px) {
+    .tiktok-canvas-wrap {
+        display: block;
+        margin-right: 0;
+        margin-bottom: 16px;
+    }
+
+    .tiktok-preview-wrap {
+        display: block;
+        text-align: center;
+    }
+
+    #tiktok-canvas {
+        max-width: 100%;
     }
 }
 

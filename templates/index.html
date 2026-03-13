@@ -157,8 +157,12 @@
                     <div class="tiktok-canvas-legend">
                         <span class="legend-gameplay">Green = Gameplay</span>
                         <span class="legend-webcam">Blue = Webcam</span>
-                        <span>Click + drag to draw. Right-click to switch region.</span>
+                        <span class="desktop-hint">Click + drag to draw. Right-click to switch region.</span>
+                        <span class="mobile-hint">Tap + drag to draw.</span>
                     </div>
+                    <button id="tiktok-switch-region" class="btn-switch-region" onclick="switchDrawingRegion()">
+                        Drawing: <strong id="tiktok-drawing-label">Gameplay</strong> — Tap to switch
+                    </button>
                 </div>
 
                 <div class="tiktok-preview-wrap">
