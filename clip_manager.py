@@ -1,6 +1,7 @@
 import os
 import uuid
 import subprocess
+import time
 import yt_dlp
 
 
@@ -17,9 +18,20 @@ class ClipManager:
         output_path = os.path.join(self.downloads_dir, f"{job_id}.mp4")
 
         last_progress = [0]
+        download_start_time = [None]
+        # Estimate expected duration in seconds for time-based progress
+        expected_duration = [None]
+        if time_start or time_end:
+            start_sec = _parse_time_to_seconds(time_start or "0") or 0
+            end_sec = _parse_time_to_seconds(time_end) if time_end else None
+            if end_sec is not None:
+                expected_duration[0] = end_sec - start_sec
 
         def progress_hook(d):
             if progress_callback and d["status"] == "downloading":
+                if download_start_time[0] is None:
+                    download_start_time[0] = time.time()
+
                 pct = None
 
                 # Method 1: total bytes known
@@ -32,7 +44,7 @@ class ClipManager:
                 if pct is None:
                     frag_idx = d.get("fragment_index")
                     frag_count = d.get("fragment_count")
-                    if frag_idx and frag_count and frag_count > 0:
+                    if frag_idx is not None and frag_count and frag_count > 0:
                         pct = frag_idx / frag_count
 
                 # Method 3: parse _percent_str from yt-dlp
@@ -43,9 +55,29 @@ class ClipManager:
                     except (ValueError, TypeError):
                         pass
 
-                if pct is not None and pct - last_progress[0] >= 0.02:
+                # Method 4: estimate from elapsed time vs expected video duration
+                # Twitch downloads are roughly real-time to 3x speed
+                if pct is None and expected_duration[0] and download_start_time[0]:
+                    elapsed = time.time() - download_start_time[0]
+                    # Assume download speed is ~2x real-time on average
+                    estimated_total_time = expected_duration[0] / 2.0
+                    if estimated_total_time > 0:
+                        pct = min(elapsed / estimated_total_time, 0.95)
+
+                # Method 5: check downloaded file size growth
+                if pct is None and os.path.exists(output_path):
+                    try:
+                        file_size = os.path.getsize(output_path)
+                        # Rough estimate: 720p Twitch is ~2-4 MB/s, use 3 MB/s
+                        if expected_duration[0]:
+                            est_total = expected_duration[0] * 3 * 1024 * 1024
+                            pct = min(file_size / est_total, 0.95)
+                    except OSError:
+                        pass
+
+                if pct is not None and pct - last_progress[0] >= 0.01:
                     last_progress[0] = pct
-                    progress_callback(min(pct, 1.0))
+                    progress_callback(min(pct, 0.99))
 
             elif progress_callback and d["status"] == "finished":
                 progress_callback(1.0)
