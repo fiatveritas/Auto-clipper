@@ -1,3 +1,18 @@
+// Load saved API key on page load
+window.addEventListener("DOMContentLoaded", () => {
+    const saved = localStorage.getItem("xai_api_key");
+    if (saved) document.getElementById("api-key").value = saved;
+});
+
+// Save API key whenever it changes
+document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("api-key").addEventListener("input", (e) => {
+        const val = e.target.value.trim();
+        if (val) localStorage.setItem("xai_api_key", val);
+        else localStorage.removeItem("xai_api_key");
+    });
+});
+
 // State
 let currentJobId = null;
 let currentClips = [];
