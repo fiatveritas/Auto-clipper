@@ -25,10 +25,13 @@ function startAnalysis() {
     setAnalyzing(true);
     showProgress();
 
+    const timeStart = document.getElementById("time-start").value.trim();
+    const timeEnd = document.getElementById("time-end").value.trim();
+
     fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, api_key: apiKey }),
+        body: JSON.stringify({ url, api_key: apiKey, time_start: timeStart, time_end: timeEnd }),
     })
     .then((res) => res.json())
     .then((data) => {
@@ -331,7 +334,14 @@ function deleteClip(clipId, index) {
         });
 }
 
-// API key toggle
+// Toggles
+function toggleTimeRange() {
+    const wrapper = document.getElementById("time-range-wrapper");
+    const icon = document.getElementById("time-toggle-icon");
+    wrapper.classList.toggle("hidden");
+    icon.textContent = wrapper.classList.contains("hidden") ? "+" : "-";
+}
+
 function toggleApiKey() {
     const wrapper = document.getElementById("api-key-wrapper");
     const icon = document.getElementById("api-toggle-icon");

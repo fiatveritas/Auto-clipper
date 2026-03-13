@@ -24,6 +24,28 @@
                     <span class="btn-icon">&#9654;</span>
                 </button>
             </div>
+            <!-- Time Range -->
+            <div class="time-range-section">
+                <button class="toggle-api" onclick="toggleTimeRange()">
+                    <span id="time-toggle-icon">+</span> Download specific part (faster)
+                </button>
+                <div id="time-range-wrapper" class="hidden">
+                    <div class="time-range-inputs">
+                        <div class="time-field">
+                            <label>From</label>
+                            <input type="text" id="time-start" placeholder="0:00:00" autocomplete="off">
+                        </div>
+                        <span class="time-arrow">to</span>
+                        <div class="time-field">
+                            <label>To</label>
+                            <input type="text" id="time-end" placeholder="End of stream" autocomplete="off">
+                        </div>
+                    </div>
+                    <p class="api-hint">Only download part of the stream. Use format like <strong>1:30:00</strong> or <strong>45:00</strong>. Leave empty for full VOD.</p>
+                </div>
+            </div>
+
+            <!-- API Key -->
             <div class="api-key-section">
                 <button class="toggle-api" onclick="toggleApiKey()">
                     <span id="api-toggle-icon">+</span> AI Mode (xAI Grok Vision)

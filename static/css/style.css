@@ -123,6 +123,57 @@ header h1 {
     font-size: 0.8em;
 }
 
+/* Time Range Section */
+.time-range-section {
+    margin-top: 14px;
+}
+
+.time-range-inputs {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.time-field {
+    flex: 1;
+}
+
+.time-field label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+}
+
+.time-field input {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 0.95rem;
+    font-family: monospace;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.time-field input:focus {
+    border-color: var(--accent);
+}
+
+.time-field input::placeholder {
+    color: #636369;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.time-arrow {
+    padding-bottom: 10px;
+    color: var(--text-dim);
+    font-size: 0.9rem;
+}
+
 /* API Key Section */
 .api-key-section {
     margin-top: 14px;

@@ -34,6 +34,8 @@ def start_analysis():
     data = request.get_json()
     url = data.get("url", "").strip()
     api_key = data.get("api_key", "").strip()
+    time_start = data.get("time_start", "").strip()
+    time_end = data.get("time_end", "").strip()
 
     if not url:
         return jsonify({"error": "No URL provided"}), 400
@@ -54,7 +56,7 @@ def start_analysis():
     }
 
     thread = threading.Thread(
-        target=_run_analysis, args=(job_id, url, api_key), daemon=True
+        target=_run_analysis, args=(job_id, url, api_key, time_start, time_end), daemon=True
     )
     thread.start()
 
@@ -164,7 +166,7 @@ def _is_valid_twitch_url(url):
     return any(pattern in url.lower() for pattern in valid_patterns)
 
 
-def _run_analysis(job_id, url, api_key=""):
+def _run_analysis(job_id, url, api_key="", time_start="", time_end=""):
     job = jobs[job_id]
 
     def update(status, progress, message=""):
@@ -173,12 +175,18 @@ def _run_analysis(job_id, url, api_key=""):
         job["message"] = message
 
     try:
-        update("downloading", 5, "Downloading Twitch VOD...")
+        range_msg = ""
+        if time_start or time_end:
+            range_msg = f" ({time_start or '0:00'} to {time_end or 'end'})"
+        update("downloading", 5, f"Downloading Twitch VOD{range_msg}...")
+
         video_path = clip_manager.download_vod(
             url, job_id,
+            time_start=time_start or None,
+            time_end=time_end or None,
             progress_callback=lambda p: update(
                 "downloading", 5 + int(p * 35),
-                f"Downloading... {int(p * 100)}%"
+                f"Downloading{range_msg}... {int(p * 100)}%"
             )
         )
 

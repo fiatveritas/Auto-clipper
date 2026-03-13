@@ -12,8 +12,8 @@ class ClipManager:
         self.thumbnails_dir = thumbnails_dir
         self.downloads_dir = downloads_dir
 
-    def download_vod(self, url, job_id, progress_callback=None):
-        """Download a Twitch VOD using yt-dlp."""
+    def download_vod(self, url, job_id, time_start=None, time_end=None, progress_callback=None):
+        """Download a Twitch VOD using yt-dlp, optionally a time range."""
         output_path = os.path.join(self.downloads_dir, f"{job_id}.mp4")
 
         last_progress = [0]
@@ -36,6 +36,17 @@ class ClipManager:
             "no_warnings": True,
             "socket_timeout": 30,
         }
+
+        # Time range for partial downloads
+        if time_start or time_end:
+            start_sec = _parse_time_to_seconds(time_start or "0") or 0
+            end_sec = _parse_time_to_seconds(time_end) if time_end else float("inf")
+            if end_sec is None:
+                end_sec = float("inf")
+            ydl_opts["download_ranges"] = yt_dlp.utils.download_range_func(
+                None, [{"start_time": start_sec, "end_time": end_sec}]
+            )
+            ydl_opts["force_keyframes_at_cuts"] = True
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
@@ -202,3 +213,36 @@ def _format_time(seconds):
     if hours > 0:
         return f"{hours}:{minutes:02d}:{secs:02d}"
     return f"{minutes}:{secs:02d}"
+
+
+def _parse_time_to_seconds(time_str):
+    """Parse a time string like '1:30:00' or '45:00' or '90' into seconds."""
+    time_str = time_str.strip()
+    if not time_str or time_str == "inf":
+        return None
+
+    parts = time_str.split(":")
+    try:
+        if len(parts) == 3:
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+        elif len(parts) == 2:
+            return int(parts[0]) * 60 + float(parts[1])
+        else:
+            return float(parts[0])
+    except (ValueError, IndexError):
+        return None
+
+
+def _make_download_sections(start_str, end_str):
+    """Create a yt-dlp download_sections string for partial downloads."""
+    start_sec = _parse_time_to_seconds(start_str)
+    end_sec = _parse_time_to_seconds(end_str)
+
+    if start_sec is not None and end_sec is not None:
+        return f"*{start_sec}-{end_sec}"
+    elif start_sec is not None:
+        return f"*{start_sec}-inf"
+    elif end_sec is not None:
+        return f"*0-{end_sec}"
+
+    return None
