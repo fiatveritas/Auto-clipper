@@ -1,8 +1,5 @@
 flask
-flask-socketio
 yt-dlp
 opencv-python-headless
 numpy
 Pillow
-gunicorn
-eventlet

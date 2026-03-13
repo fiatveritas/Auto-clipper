@@ -123,6 +123,63 @@ header h1 {
     font-size: 0.8em;
 }
 
+/* API Key Section */
+.api-key-section {
+    margin-top: 14px;
+}
+
+.toggle-api {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 4px 0;
+    transition: color 0.2s;
+}
+
+.toggle-api:hover {
+    color: var(--accent);
+}
+
+#api-toggle-icon {
+    display: inline-block;
+    width: 16px;
+    font-weight: bold;
+    color: var(--accent);
+}
+
+#api-key-wrapper {
+    margin-top: 10px;
+}
+
+#api-key-wrapper input {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+#api-key-wrapper input:focus {
+    border-color: var(--accent);
+}
+
+#api-key-wrapper input::placeholder {
+    color: #636369;
+}
+
+.api-hint {
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    line-height: 1.4;
+}
+
 .error-msg {
     margin-top: 12px;
     padding: 10px 14px;

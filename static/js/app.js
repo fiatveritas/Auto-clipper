@@ -2,26 +2,12 @@
 let currentJobId = null;
 let currentClips = [];
 let previewClipData = null;
-
-// Socket.IO connection
-const socket = io();
-
-socket.on("job_update", (data) => {
-    if (data.job_id !== currentJobId) return;
-    updateProgress(data.status, data.progress, data.message);
-
-    if (data.status === "complete") {
-        fetchClips(data.job_id);
-    } else if (data.status === "error") {
-        showError(data.message);
-        resetUI();
-    }
-});
+let pollTimer = null;
 
 // Start analysis
 function startAnalysis() {
-    const urlInput = document.getElementById("vod-url");
-    const url = urlInput.value.trim();
+    const url = document.getElementById("vod-url").value.trim();
+    const apiKey = document.getElementById("api-key").value.trim();
 
     if (!url) {
         showError("Please paste a Twitch VOD link");
@@ -40,7 +26,7 @@ function startAnalysis() {
     fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, api_key: apiKey }),
     })
     .then((res) => res.json())
     .then((data) => {
@@ -50,19 +36,68 @@ function startAnalysis() {
             return;
         }
         currentJobId = data.job_id;
+        startPolling();
     })
-    .catch((err) => {
+    .catch(() => {
         showError("Failed to start analysis. Please try again.");
         resetUI();
     });
 }
 
-// Allow Enter key to submit
+// Enter key to submit
 document.getElementById("vod-url").addEventListener("keydown", (e) => {
     if (e.key === "Enter") startAnalysis();
 });
 
-// Progress updates
+// Polling for progress (much more reliable than WebSocket)
+function startPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(pollJob, 1500);
+}
+
+function stopPolling() {
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+}
+
+function pollJob() {
+    if (!currentJobId) return;
+
+    fetch(`/api/jobs/${currentJobId}`)
+        .then((res) => res.json())
+        .then((data) => {
+            if (data.error && !data.status) {
+                showError(data.error);
+                resetUI();
+                stopPolling();
+                return;
+            }
+
+            updateProgress(data.status, data.progress, data.message);
+
+            if (data.status === "complete") {
+                stopPolling();
+                if (data.clips && data.clips.length > 0) {
+                    currentClips = data.clips;
+                    renderClips();
+                } else {
+                    fetchClips(currentJobId);
+                }
+                setAnalyzing(false);
+            } else if (data.status === "error") {
+                stopPolling();
+                showError(data.message || data.error || "An error occurred");
+                resetUI();
+            }
+        })
+        .catch(() => {
+            // Network blip, keep polling
+        });
+}
+
+// Progress UI
 function showProgress() {
     document.getElementById("progress-section").classList.remove("hidden");
     document.getElementById("clips-section").classList.add("hidden");
@@ -126,7 +161,7 @@ function renderClips() {
         <div class="clip-card" data-index="${i}">
             <div class="clip-thumb" onclick="previewClip(${i})">
                 ${clip.thumbnail
-                    ? `<img src="/static/thumbnails/${clip.thumbnail}" alt="${clip.label}">`
+                    ? `<img src="/static/thumbnails/${clip.thumbnail}" alt="${escapeHtml(clip.label)}">`
                     : `<div style="width:100%;height:100%;background:#1a1a2e;display:flex;align-items:center;justify-content:center;color:#666">No Preview</div>`
                 }
                 <div class="play-overlay"><span>&#9654;</span></div>
@@ -175,15 +210,11 @@ function closePreview() {
 }
 
 function closeModal(event) {
-    if (event.target === event.currentTarget) {
-        closePreview();
-    }
+    if (event.target === event.currentTarget) closePreview();
 }
 
 function downloadFromModal() {
-    if (previewClipData) {
-        downloadClip(previewClipData.id, previewClipData.filename);
-    }
+    if (previewClipData) downloadClip(previewClipData.id, previewClipData.filename);
 }
 
 // Clip actions
@@ -207,6 +238,15 @@ function deleteClip(clipId, index) {
                 renderClips();
             }
         });
+}
+
+// API key toggle
+function toggleApiKey() {
+    const wrapper = document.getElementById("api-key-wrapper");
+    const icon = document.getElementById("api-toggle-icon");
+    const isHidden = wrapper.classList.contains("hidden");
+    wrapper.classList.toggle("hidden");
+    icon.textContent = isHidden ? "-" : "+";
 }
 
 // UI helpers
@@ -236,6 +276,7 @@ function hideError() {
 
 function resetUI() {
     setAnalyzing(false);
+    stopPolling();
     document.getElementById("progress-section").classList.add("hidden");
 }
 
@@ -245,7 +286,6 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
-// Keyboard shortcut: Escape to close modal
 document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closePreview();
 });

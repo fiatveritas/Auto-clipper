@@ -27,6 +27,23 @@
                     <span class="btn-icon">&#9654;</span>
                 </button>
             </div>
+
+            <!-- API Key (optional) -->
+            <div class="api-key-section">
+                <button class="toggle-api" onclick="toggleApiKey()">
+                    <span id="api-toggle-icon">+</span> AI Mode (xAI Grok Vision)
+                </button>
+                <div id="api-key-wrapper" class="hidden">
+                    <input
+                        type="password"
+                        id="api-key"
+                        placeholder="Paste your xAI API key for AI-powered analysis"
+                        autocomplete="off"
+                    >
+                    <p class="api-hint">Without an API key, the app uses computer vision (still works, just less accurate). With Grok, AI actually watches and understands your gameplay.</p>
+                </div>
+            </div>
+
             <div id="error-msg" class="error-msg hidden"></div>
         </section>
 
@@ -70,7 +87,6 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>
