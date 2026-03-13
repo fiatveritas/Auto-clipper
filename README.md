@@ -18,160 +18,45 @@ Your settings (game, API key, everything) are saved automatically — even if yo
 
 ---
 
-## Windows Installation
+## Windows
 
-### Step 1: Install Python
+1. Install Python from [python.org/downloads](https://www.python.org/downloads/) — **check "Add python.exe to PATH"** at the bottom of the installer
+2. Download this project: click the green **"<> Code"** button on this page → **"Download ZIP"**
+3. Unzip it, open the folder, and double-click **`install.bat`**
+4. When it says "Installation Complete", double-click **`run.bat`**
 
-1. Go to [python.org/downloads](https://www.python.org/downloads/) in your browser
-2. Click the big yellow **"Download Python 3.x.x"** button
-3. Open the downloaded `.exe` file
-4. **IMPORTANT: Check the box at the bottom that says "Add python.exe to PATH"** — if you miss this, nothing will work later
-5. Click **"Install Now"**
-6. Wait for it to finish, then click **Close**
-
-To make sure it worked:
-- Press the **Windows key**, type **cmd**, and press Enter to open Command Prompt
-- Type `python --version` and press Enter
-- You should see something like `Python 3.12.x`
-- If it says "not recognized", you missed the PATH checkbox — uninstall Python, download again, and **check that box**
-
-### Step 2: Download Auto-Clipper from GitHub
-
-1. Go to **[github.com/bendawg2010/Auto-clipper](https://github.com/bendawg2010/Auto-clipper)** in your browser
-2. Click the green **"<> Code"** button near the top-right
-3. Click **"Download ZIP"**
-4. Open your **Downloads** folder and find **Auto-clipper-main.zip**
-5. **Right-click** the ZIP file and click **"Extract All..."**
-6. Click **Extract** — this creates a folder called **Auto-clipper-main**
-7. Open the **Auto-clipper-main** folder — you should see files like `app.py`, `install.bat`, `run.bat`, etc.
-
-### Step 3: Run the Installer
-
-1. Double-click **`install.bat`** inside the Auto-clipper-main folder
-2. If Windows shows a blue **"Windows protected your PC"** popup, click **"More info"** then **"Run anyway"**
-3. A Command Prompt window will open and start installing everything
-
-The installer will automatically:
-- Download and install **FFmpeg** (the video processing tool)
-- Create a Python virtual environment
-- Install all the app's dependencies
-
-This takes a few minutes. When it says **"Installation Complete!"** you're done. Press any key to close the window.
-
-### Step 4: Run It
-
-Double-click **`run.bat`** inside the Auto-clipper-main folder.
-
-It will start the server and open your browser automatically to **http://localhost:8080**.
-
-That's it — you should see the Auto-Clipper interface.
-
-### Running It Again Later
-
-Every time you want to use Auto-Clipper, just double-click **`run.bat`**. That's all.
+Your browser opens to **http://localhost:8080** — that's the app. Next time, just double-click **`run.bat`** again.
 
 ---
 
-## Mac Installation
+## Mac
 
-### Step 1: Open Terminal
-
-1. Press **Command + Space** to open Spotlight
-2. Type **Terminal** and press Enter
-3. A black/white window will open — this is where you type all the commands below
-
-### Step 2: Download Auto-Clipper from GitHub
-
-Since you probably don't have Git installed yet, you need to download the project as a ZIP file first:
-
-1. Go to **[github.com/bendawg2010/Auto-clipper](https://github.com/bendawg2010/Auto-clipper)** in Safari
-2. Click the green **"<> Code"** button near the top-right
-3. Click **"Download ZIP"**
-4. The file **Auto-clipper-main.zip** will download to your **Downloads** folder
-5. **Double-click** the ZIP file in your Downloads folder to unzip it — this creates a folder called **Auto-clipper-main**
-
-### Step 3: Move to Your Home Folder
-
-In Terminal, type these commands one at a time (press Enter after each):
+1. Download this project: click the green **"<> Code"** button on this page → **"Download ZIP"**
+2. Double-click the ZIP in your Downloads folder to unzip it
+3. Open **Terminal** (Command + Space, type Terminal, press Enter)
+4. Run these commands:
 
 ```bash
 mv ~/Downloads/Auto-clipper-main ~/Auto-clipper
 cd ~/Auto-clipper
-```
-
-This moves the unzipped folder to your home directory and renames it to `Auto-clipper`.
-
-### Step 4: Install Homebrew (Mac's Package Manager)
-
-Homebrew installs everything else we need. Paste this entire command into Terminal and press Enter:
-
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-- It will ask for your **Mac password** — type it and press Enter. **You won't see the characters as you type, that's normal.**
-- It will tell you what it's going to install — press **Enter** to continue
-- This takes a few minutes
-
-**IMPORTANT — After Homebrew finishes**, it shows two commands under **"Next steps"** that you need to run. They look something like this (the exact path depends on your Mac):
-
-```bash
-echo >> ~/.zprofile
-echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
-eval "$(/opt/homebrew/bin/brew shellenv)"
-```
-
-**Copy and paste those commands from YOUR Terminal** — the ones Homebrew tells you, not the example above. Then press Enter.
-
-To verify it worked, type:
-```bash
-brew --version
-```
-You should see something like `Homebrew 4.x.x`.
-
-### Step 5: Run the Installer
-
-Now make the install script executable and run it:
-
-```bash
 chmod +x install.sh run.sh
 ./install.sh
 ```
 
-The installer will automatically:
-- Install **Python**, **Git**, and **FFmpeg** using Homebrew
-- Create a Python virtual environment
-- Install all the app's dependencies
+The installer handles everything — Homebrew, Python, Git, FFmpeg, dependencies. It will ask for your Mac password (you won't see characters as you type — that's normal). If it installs Homebrew for the first time, **copy and paste the "Next steps" commands it shows you**, then run `./install.sh` again.
 
-This takes a few minutes. When it says **"Installation Complete!"** you're done.
-
-### Step 6: Run It
+When it says "Installation Complete":
 
 ```bash
 ./run.sh
 ```
 
-It will start the server and open your browser automatically to **http://localhost:8080**.
+Your browser opens to **http://localhost:8080** — that's the app.
 
-That's it — you should see the Auto-Clipper interface.
-
-### Running It Again Later
-
-Every time you want to use Auto-Clipper, open Terminal and type:
-
+**Next time**, just open Terminal and run:
 ```bash
-cd ~/Auto-clipper
-./run.sh
+cd ~/Auto-clipper && ./run.sh
 ```
-
-### Optional: Create a Desktop App Icon
-
-```bash
-chmod +x create_mac_app.sh
-./create_mac_app.sh
-```
-
-This creates an app on your Desktop you can double-click instead of using Terminal.
 
 ---
 
@@ -248,41 +133,12 @@ Click **Remove** on any clip card to delete it. This just removes it from the cu
 
 ## iPhone / iPad
 
-Auto-Clipper runs on your computer — you view it on your phone through Safari.
+The app runs on your computer — you just view it on your phone through Safari.
 
-### Step 1: Set Up on Your Computer First
-
-Follow the **Windows** or **Mac** guide above to get Auto-Clipper running on your computer.
-
-### Step 2: Find Your Computer's IP Address
-
-**Windows:**
-- Open Command Prompt
-- Type `ipconfig`
-- Look for **"IPv4 Address"** — it's something like `192.168.1.42`
-
-**Mac:**
-- Open Terminal
-- Type `ipconfig getifaddr en0`
-- It will show something like `192.168.1.42`
-
-Write this number down.
-
-### Step 3: Open on Your iPhone
-
-1. Make sure your iPhone is on the **same Wi-Fi** as your computer
-2. Open **Safari**
-3. In the address bar, type: `http://192.168.1.42:8080` (replace with YOUR number from Step 2)
-4. You should see the Auto-Clipper interface
-
-### Step 4: Save It Like an App (Optional)
-
-1. Tap the **Share** button (the square with an arrow pointing up)
-2. Scroll down and tap **"Add to Home Screen"**
-3. Name it **Auto-Clipper**
-4. Tap **Add**
-
-Now you have an icon on your home screen. Just make sure Auto-Clipper is running on your computer when you tap it.
+1. Get Auto-Clipper running on your computer first (see above)
+2. Find your computer's IP: on Mac run `ipconfig getifaddr en0` in Terminal, on Windows run `ipconfig` and look for "IPv4 Address" — it's something like `192.168.1.42`
+3. On your iPhone (same Wi-Fi), open Safari and go to `http://YOUR_IP:8080`
+4. Optional: tap Share → "Add to Home Screen" to save it as an app icon
 
 ---
 
