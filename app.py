@@ -449,6 +449,879 @@ def delete_clip(job_id, clip_id):
     return jsonify({"error": "Clip not found"}), 404
 
 
+# ---------------------------------------------------------------------------
+# Route 1: YouTube Shorts export
+# ---------------------------------------------------------------------------
+@app.route("/api/clips/<job_id>/<clip_id>/youtube-short", methods=["POST"])
+def make_youtube_short(job_id, clip_id):
+    """Convert a clip to YouTube Shorts vertical format."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    data = request.get_json()
+    gameplay_region = data.get("gameplay")
+    webcam_region = data.get("webcam")
+    layout = data.get("layout", "stacked")
+
+    if not gameplay_region:
+        return jsonify({"error": "Gameplay region is required"}), 400
+
+    for clip in job["clips"]:
+        if clip["id"] == clip_id:
+            clip_path = os.path.join(CLIPS_DIR, clip["filename"])
+            if not os.path.exists(clip_path):
+                return jsonify({"error": "Clip file not found"}), 404
+
+            result = clip_manager.make_youtube_short(
+                clip_path, job_id, clip_id, gameplay_region, webcam_region, layout
+            )
+            if not result:
+                return jsonify({"error": "Failed to create YouTube Short version"}), 500
+
+            return jsonify({"success": True, "filename": result["filename"]})
+
+    return jsonify({"error": "Clip not found"}), 404
+
+
+# ---------------------------------------------------------------------------
+# Route 2: GIF export
+# ---------------------------------------------------------------------------
+@app.route("/api/clips/<job_id>/<clip_id>/gif", methods=["POST"])
+def make_gif(job_id, clip_id):
+    """Export a clip (or portion) as an animated GIF."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    data = request.get_json()
+    start_offset = float(data.get("start_offset", 0))
+    duration = float(data.get("duration", 10))
+    fps = int(data.get("fps", 15))
+    width = int(data.get("width", 480))
+
+    for clip in job["clips"]:
+        if clip["id"] == clip_id:
+            clip_path = os.path.join(CLIPS_DIR, clip["filename"])
+            if not os.path.exists(clip_path):
+                return jsonify({"error": "Clip file not found"}), 404
+
+            result = clip_manager.make_gif(
+                clip_path, job_id, clip_id,
+                start_offset=start_offset, duration=duration,
+                fps=fps, width=width
+            )
+            if not result:
+                return jsonify({"error": "Failed to create GIF"}), 500
+
+            return jsonify({
+                "success": True,
+                "filename": result["filename"],
+                "size": result.get("size", 0),
+            })
+
+    return jsonify({"error": "Clip not found"}), 404
+
+
+# ---------------------------------------------------------------------------
+# Route 3: Watermark a clip
+# ---------------------------------------------------------------------------
+@app.route("/api/clips/<job_id>/<clip_id>/watermark", methods=["POST"])
+def add_watermark(job_id, clip_id):
+    """Apply a watermark image to a clip."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    data = request.get_json()
+    watermark_filename = data.get("watermark_filename", "")
+    position = data.get("position", "bottom_right")
+    opacity = float(data.get("opacity", 0.5))
+    scale = float(data.get("scale", 0.15))
+
+    safe_name = os.path.basename(watermark_filename)
+    watermark_path = os.path.join(WATERMARKS_DIR, safe_name)
+    if not os.path.exists(watermark_path):
+        return jsonify({"error": "Watermark file not found"}), 404
+
+    for clip in job["clips"]:
+        if clip["id"] == clip_id:
+            clip_path = os.path.join(CLIPS_DIR, clip["filename"])
+            if not os.path.exists(clip_path):
+                return jsonify({"error": "Clip file not found"}), 404
+
+            result = clip_manager.add_watermark(
+                clip_path, job_id, clip_id, watermark_path,
+                position=position, opacity=opacity, scale=scale
+            )
+            if not result:
+                return jsonify({"error": "Failed to apply watermark"}), 500
+
+            return jsonify({"success": True, "filename": result["filename"]})
+
+    return jsonify({"error": "Clip not found"}), 404
+
+
+# ---------------------------------------------------------------------------
+# Route 4: Upload watermark
+# ---------------------------------------------------------------------------
+@app.route("/api/watermarks/upload", methods=["POST"])
+def upload_watermark():
+    """Upload a watermark image (PNG/JPG)."""
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files["file"]
+    if not file.filename:
+        return jsonify({"error": "No file selected"}), 400
+
+    allowed_ext = {".png", ".jpg", ".jpeg"}
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in allowed_ext:
+        return jsonify({"error": f"Unsupported file type. Use: {', '.join(allowed_ext)}"}), 400
+
+    safe_name = re.sub(r'[^\w\-. ]', '_', file.filename)
+    dest = os.path.join(WATERMARKS_DIR, safe_name)
+    file.save(dest)
+
+    return jsonify({"success": True, "filename": safe_name})
+
+
+# ---------------------------------------------------------------------------
+# Route 5: List watermarks
+# ---------------------------------------------------------------------------
+@app.route("/api/watermarks")
+def list_watermarks():
+    """Return list of available watermark images."""
+    files = []
+    for f in sorted(os.listdir(WATERMARKS_DIR)):
+        if os.path.isfile(os.path.join(WATERMARKS_DIR, f)):
+            files.append(f)
+    return jsonify({"watermarks": files})
+
+
+# ---------------------------------------------------------------------------
+# Route 6: Split clip
+# ---------------------------------------------------------------------------
+@app.route("/api/clips/<job_id>/<clip_id>/split", methods=["POST"])
+def split_clip(job_id, clip_id):
+    """Split a clip into two parts at a given time."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    data = request.get_json()
+    split_time = data.get("split_time")
+    if split_time is None:
+        return jsonify({"error": "split_time is required"}), 400
+
+    split_time = float(split_time)
+
+    for i, clip in enumerate(job["clips"]):
+        if clip["id"] == clip_id:
+            clip_path = os.path.join(CLIPS_DIR, clip["filename"])
+            if not os.path.exists(clip_path):
+                return jsonify({"error": "Clip file not found"}), 404
+
+            result = clip_manager.split_clip(clip_path, job_id, clip_id, split_time)
+            if not result:
+                return jsonify({"error": "Failed to split clip"}), 500
+
+            # Remove original clip and insert two new ones
+            job["clips"].pop(i)
+            job["clips"].insert(i, result["part1"])
+            job["clips"].insert(i + 1, result["part2"])
+            _save_session(job_id)
+
+            return jsonify({
+                "success": True,
+                "clips": [result["part1"], result["part2"]],
+            })
+
+    return jsonify({"error": "Clip not found"}), 404
+
+
+# ---------------------------------------------------------------------------
+# Route 7: Extend clip
+# ---------------------------------------------------------------------------
+@app.route("/api/clips/<job_id>/<clip_id>/extend", methods=["POST"])
+def extend_clip(job_id, clip_id):
+    """Extend a clip's boundaries using the original VOD."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    vod_path = job.get("vod_path")
+    if not vod_path or not os.path.exists(vod_path):
+        return jsonify({"error": "VOD no longer available. Re-analyze to extend clips."}), 400
+
+    data = request.get_json()
+    new_start = data.get("start")
+    new_end = data.get("end")
+
+    if new_start is None or new_end is None:
+        return jsonify({"error": "start and end required"}), 400
+
+    new_start = max(0, float(new_start))
+    new_end = float(new_end)
+
+    if new_end <= new_start:
+        return jsonify({"error": "End must be after start"}), 400
+
+    for clip in job["clips"]:
+        if clip["id"] == clip_id:
+            result = clip_manager.extend_clip(vod_path, job_id, clip_id, new_start, new_end)
+            if not result:
+                return jsonify({"error": "Failed to extend clip"}), 500
+
+            clip["filename"] = result["filename"]
+            clip["thumbnail"] = result.get("thumbnail", clip.get("thumbnail"))
+            clip["start_time"] = result["start_time"]
+            clip["end_time"] = result["end_time"]
+            clip["duration"] = result["duration"]
+            clip["timestamp_display"] = result.get("timestamp_display", clip.get("timestamp_display"))
+
+            _save_session(job_id)
+            return jsonify({"success": True, "clip": clip})
+
+    return jsonify({"error": "Clip not found"}), 404
+
+
+# ---------------------------------------------------------------------------
+# Route 8: Merge clips
+# ---------------------------------------------------------------------------
+@app.route("/api/clips/<job_id>/merge", methods=["POST"])
+def merge_clips(job_id):
+    """Merge multiple clips into one, optionally with transitions."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    data = request.get_json()
+    clip_ids = data.get("clip_ids", [])
+    transition = data.get("transition", "none")
+    transition_duration = float(data.get("transition_duration", 0.5))
+
+    if len(clip_ids) < 2:
+        return jsonify({"error": "At least 2 clips required for merge"}), 400
+
+    clip_paths = []
+    for cid in clip_ids:
+        found = False
+        for clip in job["clips"]:
+            if clip["id"] == cid:
+                path = os.path.join(CLIPS_DIR, clip["filename"])
+                if not os.path.exists(path):
+                    return jsonify({"error": f"Clip file not found: {cid}"}), 404
+                clip_paths.append(path)
+                found = True
+                break
+        if not found:
+            return jsonify({"error": f"Clip not found: {cid}"}), 404
+
+    result = clip_manager.merge_clips(
+        clip_paths, job_id, transition=transition,
+        transition_duration=transition_duration
+    )
+    if not result:
+        return jsonify({"error": "Failed to merge clips"}), 500
+
+    return jsonify({"success": True, "filename": result["filename"]})
+
+
+# ---------------------------------------------------------------------------
+# Route 9: Add captions
+# ---------------------------------------------------------------------------
+@app.route("/api/clips/<job_id>/<clip_id>/captions", methods=["POST"])
+def add_captions(job_id, clip_id):
+    """Burn captions/subtitles into a clip."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    data = request.get_json()
+    text = data.get("text", "")
+    position = data.get("position", "bottom")
+    font_size = int(data.get("font_size", 24))
+    color = data.get("color", "white")
+    bg_opacity = float(data.get("bg_opacity", 0.5))
+
+    if not text:
+        return jsonify({"error": "Caption text is required"}), 400
+
+    for clip in job["clips"]:
+        if clip["id"] == clip_id:
+            clip_path = os.path.join(CLIPS_DIR, clip["filename"])
+            if not os.path.exists(clip_path):
+                return jsonify({"error": "Clip file not found"}), 404
+
+            result = clip_manager.add_captions(
+                clip_path, job_id, clip_id,
+                text=text, position=position, font_size=font_size,
+                color=color, bg_opacity=bg_opacity
+            )
+            if not result:
+                return jsonify({"error": "Failed to add captions"}), 500
+
+            return jsonify({"success": True, "filename": result["filename"]})
+
+    return jsonify({"error": "Clip not found"}), 404
+
+
+# ---------------------------------------------------------------------------
+# Route 10: Zoom/Pan
+# ---------------------------------------------------------------------------
+@app.route("/api/clips/<job_id>/<clip_id>/zoompan", methods=["POST"])
+def add_zoom_pan(job_id, clip_id):
+    """Apply a zoom/pan effect to a clip."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    data = request.get_json()
+    zoom_start = float(data.get("zoom_start", 1.0))
+    zoom_end = float(data.get("zoom_end", 1.5))
+    pan_x = float(data.get("pan_x", 0.5))
+    pan_y = float(data.get("pan_y", 0.5))
+
+    for clip in job["clips"]:
+        if clip["id"] == clip_id:
+            clip_path = os.path.join(CLIPS_DIR, clip["filename"])
+            if not os.path.exists(clip_path):
+                return jsonify({"error": "Clip file not found"}), 404
+
+            result = clip_manager.add_zoom_pan(
+                clip_path, job_id, clip_id,
+                zoom_start=zoom_start, zoom_end=zoom_end,
+                pan_x=pan_x, pan_y=pan_y
+            )
+            if not result:
+                return jsonify({"error": "Failed to apply zoom/pan"}), 500
+
+            return jsonify({"success": True, "filename": result["filename"]})
+
+    return jsonify({"error": "Clip not found"}), 404
+
+
+# ---------------------------------------------------------------------------
+# Route 11: Sound effect
+# ---------------------------------------------------------------------------
+@app.route("/api/clips/<job_id>/<clip_id>/sfx", methods=["POST"])
+def add_sfx(job_id, clip_id):
+    """Overlay a sound effect onto a clip."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    data = request.get_json()
+    sfx_filename = data.get("sfx_filename", "")
+    timestamp = float(data.get("timestamp", 0))
+    volume = float(data.get("volume", 1.0))
+
+    safe_name = os.path.basename(sfx_filename)
+    sfx_path = os.path.join(SFX_DIR, safe_name)
+    if not os.path.exists(sfx_path):
+        return jsonify({"error": "Sound effect file not found"}), 404
+
+    for clip in job["clips"]:
+        if clip["id"] == clip_id:
+            clip_path = os.path.join(CLIPS_DIR, clip["filename"])
+            if not os.path.exists(clip_path):
+                return jsonify({"error": "Clip file not found"}), 404
+
+            result = clip_manager.add_sfx(
+                clip_path, job_id, clip_id, sfx_path,
+                timestamp=timestamp, volume=volume
+            )
+            if not result:
+                return jsonify({"error": "Failed to add sound effect"}), 500
+
+            return jsonify({"success": True, "filename": result["filename"]})
+
+    return jsonify({"error": "Clip not found"}), 404
+
+
+# ---------------------------------------------------------------------------
+# Route 12: Upload SFX
+# ---------------------------------------------------------------------------
+@app.route("/api/sfx/upload", methods=["POST"])
+def upload_sfx():
+    """Upload a sound effect file (MP3/WAV/OGG)."""
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files["file"]
+    if not file.filename:
+        return jsonify({"error": "No file selected"}), 400
+
+    allowed_ext = {".mp3", ".wav", ".ogg"}
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in allowed_ext:
+        return jsonify({"error": f"Unsupported file type. Use: {', '.join(allowed_ext)}"}), 400
+
+    safe_name = re.sub(r'[^\w\-. ]', '_', file.filename)
+    dest = os.path.join(SFX_DIR, safe_name)
+    file.save(dest)
+
+    return jsonify({"success": True, "filename": safe_name})
+
+
+# ---------------------------------------------------------------------------
+# Route 13: List SFX
+# ---------------------------------------------------------------------------
+@app.route("/api/sfx")
+def list_sfx():
+    """Return list of available sound effects."""
+    files = []
+    for f in sorted(os.listdir(SFX_DIR)):
+        if os.path.isfile(os.path.join(SFX_DIR, f)):
+            files.append(f)
+    return jsonify({"sfx": files})
+
+
+# ---------------------------------------------------------------------------
+# Route 14: Volume spike detection
+# ---------------------------------------------------------------------------
+@app.route("/api/clips/<job_id>/<clip_id>/volume-spikes", methods=["POST"])
+def detect_volume_spikes(job_id, clip_id):
+    """Detect loud moments / volume spikes in a clip."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    for clip in job["clips"]:
+        if clip["id"] == clip_id:
+            clip_path = os.path.join(CLIPS_DIR, clip["filename"])
+            if not os.path.exists(clip_path):
+                return jsonify({"error": "Clip file not found"}), 404
+
+            spikes = clip_manager.detect_volume_spikes(clip_path)
+            if spikes is None:
+                return jsonify({"error": "Failed to detect volume spikes"}), 500
+
+            return jsonify({"success": True, "spikes": spikes})
+
+    return jsonify({"error": "Clip not found"}), 404
+
+
+# ---------------------------------------------------------------------------
+# Route 15: Smart thumbnail
+# ---------------------------------------------------------------------------
+@app.route("/api/clips/<job_id>/<clip_id>/smart-thumbnail", methods=["POST"])
+def smart_thumbnail(job_id, clip_id):
+    """Generate a smart thumbnail for a clip."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    for clip in job["clips"]:
+        if clip["id"] == clip_id:
+            clip_path = os.path.join(CLIPS_DIR, clip["filename"])
+            if not os.path.exists(clip_path):
+                return jsonify({"error": "Clip file not found"}), 404
+
+            result = clip_manager.get_smart_thumbnail(clip_path, job_id, clip_id)
+            if not result:
+                return jsonify({"error": "Failed to generate smart thumbnail"}), 500
+
+            return jsonify({"success": True, "filename": result["filename"]})
+
+    return jsonify({"error": "Clip not found"}), 404
+
+
+# ---------------------------------------------------------------------------
+# Route 16: Batch TikTok
+# ---------------------------------------------------------------------------
+@app.route("/api/clips/<job_id>/batch-tiktok", methods=["POST"])
+def batch_tiktok(job_id):
+    """Convert multiple clips to TikTok format in batch."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    data = request.get_json()
+    clip_ids = data.get("clip_ids", [])
+    gameplay_region = data.get("gameplay")
+    webcam_region = data.get("webcam")
+    layout = data.get("layout", "stacked")
+
+    if not clip_ids:
+        return jsonify({"error": "No clip IDs provided"}), 400
+    if not gameplay_region:
+        return jsonify({"error": "Gameplay region is required"}), 400
+
+    results = []
+    errors = []
+
+    for cid in clip_ids:
+        found = False
+        for clip in job["clips"]:
+            if clip["id"] == cid:
+                found = True
+                clip_path = os.path.join(CLIPS_DIR, clip["filename"])
+                if not os.path.exists(clip_path):
+                    errors.append({"clip_id": cid, "error": "Clip file not found"})
+                    break
+
+                result = clip_manager.make_tiktok(
+                    clip_path, job_id, cid, gameplay_region, webcam_region, layout
+                )
+                if result:
+                    results.append({"clip_id": cid, "filename": result["filename"]})
+                else:
+                    errors.append({"clip_id": cid, "error": "Failed to create TikTok version"})
+                break
+        if not found:
+            errors.append({"clip_id": cid, "error": "Clip not found"})
+
+    return jsonify({"success": True, "results": results, "errors": errors})
+
+
+# ---------------------------------------------------------------------------
+# Route 17: Clip metadata (tags, notes, review status)
+# ---------------------------------------------------------------------------
+@app.route("/api/clips/<job_id>/<clip_id>/metadata", methods=["POST"])
+def update_clip_metadata(job_id, clip_id):
+    """Update metadata on a clip: tags, notes, review status."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    data = request.get_json()
+    tags = data.get("tags")
+    notes = data.get("notes")
+    review_status = data.get("review_status")
+
+    valid_statuses = {"pending", "approved", "rejected", "maybe"}
+    if review_status and review_status not in valid_statuses:
+        return jsonify({"error": f"Invalid review_status. Use: {', '.join(valid_statuses)}"}), 400
+
+    for clip in job["clips"]:
+        if clip["id"] == clip_id:
+            if tags is not None:
+                clip["tags"] = tags
+            if notes is not None:
+                clip["notes"] = notes
+            if review_status is not None:
+                clip["review_status"] = review_status
+            _save_session(job_id)
+            return jsonify({"success": True, "clip": clip})
+
+    return jsonify({"error": "Clip not found"}), 404
+
+
+# ---------------------------------------------------------------------------
+# Route 18: Export presets CRUD
+# ---------------------------------------------------------------------------
+def _load_presets():
+    if os.path.exists(PRESETS_FILE):
+        with open(PRESETS_FILE) as f:
+            return json.load(f)
+    return []
+
+
+def _save_presets(presets):
+    with open(PRESETS_FILE, "w") as f:
+        json.dump(presets, f, indent=2)
+
+
+@app.route("/api/presets", methods=["GET"])
+def get_presets():
+    """Return all saved export presets."""
+    return jsonify({"presets": _load_presets()})
+
+
+@app.route("/api/presets", methods=["POST"])
+def create_preset():
+    """Create a new export preset."""
+    data = request.get_json()
+    name = data.get("name", "").strip()
+    preset_type = data.get("type", "tiktok")
+    settings = data.get("settings", {})
+
+    if not name:
+        return jsonify({"error": "Preset name is required"}), 400
+
+    presets = _load_presets()
+    preset = {
+        "id": str(uuid.uuid4())[:8],
+        "name": name,
+        "type": preset_type,
+        "settings": settings,
+    }
+    presets.append(preset)
+    _save_presets(presets)
+
+    return jsonify({"success": True, "preset": preset})
+
+
+@app.route("/api/presets/<preset_id>/delete", methods=["POST"])
+def delete_preset(preset_id):
+    """Delete an export preset."""
+    presets = _load_presets()
+    new_presets = [p for p in presets if p.get("id") != preset_id]
+    if len(new_presets) == len(presets):
+        return jsonify({"error": "Preset not found"}), 404
+    _save_presets(new_presets)
+    return jsonify({"success": True})
+
+
+# ---------------------------------------------------------------------------
+# Route 19: Analytics tracking
+# ---------------------------------------------------------------------------
+def _load_analytics():
+    if os.path.exists(ANALYTICS_FILE):
+        with open(ANALYTICS_FILE) as f:
+            return json.load(f)
+    return {"events": []}
+
+
+def _save_analytics(data):
+    with open(ANALYTICS_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+@app.route("/api/analytics", methods=["GET"])
+def get_analytics():
+    """Return tracked analytics events."""
+    return jsonify(_load_analytics())
+
+
+@app.route("/api/analytics/track", methods=["POST"])
+def track_analytics():
+    """Track an analytics event (export, download, etc.)."""
+    data = request.get_json()
+    event_type = data.get("event", "")
+    event_data = data.get("data", {})
+
+    if not event_type:
+        return jsonify({"error": "Event type is required"}), 400
+
+    analytics = _load_analytics()
+    analytics["events"].append({
+        "id": str(uuid.uuid4())[:8],
+        "event": event_type,
+        "data": event_data,
+        "timestamp": datetime.now().isoformat(),
+    })
+    _save_analytics(analytics)
+
+    return jsonify({"success": True})
+
+
+# ---------------------------------------------------------------------------
+# Route 20: Duplicate detection
+# ---------------------------------------------------------------------------
+@app.route("/api/clips/<job_id>/duplicates")
+def detect_duplicates(job_id):
+    """Find clips with >50% overlapping time ranges."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    clips = job.get("clips", [])
+    groups = []
+    visited = set()
+
+    for i, c1 in enumerate(clips):
+        if c1["id"] in visited:
+            continue
+        s1 = c1.get("start_time", 0)
+        e1 = c1.get("end_time", s1 + c1.get("duration", 0))
+        group = [c1["id"]]
+
+        for j, c2 in enumerate(clips):
+            if j <= i or c2["id"] in visited:
+                continue
+            s2 = c2.get("start_time", 0)
+            e2 = c2.get("end_time", s2 + c2.get("duration", 0))
+
+            overlap_start = max(s1, s2)
+            overlap_end = min(e1, e2)
+            overlap = max(0, overlap_end - overlap_start)
+
+            dur1 = e1 - s1
+            dur2 = e2 - s2
+            min_dur = min(dur1, dur2) if min(dur1, dur2) > 0 else 1
+
+            if overlap / min_dur > 0.5:
+                group.append(c2["id"])
+                visited.add(c2["id"])
+
+        if len(group) > 1:
+            visited.add(c1["id"])
+            groups.append(group)
+
+    return jsonify({"duplicate_groups": groups})
+
+
+# ---------------------------------------------------------------------------
+# Route 21: Sort / filter clips
+# ---------------------------------------------------------------------------
+@app.route("/api/clips/<job_id>/sorted")
+def sorted_clips(job_id):
+    """Return clips sorted and/or filtered by query params."""
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    sort_by = request.args.get("sort_by", "time")
+    order = request.args.get("order", "asc")
+    tag_filter = request.args.get("tag")
+    status_filter = request.args.get("review_status")
+
+    result = list(job.get("clips", []))
+
+    if tag_filter:
+        result = [c for c in result if tag_filter in c.get("tags", [])]
+    if status_filter:
+        result = [c for c in result if c.get("review_status") == status_filter]
+
+    sort_keys = {
+        "confidence": lambda c: c.get("confidence", 0),
+        "duration": lambda c: c.get("duration", 0),
+        "time": lambda c: c.get("start_time", 0),
+    }
+    key_fn = sort_keys.get(sort_by, sort_keys["time"])
+    result.sort(key=key_fn, reverse=(order == "desc"))
+
+    return jsonify({"clips": result, "total": len(result)})
+
+
+# ---------------------------------------------------------------------------
+# Route 22: Watch folder start / stop / status
+# ---------------------------------------------------------------------------
+def _watch_folder_loop(api_key, game_id):
+    """Background loop that watches LIBRARY_DIR for new files and auto-analyzes."""
+    global watch_folder_running
+    import time
+    seen = set(os.listdir(LIBRARY_DIR))
+    while watch_folder_running:
+        time.sleep(5)
+        try:
+            current = set(os.listdir(LIBRARY_DIR))
+            new_files = current - seen
+            for fname in new_files:
+                fpath = os.path.join(LIBRARY_DIR, fname)
+                if not os.path.isfile(fpath):
+                    continue
+                ext = os.path.splitext(fname)[1].lower()
+                if ext not in {".mp4", ".mkv", ".mov", ".avi", ".flv", ".ts", ".webm"}:
+                    continue
+                job_id = str(uuid.uuid4())[:8]
+                jobs[job_id] = {
+                    "status": "analyzing",
+                    "progress": 42,
+                    "message": f"Auto-analyzing {fname}...",
+                    "clips": [],
+                    "error": None,
+                    "url": f"watch:{fname}",
+                    "vod_path": fpath,
+                    "vod_duration": 0,
+                }
+                thread = threading.Thread(
+                    target=_run_analysis_on_file,
+                    args=(job_id, fpath, api_key, "", "", game_id),
+                    daemon=True,
+                )
+                thread.start()
+            seen = current
+        except OSError:
+            pass
+
+
+@app.route("/api/watch-folder/start", methods=["POST"])
+def watch_folder_start():
+    """Start watching the library folder for new files."""
+    global watch_folder_thread, watch_folder_running
+
+    if watch_folder_running:
+        return jsonify({"success": True, "message": "Already running"})
+
+    data = request.get_json() or {}
+    api_key = data.get("api_key", "")
+    game_id = data.get("game", "arc_raiders")
+
+    watch_folder_running = True
+    watch_folder_thread = threading.Thread(
+        target=_watch_folder_loop, args=(api_key, game_id), daemon=True
+    )
+    watch_folder_thread.start()
+
+    return jsonify({"success": True, "message": "Watch folder started"})
+
+
+@app.route("/api/watch-folder/stop", methods=["POST"])
+def watch_folder_stop():
+    """Stop the watch folder background thread."""
+    global watch_folder_running
+    watch_folder_running = False
+    return jsonify({"success": True, "message": "Watch folder stopped"})
+
+
+@app.route("/api/watch-folder/status")
+def watch_folder_status():
+    """Return whether the watch folder is currently running."""
+    return jsonify({"running": watch_folder_running})
+
+
+# ---------------------------------------------------------------------------
+# Route 23: Custom highlight rules
+# ---------------------------------------------------------------------------
+def _load_highlight_rules():
+    if os.path.exists(HIGHLIGHT_RULES_FILE):
+        with open(HIGHLIGHT_RULES_FILE) as f:
+            return json.load(f)
+    return []
+
+
+def _save_highlight_rules(rules):
+    with open(HIGHLIGHT_RULES_FILE, "w") as f:
+        json.dump(rules, f, indent=2)
+
+
+@app.route("/api/highlight-rules", methods=["GET", "POST"])
+def highlight_rules():
+    """List or create custom highlight detection rules."""
+    if request.method == "GET":
+        return jsonify({"rules": _load_highlight_rules()})
+
+    data = request.get_json()
+    name = data.get("name", "").strip()
+    rule_type = data.get("type", "volume_spike")
+    params = data.get("params", {})
+
+    if not name:
+        return jsonify({"error": "Rule name is required"}), 400
+
+    valid_types = {"volume_spike", "color_detect", "motion"}
+    if rule_type not in valid_types:
+        return jsonify({"error": f"Invalid type. Use: {', '.join(valid_types)}"}), 400
+
+    rules = _load_highlight_rules()
+    rule = {
+        "id": str(uuid.uuid4())[:8],
+        "name": name,
+        "type": rule_type,
+        "params": params,
+    }
+    rules.append(rule)
+    _save_highlight_rules(rules)
+
+    return jsonify({"success": True, "rule": rule})
+
+
+@app.route("/api/highlight-rules/<rule_id>/delete", methods=["POST"])
+def delete_highlight_rule(rule_id):
+    """Delete a custom highlight rule."""
+    rules = _load_highlight_rules()
+    new_rules = [r for r in rules if r.get("id") != rule_id]
+    if len(new_rules) == len(rules):
+        return jsonify({"error": "Rule not found"}), 404
+    _save_highlight_rules(new_rules)
+    return jsonify({"success": True})
+
+
 def _is_valid_stream_url(url):
     """Check if the URL is a valid Twitch or YouTube VOD link."""
     url_lower = url.lower()
