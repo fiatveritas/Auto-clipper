@@ -91,6 +91,11 @@ class ArcRaidersDetector:
                 scores.append({"score": score, "label": label, "timestamp": timestamp})
                 frame_timestamps.append(timestamp)
 
+                if score >= self.intensity_threshold * 0.5:
+                    mins = int(timestamp) // 60
+                    secs = int(timestamp) % 60
+                    print(f"  [CV] {mins}:{secs:02d} - score:{score:.3f} - {label}")
+
                 prev_frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 analyzed += 1
 
@@ -104,8 +109,16 @@ class ArcRaidersDetector:
         if progress_callback:
             progress_callback(1.0)
 
+        top_scores = sorted(scores, key=lambda s: s["score"], reverse=True)[:10]
+        print(f"  [CV] Analyzed {analyzed} frames over {duration:.0f}s")
+        print(f"  [CV] Top scores: {[f'{s[\"score\"]:.3f}@{int(s[\"timestamp\"])}s' for s in top_scores]}")
+        print(f"  [CV] Threshold: {self.intensity_threshold}")
+
         # Find highlight windows
         highlights = self._find_highlights(scores, duration)
+        print(f"  [CV] Found {len(highlights)} highlights")
+        for h in highlights:
+            print(f"  [CV]   -> {h['label']} at {int(h['timestamp'])}s ({h['duration']}s, conf:{h['confidence']})")
         return highlights
 
     def _score_frame(self, frame, prev_gray):
