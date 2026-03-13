@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arc Raiders Auto-Clipper</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app">
+        <header>
+            <h1>Arc Raiders Auto-Clipper</h1>
+            <p class="subtitle">Paste your Twitch VOD link and let AI find the best moments</p>
+        </header>
+
+        <!-- URL Input Section -->
+        <section id="input-section" class="card">
+            <div class="input-group">
+                <input
+                    type="text"
+                    id="vod-url"
+                    placeholder="Paste Twitch VOD link (e.g. https://www.twitch.tv/videos/2720880233)"
+                    autocomplete="off"
+                >
+                <button id="analyze-btn" onclick="startAnalysis()">
+                    <span class="btn-text">Analyze</span>
+                    <span class="btn-icon">&#9654;</span>
+                </button>
+            </div>
+            <div id="error-msg" class="error-msg hidden"></div>
+        </section>
+
+        <!-- Progress Section -->
+        <section id="progress-section" class="card hidden">
+            <div class="progress-header">
+                <h2 id="progress-title">Processing...</h2>
+                <span id="progress-pct">0%</span>
+            </div>
+            <div class="progress-bar-track">
+                <div id="progress-bar" class="progress-bar-fill" style="width: 0%"></div>
+            </div>
+            <p id="progress-message" class="progress-message">Starting...</p>
+        </section>
+
+        <!-- Clips Section -->
+        <section id="clips-section" class="hidden">
+            <div class="clips-header">
+                <h2>Detected Highlights</h2>
+                <span id="clip-count" class="badge">0 clips</span>
+            </div>
+            <div id="clips-grid" class="clips-grid"></div>
+            <div id="no-clips" class="no-clips hidden">
+                <p>No highlights were detected in this VOD. Try a different stream with more action!</p>
+            </div>
+        </section>
+
+        <!-- Clip Preview Modal -->
+        <div id="preview-modal" class="modal hidden" onclick="closeModal(event)">
+            <div class="modal-content">
+                <button class="modal-close" onclick="closePreview()">&times;</button>
+                <video id="preview-video" controls></video>
+                <div class="modal-info">
+                    <h3 id="modal-label"></h3>
+                    <p id="modal-time"></p>
+                </div>
+                <div class="modal-actions">
+                    <button id="modal-download" class="btn-download" onclick="downloadFromModal()">Download Clip</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
