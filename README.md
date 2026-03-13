@@ -34,10 +34,15 @@ Your browser opens to **http://localhost:8080** — that's the app. Next time, j
 1. Download this project: click the green **"<> Code"** button on this page → **"Download ZIP"**
 2. Double-click the ZIP in your Downloads folder to unzip it
 3. Open **Terminal** (Command + Space, type Terminal, press Enter)
-4. Run these commands:
+4. In Finder, find the unzipped folder in your Downloads (it starts with **Auto-clipper-...**). **Drag** the folder into the Terminal window — this pastes the path. Then press Enter to `cd` into it:
 
 ```bash
-cd ~/Downloads/Auto-clipper-main
+cd <drag folder here>
+```
+
+5. Run:
+
+```bash
 chmod +x install.sh run.sh
 ./install.sh
 ```
@@ -52,10 +57,7 @@ When it says "Installation Complete":
 
 Your browser opens to **http://localhost:8080** — that's the app.
 
-**Next time**, just open Terminal and run:
-```bash
-cd ~/Downloads/Auto-clipper-main && ./run.sh
-```
+**Next time**, just open Terminal and run the same two commands (drag the folder again, then `./run.sh`).
 
 ---
 
