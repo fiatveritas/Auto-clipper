@@ -1534,3 +1534,775 @@ function exportTikTok() {
         statusEl.className = "trim-status error";
     });
 }
+
+// ===== THEME TOGGLE =====
+function toggleTheme() {
+    document.body.classList.toggle("light-theme");
+    const isLight = document.body.classList.contains("light-theme");
+    localStorage.setItem("autoclipper_theme", isLight ? "light" : "dark");
+    document.getElementById("theme-toggle").textContent = isLight ? "\u263E" : "\u2606";
+}
+
+(function initTheme() {
+    const saved = localStorage.getItem("autoclipper_theme");
+    if (saved === "light") {
+        document.body.classList.add("light-theme");
+    }
+})();
+
+// ===== KEYBOARD SHORTCUTS =====
+document.addEventListener("keydown", (e) => {
+    // Don't trigger shortcuts when typing in inputs
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") return;
+
+    const modal = document.getElementById("preview-modal");
+    const isModalOpen = !modal.classList.contains("hidden");
+
+    if (isModalOpen) {
+        const video = document.getElementById("preview-video");
+        if (e.key === " " || e.key === "k") {
+            e.preventDefault();
+            video.paused ? video.play() : video.pause();
+        } else if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            video.currentTime = Math.max(0, video.currentTime - 5);
+        } else if (e.key === "ArrowRight") {
+            e.preventDefault();
+            video.currentTime = Math.min(video.duration, video.currentTime + 5);
+        } else if (e.key === "Escape") {
+            closePreview();
+        } else if (e.key === "j") {
+            video.currentTime = Math.max(0, video.currentTime - 10);
+        } else if (e.key === "l") {
+            video.currentTime = Math.min(video.duration, video.currentTime + 10);
+        } else if (e.key === "m") {
+            video.muted = !video.muted;
+        } else if (e.key === "f") {
+            video.requestFullscreen && video.requestFullscreen();
+        }
+    }
+
+    // Global shortcuts
+    if (e.key === "1" && e.altKey) switchEditorTab("trim");
+    if (e.key === "2" && e.altKey) switchEditorTab("crop");
+    if (e.key === "3" && e.altKey) switchEditorTab("effects");
+    if (e.key === "4" && e.altKey) switchEditorTab("captions");
+    if (e.key === "5" && e.altKey) switchEditorTab("more");
+
+    // Navigate clips with arrow keys when modal closed
+    if (!isModalOpen && currentClips.length > 0) {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            const dir = e.key === "ArrowDown" ? 1 : -1;
+            const idx = (previewClipIndex + dir + currentClips.length) % currentClips.length;
+            previewClip(idx);
+        }
+    }
+});
+
+// ===== CAPTIONS EXPORT =====
+function exportCaptions() {
+    if (!previewClipData || !currentJobId) return;
+
+    const text = document.getElementById("caption-text").value.trim();
+    if (!text) {
+        document.getElementById("caption-status").textContent = "Enter caption text";
+        document.getElementById("caption-status").className = "trim-status error";
+        return;
+    }
+
+    const position = document.getElementById("caption-position").value;
+    const fontSize = parseInt(document.getElementById("caption-size").value);
+    const color = document.getElementById("caption-color").value;
+
+    const statusEl = document.getElementById("caption-status");
+    const btn = document.getElementById("caption-export-btn");
+    statusEl.textContent = "Adding captions...";
+    statusEl.className = "trim-status working";
+    btn.disabled = true;
+
+    fetch(`/api/clips/${currentJobId}/${previewClipData.id}/captions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, position, font_size: fontSize, color }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        btn.disabled = false;
+        if (data.error) {
+            statusEl.textContent = data.error;
+            statusEl.className = "trim-status error";
+            return;
+        }
+        statusEl.textContent = "Done! Downloading...";
+        statusEl.className = "trim-status success";
+        triggerDownload(data.filename);
+        trackAnalytics("caption_export");
+    })
+    .catch(() => {
+        btn.disabled = false;
+        statusEl.textContent = "Export failed";
+        statusEl.className = "trim-status error";
+    });
+}
+
+// ===== MORE TOOLS PANEL TOGGLES =====
+function hideAllSubPanels() {
+    document.querySelectorAll(".more-sub-panel").forEach(p => p.classList.add("hidden"));
+}
+
+function showWatermarkPanel() {
+    hideAllSubPanels();
+    document.getElementById("watermark-panel").classList.remove("hidden");
+    loadWatermarks();
+}
+
+function showZoomPanPanel() {
+    hideAllSubPanels();
+    document.getElementById("zoompan-panel").classList.remove("hidden");
+}
+
+function showSfxPanel() {
+    hideAllSubPanels();
+    document.getElementById("sfx-panel").classList.remove("hidden");
+    loadSfx();
+}
+
+function showGifPanel() {
+    hideAllSubPanels();
+    document.getElementById("gif-panel").classList.remove("hidden");
+}
+
+function splitClipUI() {
+    hideAllSubPanels();
+    document.getElementById("split-panel").classList.remove("hidden");
+    if (previewClipData) {
+        document.getElementById("split-time").max = previewClipData.duration;
+        document.getElementById("split-time").value = Math.round(previewClipData.duration / 2);
+    }
+}
+
+function showMergePanel() {
+    hideAllSubPanels();
+    document.getElementById("merge-panel").classList.remove("hidden");
+    renderMergeList();
+}
+
+// ===== WATERMARK =====
+function loadWatermarks() {
+    fetch("/api/watermarks")
+        .then(res => res.json())
+        .then(data => {
+            const sel = document.getElementById("watermark-select");
+            sel.innerHTML = '<option value="">Select watermark...</option>';
+            (data.watermarks || []).forEach(f => {
+                sel.innerHTML += `<option value="${f}">${f}</option>`;
+            });
+        });
+}
+
+// Upload watermark file
+document.addEventListener("DOMContentLoaded", () => {
+    const wmInput = document.getElementById("watermark-file");
+    if (wmInput) {
+        wmInput.addEventListener("change", () => {
+            if (!wmInput.files.length) return;
+            const fd = new FormData();
+            fd.append("file", wmInput.files[0]);
+            fetch("/api/watermarks/upload", { method: "POST", body: fd })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        loadWatermarks();
+                        document.getElementById("watermark-select").value = data.filename;
+                    }
+                });
+        });
+    }
+});
+
+function exportWatermark() {
+    if (!previewClipData || !currentJobId) return;
+    const wmFile = document.getElementById("watermark-select").value;
+    if (!wmFile) {
+        document.getElementById("watermark-status").textContent = "Select a watermark";
+        document.getElementById("watermark-status").className = "trim-status error";
+        return;
+    }
+
+    const statusEl = document.getElementById("watermark-status");
+    statusEl.textContent = "Applying watermark...";
+    statusEl.className = "trim-status working";
+
+    fetch(`/api/clips/${currentJobId}/${previewClipData.id}/watermark`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            watermark_filename: wmFile,
+            position: document.getElementById("watermark-position").value,
+            opacity: parseFloat(document.getElementById("watermark-opacity").value),
+            scale: parseFloat(document.getElementById("watermark-scale").value),
+        }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            statusEl.textContent = data.error;
+            statusEl.className = "trim-status error";
+            return;
+        }
+        statusEl.textContent = "Done!";
+        statusEl.className = "trim-status success";
+        triggerDownload(data.filename);
+        trackAnalytics("watermark_export");
+    })
+    .catch(() => { statusEl.textContent = "Failed"; statusEl.className = "trim-status error"; });
+}
+
+// ===== ZOOM/PAN =====
+function exportZoomPan() {
+    if (!previewClipData || !currentJobId) return;
+    const statusEl = document.getElementById("zoompan-status");
+    statusEl.textContent = "Applying zoom effect...";
+    statusEl.className = "trim-status working";
+
+    fetch(`/api/clips/${currentJobId}/${previewClipData.id}/zoompan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            zoom_start: parseFloat(document.getElementById("zoom-start").value),
+            zoom_end: parseFloat(document.getElementById("zoom-end").value),
+        }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) { statusEl.textContent = data.error; statusEl.className = "trim-status error"; return; }
+        statusEl.textContent = "Done!";
+        statusEl.className = "trim-status success";
+        triggerDownload(data.filename);
+    })
+    .catch(() => { statusEl.textContent = "Failed"; statusEl.className = "trim-status error"; });
+}
+
+// ===== SOUND EFFECTS =====
+function loadSfx() {
+    fetch("/api/sfx")
+        .then(res => res.json())
+        .then(data => {
+            const sel = document.getElementById("sfx-select");
+            sel.innerHTML = '<option value="">Select sound...</option>';
+            (data.sfx || []).forEach(f => {
+                sel.innerHTML += `<option value="${f}">${f}</option>`;
+            });
+        });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    const sfxInput = document.getElementById("sfx-file");
+    if (sfxInput) {
+        sfxInput.addEventListener("change", () => {
+            if (!sfxInput.files.length) return;
+            const fd = new FormData();
+            fd.append("file", sfxInput.files[0]);
+            fetch("/api/sfx/upload", { method: "POST", body: fd })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        loadSfx();
+                        document.getElementById("sfx-select").value = data.filename;
+                    }
+                });
+        });
+    }
+});
+
+function exportSfx() {
+    if (!previewClipData || !currentJobId) return;
+    const sfxFile = document.getElementById("sfx-select").value;
+    if (!sfxFile) {
+        document.getElementById("sfx-status").textContent = "Select a sound effect";
+        document.getElementById("sfx-status").className = "trim-status error";
+        return;
+    }
+    const statusEl = document.getElementById("sfx-status");
+    statusEl.textContent = "Adding sound effect...";
+    statusEl.className = "trim-status working";
+
+    fetch(`/api/clips/${currentJobId}/${previewClipData.id}/sfx`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            sfx_filename: sfxFile,
+            timestamp: parseFloat(document.getElementById("sfx-timestamp").value),
+            volume: parseFloat(document.getElementById("sfx-volume").value),
+        }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) { statusEl.textContent = data.error; statusEl.className = "trim-status error"; return; }
+        statusEl.textContent = "Done!";
+        statusEl.className = "trim-status success";
+        triggerDownload(data.filename);
+    })
+    .catch(() => { statusEl.textContent = "Failed"; statusEl.className = "trim-status error"; });
+}
+
+// ===== GIF EXPORT =====
+function exportGif() {
+    if (!previewClipData || !currentJobId) return;
+    const statusEl = document.getElementById("gif-status");
+    statusEl.textContent = "Creating GIF...";
+    statusEl.className = "trim-status working";
+
+    fetch(`/api/clips/${currentJobId}/${previewClipData.id}/gif`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            start_offset: parseFloat(document.getElementById("gif-start").value),
+            duration: parseFloat(document.getElementById("gif-duration").value),
+            fps: parseInt(document.getElementById("gif-fps").value),
+            width: parseInt(document.getElementById("gif-width").value),
+        }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) { statusEl.textContent = data.error; statusEl.className = "trim-status error"; return; }
+        const sizeMB = (data.size / 1024 / 1024).toFixed(1);
+        statusEl.textContent = `Done! ${sizeMB}MB`;
+        statusEl.className = "trim-status success";
+        triggerDownload(data.filename);
+        trackAnalytics("gif_export");
+    })
+    .catch(() => { statusEl.textContent = "Failed"; statusEl.className = "trim-status error"; });
+}
+
+// ===== SPLIT CLIP =====
+function splitClip() {
+    if (!previewClipData || !currentJobId) return;
+    const statusEl = document.getElementById("split-status");
+    statusEl.textContent = "Splitting...";
+    statusEl.className = "trim-status working";
+
+    fetch(`/api/clips/${currentJobId}/${previewClipData.id}/split`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ split_time: parseFloat(document.getElementById("split-time").value) }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) { statusEl.textContent = data.error; statusEl.className = "trim-status error"; return; }
+        statusEl.textContent = "Split complete!";
+        statusEl.className = "trim-status success";
+        // Refresh clips
+        fetchClips(currentJobId);
+        setTimeout(closePreview, 1000);
+    })
+    .catch(() => { statusEl.textContent = "Failed"; statusEl.className = "trim-status error"; });
+}
+
+// ===== MERGE CLIPS =====
+function renderMergeList() {
+    const list = document.getElementById("merge-clip-list");
+    if (!list) return;
+    list.innerHTML = "";
+    currentClips.forEach((clip, i) => {
+        list.innerHTML += `
+            <label class="merge-clip-item">
+                <input type="checkbox" data-index="${i}" value="${clip.id}">
+                <span>${clip.label} (${clip.duration}s) - ${clip.timestamp_display}</span>
+            </label>`;
+    });
+}
+
+function mergeClips() {
+    if (!currentJobId) return;
+    const checked = document.querySelectorAll("#merge-clip-list input:checked");
+    const clipIds = Array.from(checked).map(cb => cb.value);
+    if (clipIds.length < 2) {
+        document.getElementById("merge-status").textContent = "Select at least 2 clips";
+        document.getElementById("merge-status").className = "trim-status error";
+        return;
+    }
+
+    const statusEl = document.getElementById("merge-status");
+    statusEl.textContent = "Merging clips...";
+    statusEl.className = "trim-status working";
+
+    fetch(`/api/clips/${currentJobId}/merge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            clip_ids: clipIds,
+            transition: document.getElementById("merge-transition").value,
+        }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) { statusEl.textContent = data.error; statusEl.className = "trim-status error"; return; }
+        statusEl.textContent = "Merged! Downloading...";
+        statusEl.className = "trim-status success";
+        triggerDownload(data.filename);
+    })
+    .catch(() => { statusEl.textContent = "Failed"; statusEl.className = "trim-status error"; });
+}
+
+// ===== YOUTUBE SHORTS =====
+function openYouTubeShortEditor() {
+    // Reuse TikTok editor but change export
+    openTikTokEditor();
+    // Swap export button to YT
+    const btn = document.getElementById("tiktok-export-btn");
+    btn.textContent = "Export YouTube Short";
+    btn.onclick = exportYouTubeShort;
+    document.querySelector(".tiktok-title").textContent = "YouTube Shorts Editor";
+}
+
+function exportYouTubeShort() {
+    if (!previewClipData || !currentJobId) return;
+    const statusEl = document.getElementById("tiktok-status");
+    statusEl.textContent = "Creating YouTube Short...";
+    statusEl.className = "trim-status working";
+    const btn = document.getElementById("tiktok-export-btn");
+    btn.disabled = true;
+
+    const layout = tiktokRegions.webcam ? "stacked" : "gameplay_only";
+
+    fetch(`/api/clips/${currentJobId}/${previewClipData.id}/youtube-short`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            gameplay: tiktokRegions.gameplay,
+            webcam: tiktokRegions.webcam,
+            layout: layout,
+        }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        btn.disabled = false;
+        if (data.error) { statusEl.textContent = data.error; statusEl.className = "trim-status error"; return; }
+        statusEl.textContent = "Done! Downloading...";
+        statusEl.className = "trim-status success";
+        triggerDownload(data.filename);
+        trackAnalytics("youtube_short_export");
+    })
+    .catch(() => { btn.disabled = false; statusEl.textContent = "Failed"; statusEl.className = "trim-status error"; });
+}
+
+// ===== BATCH TIKTOK =====
+function batchTikTok() {
+    if (!currentJobId || currentClips.length === 0) return;
+    const preset = prompt("Which preset? (cam-top-right, cam-bottom-right, no-cam)", "cam-top-right");
+    if (!preset) return;
+
+    // Set regions based on preset
+    let gameplay = { x: 0, y: 0, w: 1, h: 1 };
+    let webcam = null;
+    let layout = "gameplay_only";
+
+    if (preset === "cam-top-right") { webcam = { x: 0.72, y: 0.02, w: 0.26, h: 0.30 }; layout = "stacked"; }
+    else if (preset === "cam-top-left") { webcam = { x: 0.02, y: 0.02, w: 0.26, h: 0.30 }; layout = "stacked"; }
+    else if (preset === "cam-bottom-right") { webcam = { x: 0.72, y: 0.68, w: 0.26, h: 0.30 }; layout = "stacked"; }
+    else if (preset === "cam-bottom-left") { webcam = { x: 0.02, y: 0.68, w: 0.26, h: 0.30 }; layout = "stacked"; }
+
+    const clipIds = currentClips.map(c => c.id);
+
+    showNotification(`Creating ${clipIds.length} TikTok videos...`);
+
+    fetch(`/api/clips/${currentJobId}/batch-tiktok`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clip_ids: clipIds, gameplay, webcam, layout }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) { showNotification(data.error); return; }
+        const count = (data.results || []).filter(r => r && r.filename).length;
+        showNotification(`Done! ${count} TikTok videos created.`);
+        // Download each
+        (data.results || []).forEach(r => {
+            if (r && r.filename) triggerDownload(r.filename);
+        });
+        trackAnalytics("batch_tiktok", { count });
+    })
+    .catch(() => showNotification("Batch TikTok failed"));
+}
+
+// ===== CLIP SORTING / FILTERING =====
+function sortClips(sortBy) {
+    const order = "desc";
+    fetch(`/api/clips/${currentJobId}/sorted?sort_by=${sortBy}&order=${order}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.clips) {
+                currentClips = data.clips;
+                renderClips();
+            }
+        });
+}
+
+function filterClips(filterVal) {
+    if (filterVal === "all") {
+        fetchClips(currentJobId);
+        return;
+    }
+    fetch(`/api/clips/${currentJobId}/sorted?review_status=${filterVal}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.clips) {
+                currentClips = data.clips;
+                renderClips();
+            }
+        });
+}
+
+// ===== DUPLICATE DETECTION =====
+function findDuplicates() {
+    if (!currentJobId) return;
+    fetch(`/api/clips/${currentJobId}/duplicates`)
+        .then(res => res.json())
+        .then(data => {
+            if (!data.groups || data.groups.length === 0) {
+                showNotification("No duplicate clips found!");
+                return;
+            }
+            let msg = `Found ${data.groups.length} group(s) of overlapping clips:\n`;
+            data.groups.forEach((g, i) => {
+                msg += `\nGroup ${i + 1}: ${g.clip_ids.length} clips (${Math.round(g.overlap_pct * 100)}% overlap)`;
+            });
+            alert(msg);
+        });
+}
+
+// ===== CLIP METADATA (REVIEW, TAGS, NOTES) =====
+function setClipReview(clipId, status) {
+    if (!currentJobId) return;
+    fetch(`/api/clips/${currentJobId}/${clipId}/metadata`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ review_status: status }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            // Update local clip data
+            const clip = currentClips.find(c => c.id === clipId);
+            if (clip) clip.review_status = status;
+            renderClips();
+        }
+    });
+}
+
+function addClipTag(clipId) {
+    const tag = prompt("Enter tag:");
+    if (!tag) return;
+    const clip = currentClips.find(c => c.id === clipId);
+    const tags = (clip && clip.tags) || [];
+    tags.push(tag.trim());
+
+    fetch(`/api/clips/${currentJobId}/${clipId}/metadata`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tags }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success && clip) {
+            clip.tags = tags;
+            renderClips();
+        }
+    });
+}
+
+function addClipNote(clipId) {
+    const clip = currentClips.find(c => c.id === clipId);
+    const existing = (clip && clip.notes) || "";
+    const note = prompt("Notes:", existing);
+    if (note === null) return;
+
+    fetch(`/api/clips/${currentJobId}/${clipId}/metadata`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: note }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success && clip) {
+            clip.notes = note;
+        }
+    });
+}
+
+// ===== ANALYTICS =====
+function trackAnalytics(event, details) {
+    fetch("/api/analytics/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event, details: details || {} }),
+    }).catch(() => {}); // fire and forget
+}
+
+function loadAnalytics() {
+    fetch("/api/analytics")
+        .then(res => res.json())
+        .then(data => {
+            const events = data.events || [];
+            document.getElementById("stat-total-clips").textContent = currentClips.length;
+            document.getElementById("stat-total-exports").textContent =
+                events.filter(e => e.event && e.event.includes("export")).length;
+            document.getElementById("stat-total-tiktoks").textContent =
+                events.filter(e => e.event === "tiktok_export" || e.event === "batch_tiktok").length;
+            document.getElementById("stat-total-gifs").textContent =
+                events.filter(e => e.event === "gif_export").length;
+        })
+        .catch(() => {});
+}
+
+function toggleAnalytics() {
+    const content = document.getElementById("analytics-content");
+    content.classList.toggle("hidden");
+    if (!content.classList.contains("hidden")) loadAnalytics();
+}
+
+// ===== EXPORT PRESETS =====
+function loadExportPresets() {
+    fetch("/api/presets")
+        .then(res => res.json())
+        .then(data => {
+            const sel = document.getElementById("export-preset-select");
+            if (!sel) return;
+            sel.innerHTML = '<option value="">None</option>';
+            (data.presets || []).forEach(p => {
+                sel.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+            });
+        })
+        .catch(() => {});
+}
+
+function saveExportPreset() {
+    const name = prompt("Preset name:");
+    if (!name) return;
+
+    const settings = {
+        gameplay: tiktokRegions.gameplay,
+        webcam: tiktokRegions.webcam,
+        preset: tiktokCurrentPreset,
+    };
+
+    fetch("/api/presets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, type: "tiktok", settings }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            loadExportPresets();
+            showNotification("Preset saved!");
+        }
+    });
+}
+
+function loadExportPreset(presetId) {
+    if (!presetId) return;
+    fetch("/api/presets")
+        .then(res => res.json())
+        .then(data => {
+            const preset = (data.presets || []).find(p => p.id === presetId);
+            if (preset && preset.settings) {
+                if (preset.settings.gameplay) tiktokRegions.gameplay = preset.settings.gameplay;
+                if (preset.settings.webcam) tiktokRegions.webcam = preset.settings.webcam;
+                if (preset.settings.preset) setPreset(preset.settings.preset);
+                drawTikTokOverlay();
+                drawTikTokPreview();
+            }
+        });
+}
+
+// ===== WATCH FOLDER =====
+function toggleWatchFolder() {
+    const btn = document.getElementById("watch-folder-btn");
+    const isActive = btn.classList.contains("watch-folder-active");
+
+    if (isActive) {
+        fetch("/api/watch-folder/stop", { method: "POST" })
+            .then(res => res.json())
+            .then(() => {
+                btn.classList.remove("watch-folder-active");
+                btn.textContent = "Watch Folder: Off";
+            });
+    } else {
+        const apiKey = document.getElementById("api-key").value.trim();
+        const gameId = selectedGame;
+        fetch("/api/watch-folder/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ api_key: apiKey, game: gameId }),
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                btn.classList.add("watch-folder-active");
+                btn.textContent = "Watch Folder: ON";
+            }
+        });
+    }
+}
+
+// ===== NOTIFICATIONS =====
+function showNotification(message) {
+    // Browser notification
+    if (Notification.permission === "granted") {
+        new Notification("Auto-Clipper", { body: message });
+    } else if (Notification.permission !== "denied") {
+        Notification.requestPermission();
+    }
+
+    // Toast notification
+    let toast = document.getElementById("notification-toast");
+    if (!toast) {
+        toast = document.createElement("div");
+        toast.id = "notification-toast";
+        toast.className = "notification-toast";
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 3000);
+}
+
+// ===== HELPER: TRIGGER DOWNLOAD =====
+function triggerDownload(filename) {
+    const a = document.createElement("a");
+    a.href = `/static/clips/${filename}`;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+// ===== INIT NEW FEATURES ON LOAD =====
+document.addEventListener("DOMContentLoaded", () => {
+    // Show analytics section
+    const analyticsSection = document.getElementById("analytics-section");
+    if (analyticsSection) analyticsSection.classList.remove("hidden");
+
+    // Load export presets
+    loadExportPresets();
+
+    // Request notification permission
+    if ("Notification" in window && Notification.permission === "default") {
+        // Will ask on first notification
+    }
+
+    // Check watch folder status
+    fetch("/api/watch-folder/status")
+        .then(res => res.json())
+        .then(data => {
+            const btn = document.getElementById("watch-folder-btn");
+            if (btn && data.running) {
+                btn.classList.add("watch-folder-active");
+                btn.textContent = "Watch Folder: ON";
+            }
+        })
+        .catch(() => {});
+});
