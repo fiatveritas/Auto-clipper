@@ -3,15 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arc Raiders Auto-Clipper</title>
+    <title>Auto-Clipper</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <div class="app">
         <header>
-            <h1>Arc Raiders Auto-Clipper</h1>
+            <h1>Auto-Clipper</h1>
             <p class="subtitle">Paste your Twitch VOD link and let AI find the best moments</p>
         </header>
+
+        <!-- Game Selection -->
+        <section id="game-section" class="card">
+            <div class="game-selector">
+                <label class="game-label">Game</label>
+                <div id="game-options" class="game-options">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </section>
 
         <!-- URL Input Section -->
         <section id="input-section" class="card">

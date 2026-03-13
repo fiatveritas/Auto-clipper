@@ -1,56 +1,29 @@
 import cv2
 import numpy as np
 
+from analysis.game_profiles import get_profile
 
-class ArcRaidersDetector:
+
+class GameDetector:
     """
-    Detects exciting moments in Arc Raiders gameplay by analyzing video frames.
-
-    Detection methods:
-    1. Kill feed / elimination text detection (bright UI text flashes)
-    2. Rapid scene changes (explosions, combat chaos)
-    3. Health bar / damage indicators (red screen flashes)
-    4. Crosshair / hit marker detection (bright center-screen flashes)
-    5. Audio spike analysis (loud combat sounds) via frame brightness proxy
-    6. HUD kill/score popup detection
+    Detects exciting moments in gameplay by analyzing video frames
+    using a game-specific detection profile.
 
     The detector samples frames at a configurable rate, scores each frame
     window for "action intensity", and returns timestamps above a threshold.
     """
 
-    # Arc Raiders UI color ranges (HSV) for detecting game-specific elements
-    # Kill feed text is typically white/bright yellow
-    KILL_TEXT_LOWER = np.array([0, 0, 200])
-    KILL_TEXT_UPPER = np.array([180, 50, 255])
-
-    # Damage indicator red flash
-    DAMAGE_RED_LOWER = np.array([0, 120, 100])
-    DAMAGE_RED_UPPER = np.array([10, 255, 255])
-    DAMAGE_RED_LOWER2 = np.array([170, 120, 100])
-    DAMAGE_RED_UPPER2 = np.array([180, 255, 255])
-
-    # Hit marker / crosshair flash (bright white center)
-    HIT_MARKER_LOWER = np.array([0, 0, 230])
-    HIT_MARKER_UPPER = np.array([180, 30, 255])
-
-    # Muzzle flash / explosion orange-yellow
-    EXPLOSION_LOWER = np.array([10, 100, 150])
-    EXPLOSION_UPPER = np.array([35, 255, 255])
-
-    # Arc (enemy) blue glow
-    ARC_BLUE_LOWER = np.array([90, 80, 100])
-    ARC_BLUE_UPPER = np.array([130, 255, 255])
-
-    def __init__(self, sample_fps=2, window_seconds=3, intensity_threshold=0.35):
+    def __init__(self, game_id="arc_raiders", sample_fps=2, window_seconds=3):
         """
         Args:
+            game_id: Which game profile to use (e.g. "arc_raiders", "war_thunder")
             sample_fps: Frames to analyze per second (lower = faster, less precise)
             window_seconds: Sliding window size for grouping action
-            intensity_threshold: 0-1 threshold for what counts as a "highlight"
         """
+        self.profile = get_profile(game_id)
         self.sample_fps = sample_fps
         self.window_seconds = window_seconds
-        self.intensity_threshold = intensity_threshold
+        self.intensity_threshold = self.profile["intensity_threshold"]
 
     def analyze_video(self, video_path, progress_callback=None):
         """
@@ -68,12 +41,10 @@ class ArcRaidersDetector:
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         duration = total_frames / fps if fps > 0 else 0
 
-        # Calculate frame sampling interval
         frame_interval = max(1, int(fps / self.sample_fps))
         frames_to_analyze = total_frames // frame_interval
 
         scores = []
-        frame_timestamps = []
         prev_frame_gray = None
 
         frame_idx = 0
@@ -89,7 +60,6 @@ class ArcRaidersDetector:
                 score, label = self._score_frame(frame, prev_frame_gray)
 
                 scores.append({"score": score, "label": label, "timestamp": timestamp})
-                frame_timestamps.append(timestamp)
 
                 if score >= self.intensity_threshold * 0.5:
                     mins = int(timestamp) // 60
@@ -110,11 +80,11 @@ class ArcRaidersDetector:
             progress_callback(1.0)
 
         top_scores = sorted(scores, key=lambda s: s["score"], reverse=True)[:10]
+        print(f"  [CV] Game: {self.profile['name']}")
         print(f"  [CV] Analyzed {analyzed} frames over {duration:.0f}s")
         print(f"  [CV] Top scores: {[f'{s[\"score\"]:.3f}@{int(s[\"timestamp\"])}s' for s in top_scores]}")
         print(f"  [CV] Threshold: {self.intensity_threshold}")
 
-        # Find highlight windows
         highlights = self._find_highlights(scores, duration)
         print(f"  [CV] Found {len(highlights)} highlights")
         for h in highlights:
@@ -123,7 +93,7 @@ class ArcRaidersDetector:
 
     def _score_frame(self, frame, prev_gray):
         """
-        Score a single frame for action intensity.
+        Score a single frame for action intensity using the game profile.
         Returns (score: float 0-1, label: str).
         """
         h, w = frame.shape[:2]
@@ -131,80 +101,76 @@ class ArcRaidersDetector:
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         component_scores = {}
+        label_map = {}
+        weights = {}
 
-        # 1. Kill feed region (top-right area of screen where kill notifications appear)
-        kill_region = hsv[int(h * 0.05):int(h * 0.25), int(w * 0.55):int(w * 0.95)]
-        kill_mask = cv2.inRange(kill_region, self.KILL_TEXT_LOWER, self.KILL_TEXT_UPPER)
-        kill_density = np.count_nonzero(kill_mask) / max(kill_mask.size, 1)
-        component_scores["kill_feed"] = min(kill_density * 8, 1.0)
+        # Process each detector from the profile
+        for det_id, det in self.profile["detectors"].items():
+            label_map[det_id] = det["label"]
+            weights[det_id] = det["weight"]
 
-        # 2. Damage indicator (red vignette around screen edges)
-        edges_top = hsv[0:int(h * 0.1), :]
-        edges_bottom = hsv[int(h * 0.9):, :]
-        edges_left = hsv[:, 0:int(w * 0.1)]
-        edges_right = hsv[:, int(w * 0.9):]
+            if det["region"] == "edges":
+                # Edge detection (damage indicators) — check all 4 edges
+                edge_size = det.get("edge_size", 0.10)
+                edges = [
+                    hsv[0:int(h * edge_size), :],              # top
+                    hsv[int(h * (1 - edge_size)):, :],         # bottom
+                    hsv[:, 0:int(w * edge_size)],              # left
+                    hsv[:, int(w * (1 - edge_size)):],         # right
+                ]
+                best = 0
+                for edge in edges:
+                    mask1 = cv2.inRange(edge, det["lower"], det["upper"])
+                    density = np.count_nonzero(mask1) / max(edge.shape[0] * edge.shape[1], 1)
+                    if "lower2" in det:
+                        mask2 = cv2.inRange(edge, det["lower2"], det["upper2"])
+                        density += np.count_nonzero(mask2) / max(edge.shape[0] * edge.shape[1], 1)
+                    best = max(best, density)
+                component_scores[det_id] = min(best * det["multiplier"], 1.0)
 
-        red_score = 0
-        for edge in [edges_top, edges_bottom, edges_left, edges_right]:
-            mask1 = cv2.inRange(edge, self.DAMAGE_RED_LOWER, self.DAMAGE_RED_UPPER)
-            mask2 = cv2.inRange(edge, self.DAMAGE_RED_LOWER2, self.DAMAGE_RED_UPPER2)
-            red_density = (np.count_nonzero(mask1) + np.count_nonzero(mask2)) / max(edge.shape[0] * edge.shape[1], 1)
-            red_score = max(red_score, red_density)
-        component_scores["damage"] = min(red_score * 5, 1.0)
+            elif det["region"] == "full":
+                # Full-frame detection
+                mask = cv2.inRange(hsv, det["lower"], det["upper"])
+                density = np.count_nonzero(mask) / max(mask.size, 1)
+                component_scores[det_id] = min(density * det["multiplier"], 1.0)
 
-        # 3. Hit marker detection (bright flash in center crosshair area)
-        center_region = hsv[int(h * 0.4):int(h * 0.6), int(w * 0.4):int(w * 0.6)]
-        hit_mask = cv2.inRange(center_region, self.HIT_MARKER_LOWER, self.HIT_MARKER_UPPER)
-        hit_density = np.count_nonzero(hit_mask) / max(hit_mask.size, 1)
-        component_scores["hit_marker"] = min(hit_density * 6, 1.0)
+            else:
+                # Region-based detection [y1, y2, x1, x2]
+                y1, y2, x1, x2 = det["region"]
+                region = hsv[int(h * y1):int(h * y2), int(w * x1):int(w * x2)]
+                mask = cv2.inRange(region, det["lower"], det["upper"])
+                density = np.count_nonzero(mask) / max(mask.size, 1)
+                if "lower2" in det:
+                    mask2 = cv2.inRange(region, det["lower2"], det["upper2"])
+                    density += np.count_nonzero(mask2) / max(mask2.size, 1)
+                component_scores[det_id] = min(density * det["multiplier"], 1.0)
 
-        # 4. Explosion / muzzle flash (orange-yellow bursts)
-        explosion_mask = cv2.inRange(hsv, self.EXPLOSION_LOWER, self.EXPLOSION_UPPER)
-        explosion_density = np.count_nonzero(explosion_mask) / max(explosion_mask.size, 1)
-        component_scores["explosion"] = min(explosion_density * 4, 1.0)
-
-        # 5. Arc enemy blue glow detection
-        arc_mask = cv2.inRange(hsv, self.ARC_BLUE_LOWER, self.ARC_BLUE_UPPER)
-        arc_density = np.count_nonzero(arc_mask) / max(arc_mask.size, 1)
-        component_scores["arc_enemy"] = min(arc_density * 5, 1.0)
-
-        # 6. Scene change detection (motion / chaos)
+        # Motion detection
+        motion_weight = self.profile.get("motion_weight", 0.10)
         if prev_gray is not None:
             diff = cv2.absdiff(gray, prev_gray)
             motion = np.mean(diff) / 255.0
-            component_scores["motion"] = min(motion * 4, 1.0)
+            component_scores["motion"] = min(motion * self.profile.get("motion_multiplier", 3), 1.0)
         else:
             component_scores["motion"] = 0
+        weights["motion"] = motion_weight
+        label_map["motion"] = "Intense Action"
 
-        # 7. Overall brightness spike (flash from kills, explosions)
+        # Brightness spike
+        brightness_weight = self.profile.get("brightness_weight", 0.05)
         brightness = np.mean(gray) / 255.0
-        brightness_spike = max(0, brightness - 0.6) * 3
+        threshold = self.profile.get("brightness_threshold", 0.6)
+        mult = self.profile.get("brightness_multiplier", 3)
+        brightness_spike = max(0, brightness - threshold) * mult
         component_scores["brightness"] = min(brightness_spike, 1.0)
+        weights["brightness"] = brightness_weight
+        label_map["brightness"] = "Flash Event"
 
         # Weighted combination
-        weights = {
-            "kill_feed": 0.25,
-            "damage": 0.20,
-            "hit_marker": 0.15,
-            "explosion": 0.15,
-            "arc_enemy": 0.10,
-            "motion": 0.10,
-            "brightness": 0.05,
-        }
-
-        total_score = sum(component_scores[k] * weights[k] for k in weights)
+        total_score = sum(component_scores.get(k, 0) * weights.get(k, 0) for k in weights)
 
         # Determine the dominant label
         best_component = max(component_scores, key=component_scores.get)
-        label_map = {
-            "kill_feed": "Kill / Elimination",
-            "damage": "Taking Damage",
-            "hit_marker": "Landing Hits",
-            "explosion": "Explosion / Combat",
-            "arc_enemy": "Arc Enemy Encounter",
-            "motion": "Intense Action",
-            "brightness": "Flash Event",
-        }
         label = label_map.get(best_component, "Highlight")
 
         return total_score, label
@@ -217,7 +183,6 @@ class ArcRaidersDetector:
         if not scores:
             return []
 
-        # Sliding window: compute average score for each window
         window_frames = int(self.window_seconds * self.sample_fps)
         window_scores = []
 
@@ -226,7 +191,6 @@ class ArcRaidersDetector:
             window_slice = scores[i:window_end]
             avg_score = sum(s["score"] for s in window_slice) / len(window_slice)
 
-            # Find the dominant label in this window
             label_counts = {}
             for s in window_slice:
                 label_counts[s["label"]] = label_counts.get(s["label"], 0) + s["score"]
@@ -239,33 +203,29 @@ class ArcRaidersDetector:
                 "label": dominant_label,
             })
 
-        # Find peaks above threshold
         peaks = [w for w in window_scores if w["avg_score"] >= self.intensity_threshold]
 
         if not peaks:
-            # Lower threshold if nothing found and return top moments
             sorted_windows = sorted(window_scores, key=lambda w: w["avg_score"], reverse=True)
-            # Take top 5 moments if their score is at least half the threshold
-            fallback_threshold = self.intensity_threshold * 0.5
+            fallback_ratio = self.profile.get("fallback_threshold_ratio", 0.5)
+            fallback_threshold = self.intensity_threshold * fallback_ratio
             peaks = [w for w in sorted_windows[:10] if w["avg_score"] >= fallback_threshold]
 
         if not peaks:
             return []
 
-        # Merge overlapping/nearby highlights
         merged = self._merge_highlights(peaks)
-
-        # Sort by timestamp
         merged.sort(key=lambda h: h["timestamp"])
-
         return merged
 
-    def _merge_highlights(self, peaks, merge_gap=8):
+    def _merge_highlights(self, peaks, merge_gap=None):
         """Merge highlights that are within merge_gap seconds of each other."""
         if not peaks:
             return []
 
-        # Sort by timestamp
+        if merge_gap is None:
+            merge_gap = self.profile.get("merge_gap", 8)
+
         peaks.sort(key=lambda p: p["timestamp"])
 
         merged = []
@@ -279,15 +239,12 @@ class ArcRaidersDetector:
 
         for peak in peaks[1:]:
             if peak["timestamp"] <= current["end_time"] + merge_gap:
-                # Extend current highlight
                 current["end_time"] = peak["timestamp"] + self.window_seconds
                 current["peak_score"] = max(current["peak_score"], peak["avg_score"])
                 current["confidence"] = (current["confidence"] + peak["avg_score"]) / 2
-                # Use label from higher-scoring peak
                 if peak["avg_score"] > current["peak_score"] * 0.9:
                     current["label"] = peak["label"]
             else:
-                # Finalize current and start new
                 merged.append(self._finalize_highlight(current))
                 current = {
                     "timestamp": peak["timestamp"],
@@ -303,13 +260,19 @@ class ArcRaidersDetector:
     def _finalize_highlight(self, highlight):
         """Convert a merged highlight window into the output format."""
         duration = highlight["end_time"] - highlight["timestamp"]
-        # Clip duration between 20 and 60 seconds (default longer)
-        duration = max(20, min(60, duration + 10))
+        min_dur = self.profile.get("min_clip_duration", 20)
+        max_dur = self.profile.get("max_clip_duration", 60)
+        extension = self.profile.get("clip_extension", 10)
+        duration = max(min_dur, min(max_dur, duration + extension))
 
         return {
             "timestamp": highlight["timestamp"],
             "duration": duration,
-            "pre_pad": 8,
+            "pre_pad": self.profile.get("pre_pad", 8),
             "label": highlight["label"],
             "confidence": round(min(highlight["confidence"] * 1.5, 1.0), 2),
         }
+
+
+# Backwards compatibility alias
+ArcRaidersDetector = GameDetector

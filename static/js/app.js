@@ -1,25 +1,123 @@
-// Load saved API key on page load
-window.addEventListener("DOMContentLoaded", () => {
-    const saved = localStorage.getItem("xai_api_key");
-    if (saved) document.getElementById("api-key").value = saved;
-});
+// ===== Persistent State =====
+// Everything saves to localStorage so closing the tab doesn't lose your settings.
 
-// Save API key whenever it changes
-document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("api-key").addEventListener("input", (e) => {
-        const val = e.target.value.trim();
-        if (val) localStorage.setItem("xai_api_key", val);
-        else localStorage.removeItem("xai_api_key");
+const STORAGE_KEY = "autoclipper_state";
+
+function loadState() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+}
+
+function saveState() {
+    const state = {
+        selectedGame: selectedGame,
+        apiKey: document.getElementById("api-key").value.trim(),
+        vodUrl: document.getElementById("vod-url").value.trim(),
+        timeStart: document.getElementById("time-start").value.trim(),
+        timeEnd: document.getElementById("time-end").value.trim(),
+        timeRangeOpen: !document.getElementById("time-range-wrapper").classList.contains("hidden"),
+        apiKeyOpen: !document.getElementById("api-key-wrapper").classList.contains("hidden"),
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+// Save whenever the user changes anything
+function hookAutoSave() {
+    ["vod-url", "api-key", "time-start", "time-end"].forEach(id => {
+        document.getElementById(id).addEventListener("input", saveState);
     });
-});
+    // Save on tab close / navigate away
+    window.addEventListener("beforeunload", saveState);
+    // Save periodically as backup
+    setInterval(saveState, 5000);
+}
 
-// State
+function restoreState() {
+    const state = loadState();
+    if (!state || !Object.keys(state).length) return;
+
+    if (state.selectedGame) {
+        selectedGame = state.selectedGame;
+    }
+    if (state.apiKey) {
+        document.getElementById("api-key").value = state.apiKey;
+    }
+    if (state.vodUrl) {
+        document.getElementById("vod-url").value = state.vodUrl;
+    }
+    if (state.timeStart) {
+        document.getElementById("time-start").value = state.timeStart;
+    }
+    if (state.timeEnd) {
+        document.getElementById("time-end").value = state.timeEnd;
+    }
+    if (state.timeRangeOpen) {
+        document.getElementById("time-range-wrapper").classList.remove("hidden");
+        document.getElementById("time-toggle-icon").textContent = "-";
+    }
+    if (state.apiKeyOpen) {
+        document.getElementById("api-key-wrapper").classList.remove("hidden");
+        document.getElementById("api-toggle-icon").textContent = "-";
+    }
+}
+
+// ===== Game Selection =====
+let selectedGame = "arc_raiders";
+let availableGames = [];
+
+function loadGames() {
+    fetch("/api/games")
+        .then(res => res.json())
+        .then(data => {
+            availableGames = data.games || [];
+            renderGameOptions();
+        })
+        .catch(() => {
+            // Fallback if endpoint fails
+            availableGames = [
+                { id: "arc_raiders", name: "Arc Raiders", description: "Sci-fi co-op shooter" },
+                { id: "war_thunder", name: "War Thunder", description: "Military vehicles" },
+            ];
+            renderGameOptions();
+        });
+}
+
+function renderGameOptions() {
+    const container = document.getElementById("game-options");
+    container.innerHTML = availableGames.map(game => `
+        <button class="game-btn ${game.id === selectedGame ? 'active' : ''}"
+                onclick="selectGame('${game.id}')"
+                data-game="${game.id}">
+            <span class="game-btn-name">${escapeHtml(game.name)}</span>
+            <span class="game-btn-desc">${escapeHtml(game.description)}</span>
+        </button>
+    `).join("");
+}
+
+function selectGame(gameId) {
+    selectedGame = gameId;
+    document.querySelectorAll(".game-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.game === gameId);
+    });
+    saveState();
+}
+
+// ===== App State =====
 let currentJobId = null;
 let currentClips = [];
 let previewClipData = null;
 let previewClipIndex = -1;
 let pollTimer = null;
 let vodDuration = 0;
+
+// ===== Init =====
+window.addEventListener("DOMContentLoaded", () => {
+    restoreState();
+    loadGames();
+    hookAutoSave();
+});
 
 // Start analysis
 function startAnalysis() {
@@ -39,6 +137,7 @@ function startAnalysis() {
     hideError();
     setAnalyzing(true);
     showProgress();
+    saveState();
 
     const timeStart = document.getElementById("time-start").value.trim();
     const timeEnd = document.getElementById("time-end").value.trim();
@@ -46,7 +145,13 @@ function startAnalysis() {
     fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, api_key: apiKey, time_start: timeStart, time_end: timeEnd }),
+        body: JSON.stringify({
+            url,
+            api_key: apiKey,
+            time_start: timeStart,
+            time_end: timeEnd,
+            game: selectedGame,
+        }),
     })
     .then((res) => res.json())
     .then((data) => {
@@ -355,6 +460,7 @@ function toggleTimeRange() {
     const icon = document.getElementById("time-toggle-icon");
     wrapper.classList.toggle("hidden");
     icon.textContent = wrapper.classList.contains("hidden") ? "+" : "-";
+    saveState();
 }
 
 function toggleApiKey() {
@@ -362,6 +468,7 @@ function toggleApiKey() {
     const icon = document.getElementById("api-toggle-icon");
     wrapper.classList.toggle("hidden");
     icon.textContent = wrapper.classList.contains("hidden") ? "+" : "-";
+    saveState();
 }
 
 // Helpers
@@ -458,7 +565,7 @@ function setPreset(name) {
 
     // Update active button
     document.querySelectorAll(".preset-btn").forEach(b => b.classList.remove("active"));
-    event.target.classList.add("active");
+    if (event && event.target) event.target.classList.add("active");
 
     if (name === "cam-top-right") {
         tiktokRegions.gameplay = { x: 0, y: 0, w: 1, h: 1 };

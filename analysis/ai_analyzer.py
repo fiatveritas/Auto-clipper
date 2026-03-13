@@ -5,33 +5,20 @@ import json
 import urllib.request
 import urllib.error
 
+from analysis.game_profiles import get_profile
+
 
 class GrokVisionAnalyzer:
     """
     Uses xAI's Grok vision API to analyze sampled video frames
-    and identify exciting Arc Raiders gameplay moments.
+    and identify exciting gameplay moments using game-specific prompts.
     """
 
     API_URL = "https://api.x.ai/v1/chat/completions"
 
-    SYSTEM_PROMPT = """You are an expert Arc Raiders gameplay analyst. You analyze screenshots from Arc Raiders streams to identify exciting moments worth clipping.
-
-Look for these types of highlights:
-- **Kills**: Player eliminating Arc enemies (robots), leapers, or other threats
-- **Combat**: Active gunfights, shooting at enemies, taking fire
-- **Arc Encounters**: Large Arc enemy appearances, boss-like encounters
-- **Explosions**: Big explosions, grenades, environmental destruction
-- **Close Calls**: Player at low health, narrow escapes
-- **Loot/Rewards**: Finding rare loot, extraction moments
-- **Deaths**: Player dying (also exciting/funny content)
-
-For each frame, respond with ONLY a JSON object (no markdown):
-{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}
-
-Score guide: 0.0 = nothing happening, 0.3 = minor action, 0.6 = good combat, 0.8 = kill/major moment, 1.0 = insane play"""
-
-    def __init__(self, api_key):
+    def __init__(self, api_key, game_id="arc_raiders"):
         self.api_key = api_key
+        self.profile = get_profile(game_id)
 
     def analyze_frames(self, video_path, sample_interval_sec=10, progress_callback=None):
         """
@@ -126,10 +113,13 @@ Score guide: 0.0 = nothing happening, 0.3 = minor action, 0.6 = good combat, 0.8
 
     def _call_grok(self, image_b64):
         """Call xAI Grok vision API with a single frame."""
+        system_prompt = self.profile.get("ai_system_prompt", "Analyze this gameplay frame.")
+        user_prompt = self.profile.get("ai_user_prompt", "Is this an exciting moment?")
+
         payload = {
             "model": "grok-2-vision-latest",
             "messages": [
-                {"role": "system", "content": self.SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {
                     "role": "user",
                     "content": [
@@ -141,7 +131,7 @@ Score guide: 0.0 = nothing happening, 0.3 = minor action, 0.6 = good combat, 0.8
                         },
                         {
                             "type": "text",
-                            "text": "Analyze this Arc Raiders gameplay frame. Is this an exciting moment?",
+                            "text": user_prompt,
                         },
                     ],
                 },
@@ -197,6 +187,8 @@ Score guide: 0.0 = nothing happening, 0.3 = minor action, 0.6 = good combat, 0.8
         merged = []
         current = None
 
+        merge_gap = self.profile.get("merge_gap", 15)
+
         for result in exciting:
             if current is None:
                 current = {
@@ -206,7 +198,7 @@ Score guide: 0.0 = nothing happening, 0.3 = minor action, 0.6 = good combat, 0.8
                     "confidence": result.get("score", 0.5),
                     "peak_score": result.get("score", 0.5),
                 }
-            elif result["timestamp"] <= current["end_time"] + 15:
+            elif result["timestamp"] <= current["end_time"] + merge_gap:
                 current["end_time"] = result["timestamp"] + sample_interval
                 if result.get("score", 0) > current["peak_score"]:
                     current["peak_score"] = result["score"]
@@ -230,12 +222,15 @@ Score guide: 0.0 = nothing happening, 0.3 = minor action, 0.6 = good combat, 0.8
     def _finalize(self, highlight):
         """Format a merged highlight for clip extraction."""
         duration = highlight["end_time"] - highlight["timestamp"]
-        duration = max(20, min(60, duration + 10))
+        min_dur = self.profile.get("min_clip_duration", 20)
+        max_dur = self.profile.get("max_clip_duration", 60)
+        extension = self.profile.get("clip_extension", 10)
+        duration = max(min_dur, min(max_dur, duration + extension))
 
         return {
             "timestamp": highlight["timestamp"],
             "duration": duration,
-            "pre_pad": 8,
+            "pre_pad": self.profile.get("pre_pad", 8),
             "label": highlight["label"],
             "confidence": round(min(highlight["confidence"], 1.0), 2),
         }

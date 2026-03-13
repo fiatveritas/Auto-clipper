@@ -3,8 +3,9 @@ import uuid
 import threading
 from flask import Flask, render_template, request, jsonify, send_from_directory
 
-from analysis.detector import ArcRaidersDetector
+from analysis.detector import GameDetector
 from analysis.ai_analyzer import GrokVisionAnalyzer
+from analysis.game_profiles import get_all_games
 from clip_manager import ClipManager
 
 app = Flask(__name__)
@@ -29,6 +30,12 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/api/games")
+def list_games():
+    """Return list of supported games for the UI."""
+    return jsonify({"games": get_all_games()})
+
+
 @app.route("/api/analyze", methods=["POST"])
 def start_analysis():
     data = request.get_json()
@@ -36,6 +43,7 @@ def start_analysis():
     api_key = data.get("api_key", "").strip()
     time_start = data.get("time_start", "").strip()
     time_end = data.get("time_end", "").strip()
+    game_id = data.get("game", "arc_raiders").strip()
 
     if not url:
         return jsonify({"error": "No URL provided"}), 400
@@ -56,7 +64,7 @@ def start_analysis():
     }
 
     thread = threading.Thread(
-        target=_run_analysis, args=(job_id, url, api_key, time_start, time_end), daemon=True
+        target=_run_analysis, args=(job_id, url, api_key, time_start, time_end, game_id), daemon=True
     )
     thread.start()
 
@@ -198,7 +206,7 @@ def _is_valid_twitch_url(url):
     return any(pattern in url.lower() for pattern in valid_patterns)
 
 
-def _run_analysis(job_id, url, api_key="", time_start="", time_end=""):
+def _run_analysis(job_id, url, api_key="", time_start="", time_end="", game_id="arc_raiders"):
     job = jobs[job_id]
 
     def update(status, progress, message=""):
@@ -233,7 +241,7 @@ def _run_analysis(job_id, url, api_key="", time_start="", time_end=""):
 
         if use_ai:
             update("analyzing", 42, "AI is watching your gameplay...")
-            analyzer = GrokVisionAnalyzer(api_key)
+            analyzer = GrokVisionAnalyzer(api_key, game_id=game_id)
             highlights = analyzer.analyze_frames(
                 video_path,
                 sample_interval_sec=8,
@@ -244,7 +252,7 @@ def _run_analysis(job_id, url, api_key="", time_start="", time_end=""):
             )
         else:
             update("analyzing", 42, "Analyzing video for highlights...")
-            detector = ArcRaidersDetector()
+            detector = GameDetector(game_id=game_id)
             highlights = detector.analyze_video(
                 video_path,
                 progress_callback=lambda p: update(
