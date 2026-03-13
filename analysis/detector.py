@@ -82,7 +82,8 @@ class GameDetector:
         top_scores = sorted(scores, key=lambda s: s["score"], reverse=True)[:10]
         print(f"  [CV] Game: {self.profile['name']}")
         print(f"  [CV] Analyzed {analyzed} frames over {duration:.0f}s")
-        print(f"  [CV] Top scores: {[f'{s[\"score\"]:.3f}@{int(s[\"timestamp\"])}s' for s in top_scores]}")
+        score_strs = [f'{s["score"]:.3f}@{int(s["timestamp"])}s' for s in top_scores]
+        print(f"  [CV] Top scores: {score_strs}")
         print(f"  [CV] Threshold: {self.intensity_threshold}")
 
         highlights = self._find_highlights(scores, duration)

@@ -22,51 +22,45 @@ Your settings (game, API key, everything) are saved automatically — even if yo
 
 ### Step 1: Install Python
 
-1. Go to [python.org/downloads](https://www.python.org/downloads/)
+1. Go to [python.org/downloads](https://www.python.org/downloads/) in your browser
 2. Click the big yellow **"Download Python 3.x.x"** button
-3. Open the downloaded file
-4. **IMPORTANT: Check the box at the bottom that says "Add python.exe to PATH"**
+3. Open the downloaded `.exe` file
+4. **IMPORTANT: Check the box at the bottom that says "Add python.exe to PATH"** — if you miss this, nothing will work later
 5. Click **"Install Now"**
 6. Wait for it to finish, then click **Close**
 
 To make sure it worked:
-- Press the **Windows key**, type **cmd**, and press Enter
+- Press the **Windows key**, type **cmd**, and press Enter to open Command Prompt
 - Type `python --version` and press Enter
 - You should see something like `Python 3.12.x`
+- If it says "not recognized", you missed the PATH checkbox — uninstall Python, download again, and **check that box**
 
-### Step 2: Install Git
+### Step 2: Download Auto-Clipper from GitHub
 
-1. Go to [git-scm.com/download/win](https://git-scm.com/download/win)
-2. The download should start automatically — if not, click **"Click here to download manually"**
-3. Open the downloaded file
-4. Click **Next** through everything — the default settings are fine
-5. Click **Install**, then **Finish**
+1. Go to **[github.com/bendawg2010/Auto-clipper](https://github.com/bendawg2010/Auto-clipper)** in your browser
+2. Click the green **"<> Code"** button near the top-right
+3. Click **"Download ZIP"**
+4. Open your **Downloads** folder and find **Auto-clipper-main.zip**
+5. **Right-click** the ZIP file and click **"Extract All..."**
+6. Click **Extract** — this creates a folder called **Auto-clipper-main**
+7. Open the **Auto-clipper-main** folder — you should see files like `app.py`, `install.bat`, `run.bat`, etc.
 
-To make sure it worked:
-- Open a **new** Command Prompt (close the old one first)
-- Type `git --version` and press Enter
-- You should see something like `git version 2.x.x`
+### Step 3: Run the Installer
 
-### Step 3: Download and Install Auto-Clipper
-
-Open a **new** Command Prompt and type these commands one at a time, pressing Enter after each:
-
-```
-git clone https://github.com/bendawg2010/Auto-clipper.git
-cd Auto-clipper
-install.bat
-```
+1. Double-click **`install.bat`** inside the Auto-clipper-main folder
+2. If Windows shows a blue **"Windows protected your PC"** popup, click **"More info"** then **"Run anyway"**
+3. A Command Prompt window will open and start installing everything
 
 The installer will automatically:
-- Download and install FFmpeg (the video processing tool)
+- Download and install **FFmpeg** (the video processing tool)
 - Create a Python virtual environment
 - Install all the app's dependencies
 
-This takes a few minutes. When it says **"Installation Complete!"** you're done.
+This takes a few minutes. When it says **"Installation Complete!"** you're done. Press any key to close the window.
 
 ### Step 4: Run It
 
-Double-click **`run.bat`** inside the Auto-clipper folder.
+Double-click **`run.bat`** inside the Auto-clipper-main folder.
 
 It will start the server and open your browser automatically to **http://localhost:8080**.
 
@@ -86,30 +80,72 @@ Every time you want to use Auto-Clipper, just double-click **`run.bat`**. That's
 2. Type **Terminal** and press Enter
 3. A black/white window will open — this is where you type all the commands below
 
-### Step 2: Download and Install Auto-Clipper
+### Step 2: Download Auto-Clipper from GitHub
 
-If you don't have Git installed yet, macOS will ask you to install the Command Line Tools when you try to use it. Just click **Install** when it asks.
+Since you probably don't have Git installed yet, you need to download the project as a ZIP file first:
 
-Type these commands one at a time:
+1. Go to **[github.com/bendawg2010/Auto-clipper](https://github.com/bendawg2010/Auto-clipper)** in Safari
+2. Click the green **"<> Code"** button near the top-right
+3. Click **"Download ZIP"**
+4. The file **Auto-clipper-main.zip** will download to your **Downloads** folder
+5. **Double-click** the ZIP file in your Downloads folder to unzip it — this creates a folder called **Auto-clipper-main**
+
+### Step 3: Move to Your Home Folder
+
+In Terminal, type these commands one at a time (press Enter after each):
 
 ```bash
-git clone https://github.com/bendawg2010/Auto-clipper.git
-cd Auto-clipper
+mv ~/Downloads/Auto-clipper-main ~/Auto-clipper
+cd ~/Auto-clipper
+```
+
+This moves the unzipped folder to your home directory and renames it to `Auto-clipper`.
+
+### Step 4: Install Homebrew (Mac's Package Manager)
+
+Homebrew installs everything else we need. Paste this entire command into Terminal and press Enter:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+- It will ask for your **Mac password** — type it and press Enter. **You won't see the characters as you type, that's normal.**
+- It will tell you what it's going to install — press **Enter** to continue
+- This takes a few minutes
+
+**IMPORTANT — After Homebrew finishes**, it shows two commands under **"Next steps"** that you need to run. They look something like this (the exact path depends on your Mac):
+
+```bash
+echo >> ~/.zprofile
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"
+```
+
+**Copy and paste those commands from YOUR Terminal** — the ones Homebrew tells you, not the example above. Then press Enter.
+
+To verify it worked, type:
+```bash
+brew --version
+```
+You should see something like `Homebrew 4.x.x`.
+
+### Step 5: Run the Installer
+
+Now make the install script executable and run it:
+
+```bash
 chmod +x install.sh run.sh
 ./install.sh
 ```
 
 The installer will automatically:
-- Install Homebrew (Mac's package manager) if you don't have it
-- Install Python, Git, and FFmpeg
+- Install **Python**, **Git**, and **FFmpeg** using Homebrew
 - Create a Python virtual environment
 - Install all the app's dependencies
 
-It will ask for your **Mac password** — type it and press Enter. You won't see the characters as you type, that's normal.
-
 This takes a few minutes. When it says **"Installation Complete!"** you're done.
 
-### Step 3: Run It
+### Step 6: Run It
 
 ```bash
 ./run.sh
@@ -117,12 +153,14 @@ This takes a few minutes. When it says **"Installation Complete!"** you're done.
 
 It will start the server and open your browser automatically to **http://localhost:8080**.
 
+That's it — you should see the Auto-Clipper interface.
+
 ### Running It Again Later
 
 Every time you want to use Auto-Clipper, open Terminal and type:
 
 ```bash
-cd Auto-clipper
+cd ~/Auto-clipper
 ./run.sh
 ```
 
