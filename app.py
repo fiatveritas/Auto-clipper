@@ -14,6 +14,7 @@ from analysis.audio_detector import AudioDetector
 from analysis.motion_detector import MotionDetector
 from analysis.scene_detector import SceneChangeDetector
 from analysis.hybrid_detector import HybridDetector
+from analysis.roboflow_analyzer import RoboflowWorkflowAnalyzer
 from analysis.game_profiles import get_all_games
 from clip_manager import ClipManager
 
@@ -1706,6 +1707,32 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
                     f"Hybrid scanning... {int(p * 100)}%"
                 )
             )
+        elif detection_method == "roboflow_workflow":
+            if not api_key:
+                job["error"] = "Roboflow Workflow requires a Roboflow API key. Enter your key in the API Key field."
+                update("error", 0, "Roboflow Workflow requires a Roboflow API key")
+                return
+            update("analyzing", 42, "Running Roboflow AI workflow...")
+            try:
+                analyzer = RoboflowWorkflowAnalyzer(
+                    api_key=api_key,
+                    game_id=game_id,
+                    workspace="beanies-workspace",
+                    workflow="detect-and-classify-3",
+                )
+                highlights = analyzer.analyze_video(
+                    video_path,
+                    progress_callback=lambda p: update(
+                        "analyzing", 42 + int(p * 38),
+                        f"Roboflow analyzing... {int(p * 100)}%"
+                    )
+                )
+            except Exception as rf_err:
+                error_msg = str(rf_err)
+                print(f"  [Roboflow] Fatal error: {error_msg}")
+                job["error"] = f"Roboflow analysis failed: {error_msg}"
+                update("error", 0, f"Roboflow error: {error_msg}")
+                return
         elif detection_method == "chat_spikes":
             update("analyzing", 42, "Downloading Twitch chat data...")
             from analysis.chat_detector import ChatSpikeDetector

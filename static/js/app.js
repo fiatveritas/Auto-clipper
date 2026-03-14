@@ -1189,10 +1189,11 @@ function onDetectionMethodChange(method) {
         hybrid: "Runs audio + motion + scene change together. Slowest but catches everything — if any signal fires, it counts.",
         chat_spikes: "Uses Twitch chat activity spikes to find hype moments. Only works with Twitch VOD URLs.",
         ai_vision: "AI analyzes screenshots of your gameplay. Most accurate but requires xAI API key and costs per use.",
+        roboflow_workflow: "Roboflow AI workflow for Arc Raiders — streams video through a detect-and-classify pipeline. Requires Roboflow API key.",
     };
     document.getElementById("detection-hint").textContent = hints[method] || "";
     const apiSection = document.getElementById("api-key-section");
-    if (method === "ai_vision") {
+    if (method === "ai_vision" || method === "roboflow_workflow") {
         apiSection.classList.remove("hidden");
     } else {
         apiSection.classList.add("hidden");
