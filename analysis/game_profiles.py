@@ -15,109 +15,132 @@ import numpy as np
 GAME_PROFILES = {
     "arc_raiders": {
         "name": "Arc Raiders",
-        "description": "Sci-fi co-op shooter — detects kills, Arc enemies, damage, explosions",
+        "description": "Sci-fi co-op PvE shooter \u2014 detects gunfire, explosions, Arc enemies, combat",
 
-        # Detection components and their HSV color ranges
+        # RESEARCH: Arc Raiders has NO traditional health bar and NO hitmakers by design.
+        # The devs use physics-based visual feedback (see GameRant interview).
+        # Detection focuses on: muzzle flash, explosions, red damage vignette,
+        # and the minimal HUD bars that exist (health/stamina bottom-left).
+        # This is a PvE game -- kills are against AI robots/creatures, not players.
         "detectors": {
             "kill_feed": {
-                "label": "Kill / Elimination",
-                "weight": 0.30,
-                # Kill notifications: bright white/yellow text in kill feed area
-                # Tighter region and higher saturation floor to avoid matching sky/clouds
-                "lower": np.array([15, 80, 200]),
-                "upper": np.array([40, 255, 255]),
-                # Also check for very bright white text (low sat, very high value)
+                "label": "Muzzle Flash / Gunfire",
+                "weight": 0.35,
+                # Primary combat indicator: muzzle flash from firing weapons
+                # Orange-yellow burst in the lower-center where the weapon model is
+                # This is the #1 way to distinguish combat from walking
+                "lower": np.array([10, 120, 180]),
+                "upper": np.array([30, 255, 255]),
+                # Also detect bright white flash from energy weapons
                 "lower2": np.array([0, 0, 240]),
-                "upper2": np.array([180, 30, 255]),
-                "region": [0.05, 0.18, 0.60, 0.95],  # tighter kill feed area top-right
-                "min_density": 0.005,  # ignore if too few pixels (not real text)
-                "max_density": 0.40,   # ignore if too many pixels (sky/bright scene)
-                "multiplier": 8,
+                "upper2": np.array([180, 40, 255]),
+                # Lower half center -- where weapon/muzzle appears on screen
+                "region": [0.50, 0.85, 0.30, 0.70],
+                "min_density": 0.008,
+                "max_density": 0.25,
+                "multiplier": 7,
             },
             "damage": {
                 "label": "Taking Damage",
-                "weight": 0.20,
-                # Detect health/shield bar depletion in the HUD
-                # Arc Raiders: health bar is white, shield bar is blue
-                # Both are in the bottom-left of the screen
-                "region": "health_bar",
-                # Health bar location (bottom-left HUD area)
-                "bar_region": [0.88, 0.95, 0.02, 0.22],  # y1, y2, x1, x2
-                # Colors that represent a FULL/healthy bar
-                "bar_colors": [
-                    # White health bar
-                    {"lower": np.array([0, 0, 180]), "upper": np.array([180, 40, 255])},
-                    # Blue shield bar
-                    {"lower": np.array([90, 60, 100]), "upper": np.array([130, 255, 255])},
-                ],
-                # Trigger when bars lose 10%+ of their fill (shield break = clip-worthy)
-                "depletion_threshold": 0.1,
+                "weight": 0.25,
+                # Red damage vignette on screen edges when hit
+                "lower": np.array([0, 100, 80]),
+                "upper": np.array([10, 255, 255]),
+                "lower2": np.array([170, 100, 80]),
+                "upper2": np.array([180, 255, 255]),
+                "region": "edges",
+                "edge_size": 0.08,
+                "min_density": 0.02,
+                "max_density": 0.50,
                 "multiplier": 6,
             },
             "hit_marker": {
-                "label": "Landing Hits",
-                "weight": 0.20,
-                # Bright white center crosshair flash
-                "lower": np.array([0, 0, 230]),
-                "upper": np.array([180, 30, 255]),
-                "region": [0.4, 0.6, 0.4, 0.6],  # center screen
-                "multiplier": 6,
+                "label": "Combat Action",
+                "weight": 0.15,
+                # Crosshair area activity during combat -- tight center
+                "lower": np.array([0, 0, 240]),
+                "upper": np.array([180, 25, 255]),
+                "region": [0.43, 0.57, 0.43, 0.57],
+                "min_density": 0.01,
+                "max_density": 0.30,
+                "multiplier": 5,
             },
             "explosion": {
-                "label": "Explosion / Combat",
+                "label": "Explosion",
                 "weight": 0.18,
-                # Orange-yellow muzzle flash / explosions
-                "lower": np.array([10, 100, 150]),
-                "upper": np.array([35, 255, 255]),
-                "region": "full",
-                "multiplier": 4,
+                # Large explosions -- orange-red with high saturation
+                # NOT full screen -- restrict to center+lower to avoid sunset/sky
+                "lower": np.array([5, 150, 170]),
+                "upper": np.array([25, 255, 255]),
+                "region": [0.25, 0.90, 0.15, 0.85],
+                "min_density": 0.01,
+                "max_density": 0.35,
+                "multiplier": 5,
             },
             "special": {
                 "label": "Arc Enemy Encounter",
                 "weight": 0.07,
-                # Blue glow from Arc enemies
-                "lower": np.array([90, 80, 100]),
-                "upper": np.array([130, 255, 255]),
-                "region": "full",
+                # Blue glow from Arc enemies -- distinctive blue-cyan energy
+                "lower": np.array([95, 100, 120]),
+                "upper": np.array([125, 255, 255]),
+                "region": [0.15, 0.80, 0.15, 0.85],
+                "min_density": 0.005,
+                "max_density": 0.20,
                 "multiplier": 4,
             },
         },
 
-        # Motion detection weight — low to avoid triggering on running/walking
-        "motion_weight": 0.03,
+        # Motion -- high threshold so walking/camera pan does not trigger
+        "motion_weight": 0.02,
+        "motion_threshold": 0.12,
         "motion_multiplier": 1.5,
 
-        # Brightness spike weight — low to avoid triggering on menus/inventory
-        "brightness_weight": 0.02,
-        "brightness_threshold": 0.7,
+        # Brightness -- very high threshold, only actual flashes (explosions)
+        "brightness_weight": 0.01,
+        "brightness_threshold": 0.80,
         "brightness_multiplier": 1.5,
 
-        # Scoring
-        "intensity_threshold": 0.35,       # combat-focused: catch more fights
-        "fallback_threshold_ratio": 0.3,    # fallback = threshold * this
-        "merge_gap": 8,                     # seconds between highlights to merge
+        # Require at least 2 detectors to fire -- prevents single-source false positives
+        "min_active_detectors": 2,
+
+        # Menu suppression -- detect Arc Raiders menu/inventory screens
+        "menu_suppress_colors": [
+            {"lower": np.array([0, 0, 10]), "upper": np.array([180, 30, 60]),
+             "min_coverage": 0.55},
+        ],
+
+        # Scoring -- MUCH higher threshold to eliminate false positives
+        "intensity_threshold": 0.50,
+        "fallback_threshold_ratio": 0.35,
+        "merge_gap": 8,
         "min_clip_duration": 20,
         "max_clip_duration": 60,
         "clip_extension": 10,
         "pre_pad": 8,
 
-        # AI prompt
+        # AI prompt -- explicitly reject menus, walking, lobbies
         "ai_system_prompt": """You are an expert Arc Raiders gameplay analyst. You analyze screenshots from Arc Raiders streams to identify exciting moments worth clipping.
 
-Look for these types of highlights:
-- **Kills**: Player eliminating Arc enemies (robots), leapers, or other threats
-- **Combat**: Active gunfights, shooting at enemies, taking fire
-- **Arc Encounters**: Large Arc enemy appearances, boss-like encounters
-- **Explosions**: Big explosions, grenades, environmental destruction
-- **Close Calls**: Player at low health, narrow escapes
-- **Loot/Rewards**: Finding rare loot, extraction moments
-- **Deaths**: Player dying (also exciting/funny content)
+IMPORTANT: Arc Raiders is a PvE co-op shooter with minimal HUD (no traditional health bar, no hitmarkers).
+You MUST score 0.0 for: menus, inventory screens, loading screens, lobby/matchmaking,
+map screens, settings, walking/running with no enemies visible, looting with no threats,
+crafting, and any non-combat scene.
+
+Only score above 0.3 if there is ACTIVE COMBAT happening:
+- **Gunfire**: Player actively shooting at enemies (muzzle flash visible, tracers, bullet impacts)
+- **PvE Kills**: Arc enemies (robots, leapers, drones) dying, exploding, ragdolling
+- **Arc Encounters**: Large Arc enemy robots attacking, charging, shooting at player
+- **Explosions**: Grenades, environmental destruction, vehicle explosions
+- **Taking Fire**: Red screen edges, screen shake from enemy attacks
+- **Close Calls**: Near-death moments during active combat
+- **Deaths**: Player dying during combat (also exciting/funny content)
+- **Boss Fights**: Large Arc enemy encounters with heavy combat
 
 For each frame, respond with ONLY a JSON object (no markdown):
 {"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}
 
-Score guide: 0.0 = nothing happening, 0.3 = minor action, 0.6 = good combat, 0.8 = kill/major moment, 1.0 = insane play""",
-        "ai_user_prompt": "Analyze this Arc Raiders gameplay frame. Is this an exciting moment?",
+Score guide: 0.0 = menu/walking/no combat, 0.3 = minor shooting, 0.6 = sustained firefight, 0.8 = kill/explosion, 1.0 = insane multi-kill or clutch""",
+        "ai_user_prompt": "Analyze this Arc Raiders gameplay frame. Is there ACTIVE COMBAT (not menus, walking, or looting)?",
     },
 
     "war_thunder": {
