@@ -138,40 +138,25 @@ GAME_PROFILES = {
         "clip_extension": 10,
         "pre_pad": 8,
 
-        # AI prompt -- explicitly reject menus, walking, lobbies
+        # AI prompt -- simple and permissive (matches the original v1 that worked best)
         "ai_system_prompt": """You are an expert Arc Raiders gameplay analyst. You analyze screenshots from Arc Raiders streams to identify exciting moments worth clipping.
 
-IMPORTANT: Arc Raiders is a PvE co-op shooter with minimal HUD (no traditional health bar, no hitmarkers).
+Look for these types of highlights:
+- **Kills**: Player eliminating Arc enemies (robots), leapers, or other threats
+- **Combat**: Active gunfights, shooting at enemies, taking fire
+- **Arc Encounters**: Large Arc enemy appearances, boss-like encounters
+- **Explosions**: Big explosions, grenades, environmental destruction
+- **Close Calls**: Player at low health, narrow escapes
+- **Loot/Rewards**: Finding rare loot, extraction moments
+- **Deaths**: Player dying (also exciting/funny content)
 
-ALWAYS score 0.0 for these (NEVER clip these):
-- Menus, inventory screens, crafting UI, map screens, settings, loading screens
-- Lobby/matchmaking, character selection, loadout screens
-- Walking/running with NO enemies visible
-- Looting with no threats nearby
-- Any UI overlay covering the game world
-- Quiet scenic moments with no action
-
-Arc enemy identification (called "Arcs"):
-- Arcs are MECHANICAL ROBOTS ranging from small (Ticks, Surveyors) to massive (Queen, Matriarch)
-- They have matte WHITE/GREY metallic plating on unarmored sections
-- Their scanner laser color shows combat state: BLUE = patrolling (not combat), YELLOW = alerted, RED = attacking
-- RED scanner lasers mean active combat is happening
-- They do NOT glow blue — blue scanner just means they're idle/patrolling
-
-Only score above 0.3 if there is ACTIVE COMBAT happening:
-- **Gunfire**: Player actively shooting (muzzle flash, tracers, bullet impacts on robots)
-- **Arc Kills**: Robots exploding, breaking apart, sparking, ragdolling
-- **Arc Attacks**: Robots with RED scanners charging, shooting, swarming the player
-- **Explosions**: Grenades, environmental destruction, Arc robots detonating
-- **Taking Fire**: Screen effects from enemy attacks hitting the player
-- **Boss Fights**: Queen, Matriarch, or other large Arc encounters
-- **Close Calls/Deaths**: Near-death or death during active combat
+Score 0.0 for: menus, inventory screens, loading screens, lobbies, settings UI.
 
 For each frame, respond with ONLY a JSON object (no markdown):
 {"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}
 
-Score guide: 0.0 = menu/inventory/walking/no combat, 0.3 = minor shooting, 0.6 = sustained firefight, 0.8 = kill/explosion, 1.0 = insane multi-kill or clutch""",
-        "ai_user_prompt": "Analyze this Arc Raiders gameplay frame. Is there ACTIVE COMBAT (not menus, walking, or looting)?",
+Score guide: 0.0 = menu/nothing happening, 0.3 = minor action, 0.6 = good combat, 0.8 = kill/major moment, 1.0 = insane play""",
+        "ai_user_prompt": "Analyze this Arc Raiders gameplay frame. Is this an exciting moment?",
     },
 
     "war_thunder": {
