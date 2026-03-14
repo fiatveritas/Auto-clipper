@@ -10,6 +10,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory,
 
 from analysis.detector import GameDetector
 from analysis.ai_analyzer import GrokVisionAnalyzer
+from analysis.audio_detector import AudioDetector
 from analysis.game_profiles import get_all_games
 from clip_manager import ClipManager
 
@@ -120,6 +121,7 @@ def start_analysis():
     time_start = data.get("time_start", "").strip()
     time_end = data.get("time_end", "").strip()
     game_id = data.get("game", "arc_raiders").strip()
+    detection_method = data.get("detection_method", "audio_cv").strip()
 
     # Option 1: Re-analyze a saved VOD from the library
     if library_file:
@@ -141,7 +143,7 @@ def start_analysis():
         }
 
         thread = threading.Thread(
-            target=_run_analysis_on_file, args=(job_id, lib_path, api_key, time_start, time_end, game_id), daemon=True
+            target=_run_analysis_on_file, args=(job_id, lib_path, api_key, time_start, time_end, game_id, detection_method), daemon=True
         )
         thread.start()
         return jsonify({"job_id": job_id})
@@ -166,7 +168,7 @@ def start_analysis():
     }
 
     thread = threading.Thread(
-        target=_run_analysis, args=(job_id, url, api_key, time_start, time_end, game_id), daemon=True
+        target=_run_analysis, args=(job_id, url, api_key, time_start, time_end, game_id, detection_method), daemon=True
     )
     thread.start()
 
@@ -255,6 +257,7 @@ def upload_vod():
     time_start = request.form.get("time_start", "").strip()
     time_end = request.form.get("time_end", "").strip()
     game_id = request.form.get("game", "arc_raiders").strip()
+    detection_method = request.form.get("detection_method", "audio_cv").strip()
 
     job_id = str(uuid.uuid4())[:8]
 
@@ -276,7 +279,7 @@ def upload_vod():
 
     thread = threading.Thread(
         target=_run_analysis_on_file,
-        args=(job_id, lib_path, api_key, time_start, time_end, game_id),
+        args=(job_id, lib_path, api_key, time_start, time_end, game_id, detection_method),
         daemon=True,
     )
     thread.start()
@@ -1362,7 +1365,7 @@ def _save_to_library(url, video_path):
     return lib_path
 
 
-def _run_analysis(job_id, url, api_key="", time_start="", time_end="", game_id="arc_raiders"):
+def _run_analysis(job_id, url, api_key="", time_start="", time_end="", game_id="arc_raiders", detection_method="audio_cv"):
     job = jobs[job_id]
     platform = _get_platform_name(url)
 
@@ -1394,14 +1397,14 @@ def _run_analysis(job_id, url, api_key="", time_start="", time_end="", game_id="
         update("downloading", 40, "Saving to library...")
         video_path = _save_to_library(url, video_path)
 
-        _run_analysis_on_file(job_id, video_path, api_key, time_start, time_end, game_id)
+        _run_analysis_on_file(job_id, video_path, api_key, time_start, time_end, game_id, detection_method)
 
     except Exception as e:
         job["error"] = str(e)
         update("error", 0, str(e))
 
 
-def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_end="", game_id="arc_raiders"):
+def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_end="", game_id="arc_raiders", detection_method="audio_cv"):
     """Run analysis on a local video file (from library or download)."""
     job = jobs[job_id]
 
@@ -1414,9 +1417,7 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
         job["vod_path"] = video_path
         job["vod_duration"] = clip_manager.get_vod_duration(video_path)
 
-        use_ai = bool(api_key)
-
-        if use_ai:
+        if detection_method == "ai_vision" and api_key:
             update("analyzing", 42, "AI is watching your gameplay...")
             analyzer = GrokVisionAnalyzer(api_key, game_id=game_id)
             highlights = analyzer.analyze_frames(
@@ -1427,14 +1428,38 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
                     f"AI analyzing frames... {int(p * 100)}%"
                 )
             )
-        else:
-            update("analyzing", 42, "Analyzing video for highlights...")
+        elif detection_method == "audio_only":
+            update("analyzing", 42, "Listening for combat audio...")
+            detector = AudioDetector(game_id=game_id)
+            highlights = detector.analyze_video(
+                video_path,
+                progress_callback=lambda p: update(
+                    "analyzing", 42 + int(p * 38),
+                    f"Analyzing audio... {int(p * 100)}%"
+                )
+            )
+        elif detection_method == "cv_only":
+            update("analyzing", 42, "Scanning video frames...")
             detector = GameDetector(game_id=game_id)
+            # Override audio_weight to 0 for CV-only mode
+            detector.profile = dict(detector.profile)
+            detector.profile["audio_weight"] = 0
             highlights = detector.analyze_video(
                 video_path,
                 progress_callback=lambda p: update(
                     "analyzing", 42 + int(p * 38),
                     f"Scanning frames... {int(p * 100)}%"
+                )
+            )
+        else:
+            # Default: audio_cv (combined)
+            update("analyzing", 42, "Analyzing audio + video...")
+            detector = GameDetector(game_id=game_id)
+            highlights = detector.analyze_video(
+                video_path,
+                progress_callback=lambda p: update(
+                    "analyzing", 42 + int(p * 38),
+                    f"Scanning audio + video... {int(p * 100)}%"
                 )
             )
 

@@ -93,16 +93,25 @@
                 </div>
             </div>
 
-            <!-- API Key -->
-            <div class="api-key-section">
-                <button class="toggle-api" onclick="toggleApiKey()">
-                    <span id="api-toggle-icon">+</span> AI Mode (xAI Grok Vision)
-                </button>
-                <div id="api-key-wrapper" class="hidden">
+            <!-- Detection Method -->
+            <div class="detection-method-section">
+                <label class="game-label" for="detection-method">Detection Method</label>
+                <select id="detection-method" class="game-dropdown" onchange="onDetectionMethodChange(this.value)">
+                    <option value="audio_cv" selected>Audio + Vision (Recommended)</option>
+                    <option value="audio_only">Audio Only (fastest)</option>
+                    <option value="cv_only">Computer Vision Only</option>
+                    <option value="ai_vision">AI Vision (xAI Grok)</option>
+                </select>
+                <p class="api-hint" id="detection-hint">Uses audio spikes (gunshots/explosions) combined with visual detection. Best for most games.</p>
+            </div>
+
+            <!-- API Key (shown only for AI Vision mode) -->
+            <div class="api-key-section hidden" id="api-key-section">
+                <div id="api-key-wrapper">
                     <input type="password" id="api-key"
                         placeholder="Paste your xAI API key for AI-powered analysis"
                         autocomplete="off">
-                    <p class="api-hint">Without a key, uses computer vision detection. With Grok, AI actually understands your gameplay.</p>
+                    <p class="api-hint">Grok Vision AI analyzes screenshots of your gameplay to find exciting moments.</p>
                 </div>
             </div>
             <div id="error-msg" class="error-msg hidden"></div>

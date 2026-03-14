@@ -18,7 +18,7 @@ function saveState() {
         timeStart: document.getElementById("time-start").value.trim(),
         timeEnd: document.getElementById("time-end").value.trim(),
         timeRangeOpen: !document.getElementById("time-range-wrapper").classList.contains("hidden"),
-        apiKeyOpen: !document.getElementById("api-key-wrapper").classList.contains("hidden"),
+        detectionMethod: document.getElementById("detection-method").value,
         source: currentSource,
         currentJobId: currentJobId,
     };
@@ -59,9 +59,9 @@ function restoreState() {
         document.getElementById("time-range-wrapper").classList.remove("hidden");
         document.getElementById("time-toggle-icon").textContent = "-";
     }
-    if (state.apiKeyOpen) {
-        document.getElementById("api-key-wrapper").classList.remove("hidden");
-        document.getElementById("api-toggle-icon").textContent = "-";
+    if (state.detectionMethod) {
+        document.getElementById("detection-method").value = state.detectionMethod;
+        onDetectionMethodChange(state.detectionMethod);
     }
     if (state.source) {
         setSource(state.source);
@@ -179,6 +179,7 @@ function startUploadAnalysis() {
     formData.append("time_start", document.getElementById("time-start").value.trim());
     formData.append("time_end", document.getElementById("time-end").value.trim());
     formData.append("game", selectedGame);
+    formData.append("detection_method", document.getElementById("detection-method").value);
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/upload");
@@ -412,6 +413,8 @@ function startAnalysis() {
     const timeStart = document.getElementById("time-start").value.trim();
     const timeEnd = document.getElementById("time-end").value.trim();
 
+    const detectionMethod = document.getElementById("detection-method").value;
+
     fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -421,6 +424,7 @@ function startAnalysis() {
             time_start: timeStart,
             time_end: timeEnd,
             game: selectedGame,
+            detection_method: detectionMethod,
         }),
     })
     .then((res) => res.json())
@@ -1158,11 +1162,20 @@ function toggleTimeRange() {
     saveState();
 }
 
-function toggleApiKey() {
-    const wrapper = document.getElementById("api-key-wrapper");
-    const icon = document.getElementById("api-toggle-icon");
-    wrapper.classList.toggle("hidden");
-    icon.textContent = wrapper.classList.contains("hidden") ? "+" : "-";
+function onDetectionMethodChange(method) {
+    const hints = {
+        audio_cv: "Uses audio spikes (gunshots/explosions) combined with visual detection. Best for most games.",
+        audio_only: "Detects loud moments only (gunfire, explosions). Fastest method, no video scanning needed.",
+        cv_only: "Frame-by-frame color/motion analysis. Works without audio but less accurate for some games.",
+        ai_vision: "AI analyzes screenshots of your gameplay. Most accurate but requires xAI API key and costs per use.",
+    };
+    document.getElementById("detection-hint").textContent = hints[method] || "";
+    const apiSection = document.getElementById("api-key-section");
+    if (method === "ai_vision") {
+        apiSection.classList.remove("hidden");
+    } else {
+        apiSection.classList.add("hidden");
+    }
     saveState();
 }
 
