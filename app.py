@@ -1760,39 +1760,22 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
                 job["error"] = f"Roboflow model analysis failed: {error_msg}"
                 update("error", 0, f"Roboflow model error: {error_msg}")
                 return
-        elif detection_method == "yolo_local":
-            update("analyzing", 42, "Running local YOLO model...")
-            try:
-                analyzer = YoloLocalAnalyzer(game_id=game_id)
-                highlights = analyzer.analyze_video(
-                    video_path,
-                    progress_callback=lambda p: update(
-                        "analyzing", 42 + int(p * 38),
-                        f"YOLO analyzing... {int(p * 100)}%"
-                    )
-                )
-            except Exception as yolo_err:
-                error_msg = str(yolo_err)
-                print(f"  [YoloLocal] Fatal error: {error_msg}")
-                job["error"] = f"YOLO analysis failed: {error_msg}"
-                update("error", 0, f"YOLO error: {error_msg}")
-                return
-        elif detection_method == "arc_cv_pipeline":
-            update("analyzing", 42, "Running YOLO + CV pipeline (Arc Raiders)...")
+        elif detection_method in ("yolo_local", "arc_cv_pipeline"):
+            update("analyzing", 42, "Running CV pipeline...")
             try:
                 analyzer = ArcClipDetectorAdapter(game_id=game_id)
                 highlights = analyzer.analyze_video(
                     video_path,
                     progress_callback=lambda p: update(
                         "analyzing", 42 + int(p * 38),
-                        f"YOLO + CV analyzing... {int(p * 100)}%"
+                        f"CV analyzing... {int(p * 100)}%"
                     )
                 )
-            except Exception as arc_err:
-                error_msg = str(arc_err)
-                print(f"  [ArcCVPipeline] Fatal error: {error_msg}")
-                job["error"] = f"YOLO + CV pipeline failed: {error_msg}"
-                update("error", 0, f"YOLO + CV error: {error_msg}")
+            except Exception as cv_err:
+                error_msg = str(cv_err)
+                print(f"  [CVPipeline] Fatal error: {error_msg}")
+                job["error"] = f"CV pipeline failed: {error_msg}"
+                update("error", 0, f"CV error: {error_msg}")
                 return
         elif detection_method == "chat_spikes":
             update("analyzing", 42, "Downloading Twitch chat data...")
