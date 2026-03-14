@@ -14,7 +14,7 @@ import numpy as np
 
 GAME_PROFILES = {
     "arc_raiders": {
-        "name": "Arc Raiders v1 (Simple)",
+        "name": "Arc Raiders",
         "description": "Simple detection \u2014 Recommended, works best for most streams",
 
         # NOTE: Arc Raiders has NO kill feed. Deaths emit a RED FLARE in the sky.
@@ -158,7 +158,7 @@ Score guide: 0.0 = menu/nothing happening, 0.3 = minor action, 0.6 = good combat
     # Sources: ARC Raiders Wiki, GameRant, GamingBolt, Steam Community, NerdSchalk,
     #   Beebom, GameSpot, Epiccarry, NeonLightsMedia, The Escapist, Kotaku
     "arc_raiders_v2": {
-        "name": "Arc Raiders v2 (Research)",
+        "name": "Arc Raiders (Research)",
         "description": "Research-based detection \u2014 tuned to actual HUD colors and enemy visuals",
 
         "detectors": {
