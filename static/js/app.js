@@ -1169,6 +1169,7 @@ function onDetectionMethodChange(method) {
         cv_only: "Frame-by-frame color/motion analysis. Works without audio but less accurate for some games.",
         motion: "Detects high-movement periods (combat, camera shakes, explosions). Pure pixel motion analysis.",
         scene_change: "Finds visual disruptions — explosions, flashes, damage effects. Measures how fast the scene shifts.",
+        hybrid: "Runs audio + motion + scene change together. Slowest but catches everything — if any signal fires, it counts.",
         ai_vision: "AI analyzes screenshots of your gameplay. Most accurate but requires xAI API key and costs per use.",
     };
     document.getElementById("detection-hint").textContent = hints[method] || "";

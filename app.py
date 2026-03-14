@@ -13,6 +13,7 @@ from analysis.ai_analyzer import GrokVisionAnalyzer
 from analysis.audio_detector import AudioDetector
 from analysis.motion_detector import MotionDetector
 from analysis.scene_detector import SceneChangeDetector
+from analysis.hybrid_detector import HybridDetector
 from analysis.game_profiles import get_all_games
 from clip_manager import ClipManager
 
@@ -1471,6 +1472,16 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
                 progress_callback=lambda p: update(
                     "analyzing", 42 + int(p * 38),
                     f"Analyzing scene changes... {int(p * 100)}%"
+                )
+            )
+        elif detection_method == "hybrid":
+            update("analyzing", 42, "Running hybrid analysis (audio + motion + scene)...")
+            detector = HybridDetector(game_id=game_id)
+            highlights = detector.analyze_video(
+                video_path,
+                progress_callback=lambda p: update(
+                    "analyzing", 42 + int(p * 38),
+                    f"Hybrid scanning... {int(p * 100)}%"
                 )
             )
         else:
