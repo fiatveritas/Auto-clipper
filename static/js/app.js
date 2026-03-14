@@ -1191,6 +1191,7 @@ function onDetectionMethodChange(method) {
         ai_vision: "AI analyzes screenshots of your gameplay. Most accurate but requires xAI API key and costs per use.",
         roboflow_workflow: "Roboflow AI workflow for Arc Raiders — streams video through a detect-and-classify pipeline. Requires Roboflow API key.",
         roboflow_model: "Sends frames directly to your Roboflow model for object detection. Simpler setup — just needs a Roboflow API key.",
+        yolo_local: "Runs a YOLO model locally on your machine. No API key needed — place your best.pt in the models/ folder.",
     };
     document.getElementById("detection-hint").textContent = hints[method] || "";
     const apiSection = document.getElementById("api-key-section");

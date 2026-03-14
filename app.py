@@ -16,6 +16,7 @@ from analysis.scene_detector import SceneChangeDetector
 from analysis.hybrid_detector import HybridDetector
 from analysis.roboflow_analyzer import RoboflowWorkflowAnalyzer
 from analysis.roboflow_model_analyzer import RoboflowModelAnalyzer
+from analysis.yolo_local_analyzer import YoloLocalAnalyzer
 from analysis.game_profiles import get_all_games
 from clip_manager import ClipManager
 
@@ -1757,6 +1758,23 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
                 print(f"  [RoboflowModel] Fatal error: {error_msg}")
                 job["error"] = f"Roboflow model analysis failed: {error_msg}"
                 update("error", 0, f"Roboflow model error: {error_msg}")
+                return
+        elif detection_method == "yolo_local":
+            update("analyzing", 42, "Running local YOLO model...")
+            try:
+                analyzer = YoloLocalAnalyzer(game_id=game_id)
+                highlights = analyzer.analyze_video(
+                    video_path,
+                    progress_callback=lambda p: update(
+                        "analyzing", 42 + int(p * 38),
+                        f"YOLO analyzing... {int(p * 100)}%"
+                    )
+                )
+            except Exception as yolo_err:
+                error_msg = str(yolo_err)
+                print(f"  [YoloLocal] Fatal error: {error_msg}")
+                job["error"] = f"YOLO analysis failed: {error_msg}"
+                update("error", 0, f"YOLO error: {error_msg}")
                 return
         elif detection_method == "chat_spikes":
             update("analyzing", 42, "Downloading Twitch chat data...")
