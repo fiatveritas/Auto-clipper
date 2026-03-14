@@ -2,8 +2,8 @@ import os
 import cv2
 import base64
 import json
-import urllib.request
-import urllib.error
+import time
+import requests
 
 from analysis.game_profiles import get_profile
 
@@ -19,6 +19,13 @@ class GrokVisionAnalyzer:
     def __init__(self, api_key, game_id="arc_raiders"):
         self.api_key = api_key
         self.profile = get_profile(game_id)
+        self.session = requests.Session()
+        self.session.headers.update({
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+            "User-Agent": "AutoClipper/1.0",
+            "Accept": "application/json",
+        })
 
     def analyze_frames(self, video_path, sample_interval_sec=10, progress_callback=None):
         """
@@ -71,18 +78,27 @@ class GrokVisionAnalyzer:
         if not frames_data:
             return []
 
-        # Analyze frames individually (batching causes issues with API)
+        # Analyze frames individually
         all_results = []
         error_count = 0
         last_error = ""
+        consecutive_errors = 0
 
         for i, frame_data in enumerate(frames_data):
+            # If we get 5 consecutive errors, abort early — API is down or key is bad
+            if consecutive_errors >= 5:
+                print(f"  [AI] Aborting: {consecutive_errors} consecutive failures. Last error: {last_error}")
+                raise Exception(f"AI API failing consistently: {last_error}")
+
             result = self._analyze_single(frame_data)
             all_results.append(result)
 
             if result.get("_error"):
                 error_count += 1
+                consecutive_errors += 1
                 last_error = result.get("reason", "Unknown error")
+            else:
+                consecutive_errors = 0
 
             if progress_callback:
                 progress_callback((i + 1) / len(frames_data))
@@ -115,7 +131,6 @@ class GrokVisionAnalyzer:
             except Exception as e:
                 error_str = str(e)
                 if attempt < retries and ("429" in error_str or "500" in error_str or "503" in error_str or "timeout" in error_str.lower()):
-                    import time
                     wait = 2 ** (attempt + 1)
                     print(f"  [AI] {ts:.0f}s - retrying in {wait}s ({error_str[:80]})")
                     time.sleep(wait)
@@ -159,31 +174,18 @@ class GrokVisionAnalyzer:
             "temperature": 0.3,
         }
 
-        data = json.dumps(payload).encode('utf-8')
-        req = urllib.request.Request(
-            self.API_URL,
-            data=data,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
-            },
-            method="POST",
-        )
+        resp = self.session.post(self.API_URL, json=payload, timeout=30)
 
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                result = json.loads(resp.read().decode('utf-8'))
-        except urllib.error.HTTPError as e:
-            body = e.read().decode('utf-8', errors='replace')
-            raise Exception(f"Grok API {e.code}: {body[:200]}")
+        if resp.status_code != 200:
+            raise Exception(f"Grok API {resp.status_code}: {resp.text[:200]}")
 
+        result = resp.json()
         content = result["choices"][0]["message"]["content"].strip()
 
         # Parse JSON from response (handle markdown code blocks)
         if content.startswith("```"):
             # Strip ```json or ``` wrapper
             lines = content.split("\n")
-            # Remove first and last ``` lines
             json_lines = []
             in_block = False
             for line in lines:
@@ -198,7 +200,6 @@ class GrokVisionAnalyzer:
 
         # Try to extract JSON object if mixed with text
         if not content.startswith("{"):
-            # Look for JSON object in the response
             start = content.find("{")
             end = content.rfind("}")
             if start >= 0 and end > start:
@@ -209,7 +210,6 @@ class GrokVisionAnalyzer:
         except json.JSONDecodeError:
             # Grok returned non-JSON — try to interpret as text
             print(f"  [AI] Non-JSON response: {content[:100]}")
-            # Heuristic: if it mentions combat/fighting/shooting, consider it exciting
             lower = content.lower()
             has_action = any(w in lower for w in ["combat", "fight", "shoot", "explos", "kill", "attack", "gunfire", "battle"])
             return {
