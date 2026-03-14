@@ -90,6 +90,13 @@ GAME_PROFILES = {
             },
         },
 
+        # AUDIO DETECTION -- the #1 signal for Arc Raiders combat
+        # Gunshots, explosions, and enemy screams are far more reliable than colors
+        # audio_weight=0.70 means 70% audio + 30% visual
+        "audio_weight": 0.70,
+        "audio_threshold_db": -8,   # dB level that counts as "loud" (gunshots ~-5 to -1)
+        "audio_ceiling_db": -1,     # dB level that maps to max score
+
         # Motion -- high threshold so walking/camera pan does not trigger
         "motion_weight": 0.02,
         "motion_threshold": 0.12,
@@ -100,8 +107,8 @@ GAME_PROFILES = {
         "brightness_threshold": 0.80,
         "brightness_multiplier": 1.5,
 
-        # Require at least 2 detectors to fire -- prevents single-source false positives
-        "min_active_detectors": 2,
+        # Require at least 1 detector (relaxed since audio carries most weight now)
+        "min_active_detectors": 1,
 
         # Menu suppression -- detect Arc Raiders menu/inventory screens
         "menu_suppress_colors": [
@@ -109,9 +116,9 @@ GAME_PROFILES = {
              "min_coverage": 0.55},
         ],
 
-        # Scoring -- MUCH higher threshold to eliminate false positives
-        "intensity_threshold": 0.50,
-        "fallback_threshold_ratio": 0.35,
+        # Scoring -- lower threshold since audio provides strong signal
+        "intensity_threshold": 0.35,
+        "fallback_threshold_ratio": 0.30,
         "merge_gap": 8,
         "min_clip_duration": 20,
         "max_clip_duration": 60,
