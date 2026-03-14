@@ -129,12 +129,14 @@ class AudioDetector:
 
     def _classify_level(self, level_db):
         """Classify a dB level into a human-readable label."""
-        if level_db >= -2:
+        if level_db >= -3:
             return "Loud Combat"
-        elif level_db >= -5:
+        elif level_db >= -6:
             return "Gunfire/Explosion"
-        elif level_db >= self.threshold_db:
+        elif level_db >= -10:
             return "Combat Audio"
+        elif level_db >= self.threshold_db:
+            return "Ambient Activity"
         else:
             return "Ambient"
 
@@ -149,11 +151,14 @@ class AudioDetector:
         loud_seconds = [s for s in scores if s["score"] >= intensity_threshold]
 
         if not loud_seconds:
-            # Fallback: take the loudest moments
+            # Fallback: take the loudest moments, but be selective
+            # Only fall back if the top moments are genuinely above-average loud
             sorted_scores = sorted(scores, key=lambda s: s["score"], reverse=True)
-            fallback_ratio = self.profile.get("fallback_threshold_ratio", 0.3)
+            fallback_ratio = self.profile.get("fallback_threshold_ratio", 0.15)
             fallback_threshold = intensity_threshold * fallback_ratio
-            loud_seconds = [s for s in sorted_scores[:10] if s["score"] >= fallback_threshold]
+            # Only take top 5 (not 10) and require at least some audio activity
+            loud_seconds = [s for s in sorted_scores[:5] if s["score"] >= fallback_threshold
+                           and s["label"] not in ("Ambient", "Ambient Activity")]
 
         if not loud_seconds:
             return []

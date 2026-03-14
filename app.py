@@ -1615,13 +1615,20 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
         job["vod_duration"] = clip_manager.get_vod_duration(video_path)
 
         def _apply_sensitivity(det):
-            """Apply sensitivity multiplier to a detector's threshold."""
+            """Apply sensitivity multiplier to a detector's thresholds."""
             if hasattr(det, 'profile'):
                 det.profile = dict(det.profile)
-                original = det.profile.get("intensity_threshold", 0.35)
+                original = det.profile.get("intensity_threshold", 0.40)
                 det.profile["intensity_threshold"] = max(0.05, original * sensitivity_multiplier)
+                # Scale audio threshold with sensitivity too
+                # Higher sensitivity = lower audio threshold (catch more sounds)
+                audio_thresh = det.profile.get("audio_threshold_db", -15)
+                audio_adjust = (sensitivity / 100 - 0.5) * 8
+                det.profile["audio_threshold_db"] = audio_thresh - audio_adjust
             if hasattr(det, 'intensity_threshold'):
                 det.intensity_threshold = max(0.05, det.intensity_threshold * sensitivity_multiplier)
+            if hasattr(det, 'threshold_db') and hasattr(det, 'profile'):
+                det.threshold_db = det.profile.get("audio_threshold_db", -15)
             return det
 
         if detection_method == "ai_vision" and api_key:

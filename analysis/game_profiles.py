@@ -78,24 +78,30 @@ GAME_PROFILES = {
                 "multiplier": 5,
             },
             "special": {
-                "label": "Arc Enemy Encounter",
-                "weight": 0.07,
-                # Blue glow from Arc enemies -- distinctive blue-cyan energy
-                "lower": np.array([95, 100, 120]),
-                "upper": np.array([125, 255, 255]),
-                "region": [0.15, 0.80, 0.15, 0.85],
-                "min_density": 0.005,
-                "max_density": 0.20,
-                "multiplier": 4,
+                "label": "Arc Enemy Aggro",
+                "weight": 0.10,
+                # Arc enemies are robots with scanner lasers that turn RED when attacking.
+                # Blue scanner = patrolling (NOT combat). Red scanner = aggro/combat.
+                # Detect red scanner lasers and red glowing eyes on Arc robots.
+                "lower": np.array([0, 140, 150]),
+                "upper": np.array([8, 255, 255]),
+                "lower2": np.array([172, 140, 150]),
+                "upper2": np.array([180, 255, 255]),
+                "region": [0.10, 0.75, 0.10, 0.90],
+                "min_density": 0.003,
+                "max_density": 0.15,
+                "multiplier": 5,
             },
         },
 
         # AUDIO DETECTION -- the #1 signal for Arc Raiders combat
         # Gunshots, explosions, and enemy screams are far more reliable than colors
-        # audio_weight=0.70 means 70% audio + 30% visual
-        "audio_weight": 0.70,
-        "audio_threshold_db": -8,   # dB level that counts as "loud" (gunshots ~-5 to -1)
-        "audio_ceiling_db": -1,     # dB level that maps to max score
+        # audio_weight=0.65 means 65% audio + 35% visual
+        # Twitch VOD audio is compressed by streamer's OBS chain (compressor/limiter)
+        # so peaks are much lower than raw game audio — use -15 dB threshold
+        "audio_weight": 0.65,
+        "audio_threshold_db": -15,  # dB level that counts as "loud" (Twitch-compressed audio)
+        "audio_ceiling_db": -3,     # dB level that maps to max score (compressed peaks)
 
         # Motion -- high threshold so walking/camera pan does not trigger
         "motion_weight": 0.02,
@@ -111,14 +117,21 @@ GAME_PROFILES = {
         "min_active_detectors": 1,
 
         # Menu suppression -- detect Arc Raiders menu/inventory screens
+        # Arc Raiders inventory has dark semi-transparent overlays and UI panels
         "menu_suppress_colors": [
+            # Dark UI overlay (inventory/menu background)
             {"lower": np.array([0, 0, 10]), "upper": np.array([180, 30, 60]),
-             "min_coverage": 0.55},
+             "min_coverage": 0.50},
+            # Medium-dark UI panels (settings, crafting, map screens)
+            {"lower": np.array([0, 0, 20]), "upper": np.array([180, 40, 100]),
+             "min_coverage": 0.60},
         ],
 
-        # Scoring -- lower threshold since audio provides strong signal
-        "intensity_threshold": 0.35,
-        "fallback_threshold_ratio": 0.30,
+        # Scoring -- higher threshold to avoid clipping quiet/boring moments
+        # Combined with lower audio threshold, this means only genuinely loud
+        # combat (gunfire, explosions) will make the cut
+        "intensity_threshold": 0.40,
+        "fallback_threshold_ratio": 0.15,
         "merge_gap": 8,
         "min_clip_duration": 20,
         "max_clip_duration": 60,
@@ -129,24 +142,35 @@ GAME_PROFILES = {
         "ai_system_prompt": """You are an expert Arc Raiders gameplay analyst. You analyze screenshots from Arc Raiders streams to identify exciting moments worth clipping.
 
 IMPORTANT: Arc Raiders is a PvE co-op shooter with minimal HUD (no traditional health bar, no hitmarkers).
-You MUST score 0.0 for: menus, inventory screens, loading screens, lobby/matchmaking,
-map screens, settings, walking/running with no enemies visible, looting with no threats,
-crafting, and any non-combat scene.
+
+ALWAYS score 0.0 for these (NEVER clip these):
+- Menus, inventory screens, crafting UI, map screens, settings, loading screens
+- Lobby/matchmaking, character selection, loadout screens
+- Walking/running with NO enemies visible
+- Looting with no threats nearby
+- Any UI overlay covering the game world
+- Quiet scenic moments with no action
+
+Arc enemy identification (called "Arcs"):
+- Arcs are MECHANICAL ROBOTS ranging from small (Ticks, Surveyors) to massive (Queen, Matriarch)
+- They have matte WHITE/GREY metallic plating on unarmored sections
+- Their scanner laser color shows combat state: BLUE = patrolling (not combat), YELLOW = alerted, RED = attacking
+- RED scanner lasers mean active combat is happening
+- They do NOT glow blue — blue scanner just means they're idle/patrolling
 
 Only score above 0.3 if there is ACTIVE COMBAT happening:
-- **Gunfire**: Player actively shooting at enemies (muzzle flash visible, tracers, bullet impacts)
-- **PvE Kills**: Arc enemies (robots, leapers, drones) dying, exploding, ragdolling
-- **Arc Encounters**: Large Arc enemy robots attacking, charging, shooting at player
-- **Explosions**: Grenades, environmental destruction, vehicle explosions
-- **Taking Fire**: Red screen edges, screen shake from enemy attacks
-- **Close Calls**: Near-death moments during active combat
-- **Deaths**: Player dying during combat (also exciting/funny content)
-- **Boss Fights**: Large Arc enemy encounters with heavy combat
+- **Gunfire**: Player actively shooting (muzzle flash, tracers, bullet impacts on robots)
+- **Arc Kills**: Robots exploding, breaking apart, sparking, ragdolling
+- **Arc Attacks**: Robots with RED scanners charging, shooting, swarming the player
+- **Explosions**: Grenades, environmental destruction, Arc robots detonating
+- **Taking Fire**: Screen effects from enemy attacks hitting the player
+- **Boss Fights**: Queen, Matriarch, or other large Arc encounters
+- **Close Calls/Deaths**: Near-death or death during active combat
 
 For each frame, respond with ONLY a JSON object (no markdown):
 {"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}
 
-Score guide: 0.0 = menu/walking/no combat, 0.3 = minor shooting, 0.6 = sustained firefight, 0.8 = kill/explosion, 1.0 = insane multi-kill or clutch""",
+Score guide: 0.0 = menu/inventory/walking/no combat, 0.3 = minor shooting, 0.6 = sustained firefight, 0.8 = kill/explosion, 1.0 = insane multi-kill or clutch""",
         "ai_user_prompt": "Analyze this Arc Raiders gameplay frame. Is there ACTIVE COMBAT (not menus, walking, or looting)?",
     },
 

@@ -146,11 +146,16 @@ class GameDetector:
                 )
 
                 # Audio boost: blend audio score with CV score
+                # BUT: if the frame is a menu/inventory, do NOT let audio save it
                 audio_score = self._get_audio_score(timestamp, audio_levels)
-                if audio_weight > 0 and audio_score > 0:
+                if label == "Menu/Lobby":
+                    # Menu frame — suppress completely regardless of audio
+                    # Game sounds during menu navigation are NOT exciting
+                    score = 0.0
+                elif audio_weight > 0 and audio_score > 0:
                     # Weighted blend: audio can carry the score even if CV is weak
                     score = cv_score * (1.0 - audio_weight) + audio_score * audio_weight
-                    if audio_score > 0.5 and label in ("Menu/Lobby", "Highlight"):
+                    if audio_score > 0.5 and label == "Highlight":
                         label = "Loud Combat"
                 else:
                     score = cv_score
@@ -199,6 +204,7 @@ class GameDetector:
         - High contrast UI text elements
         - Low scene complexity (few distinct color clusters)
         - Specific menu background colors
+        - Sharp rectangular UI panels with hard edges
 
         Returns True if this looks like a menu frame.
         """
@@ -206,7 +212,7 @@ class GameDetector:
 
         # Check 1: Very dark frame with sparse bright UI text = menu/loading
         mean_brightness = np.mean(gray) / 255.0
-        if mean_brightness < 0.08:
+        if mean_brightness < 0.10:
             # Almost black frame = loading screen, suppress
             return True
 
@@ -214,7 +220,7 @@ class GameDetector:
         # Sample the center 60% of the frame (menus are typically centered)
         center = gray[int(h * 0.2):int(h * 0.8), int(w * 0.2):int(w * 0.8)]
         std_dev = np.std(center)
-        if std_dev < 15 and mean_brightness > 0.15:
+        if std_dev < 18 and mean_brightness > 0.12:
             # Very uniform center with reasonable brightness = menu/UI overlay
             return True
 
@@ -222,7 +228,7 @@ class GameDetector:
         # Many games have a dark semi-transparent overlay when menu is open
         # This shows as low saturation + medium brightness across most of frame
         mean_sat = np.mean(hsv[:, :, 1])
-        if mean_sat < 20 and mean_brightness > 0.25 and std_dev < 30:
+        if mean_sat < 25 and mean_brightness > 0.20 and std_dev < 35:
             # Low saturation + medium brightness + low variance = greyed-out menu
             return True
 
@@ -234,6 +240,24 @@ class GameDetector:
                 coverage = np.count_nonzero(mask) / max(mask.size, 1)
                 if coverage >= mc.get("min_coverage", 0.4):
                     return True
+
+        # Check 5: Inventory/UI detection — high edge density in structured grid pattern
+        # Inventory screens have many sharp horizontal/vertical edges from UI panels
+        # while gameplay has more organic, irregular edges
+        edges = cv2.Canny(gray, 50, 150)
+        edge_density = np.count_nonzero(edges) / max(edges.size, 1)
+        if edge_density > 0.12 and mean_sat < 40:
+            # Lots of sharp edges + low saturation = UI-heavy frame (inventory, settings)
+            return True
+
+        # Check 6: Bimodal brightness — dark background with bright UI text/icons
+        # Inventory screens often have a dark overlay with bright item icons
+        dark_pixels = np.sum(gray < 50) / max(gray.size, 1)
+        bright_pixels = np.sum(gray > 200) / max(gray.size, 1)
+        mid_pixels = 1.0 - dark_pixels - bright_pixels
+        if dark_pixels > 0.40 and bright_pixels > 0.08 and mid_pixels < 0.35:
+            # Bimodal distribution: dark background + bright UI elements = menu/inventory
+            return True
 
         return False
 

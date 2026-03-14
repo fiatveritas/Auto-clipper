@@ -109,6 +109,51 @@ class HybridDetector:
         raw = (level_db - self.audio_threshold_db) / max(self.audio_ceiling_db - self.audio_threshold_db, 1)
         return min(max(raw, 0.0), 1.0)
 
+    def _is_menu_frame(self, frame, gray):
+        """Detect menu/inventory/UI overlay frames that should not be clipped."""
+        h, w = frame.shape[:2]
+        brightness = np.mean(gray) / 255.0
+
+        # Very dark frame = loading screen
+        if brightness < 0.10:
+            return True
+
+        # Uniform center = menu background
+        center = gray[int(h * 0.2):int(h * 0.8), int(w * 0.2):int(w * 0.8)]
+        std_dev = np.std(center)
+        if std_dev < 18 and brightness > 0.12:
+            return True
+
+        # Low saturation + low variance = greyed-out menu overlay
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        mean_sat = np.mean(hsv[:, :, 1])
+        if mean_sat < 25 and brightness > 0.20 and std_dev < 35:
+            return True
+
+        # High edge density + low saturation = UI-heavy frame (inventory, settings)
+        edges = cv2.Canny(gray, 50, 150)
+        edge_density = np.count_nonzero(edges) / max(edges.size, 1)
+        if edge_density > 0.12 and mean_sat < 40:
+            return True
+
+        # Bimodal brightness = dark overlay with bright UI elements
+        dark_pixels = np.sum(gray < 50) / max(gray.size, 1)
+        bright_pixels = np.sum(gray > 200) / max(gray.size, 1)
+        mid_pixels = 1.0 - dark_pixels - bright_pixels
+        if dark_pixels > 0.40 and bright_pixels > 0.08 and mid_pixels < 0.35:
+            return True
+
+        # Game-specific menu colors
+        menu_colors = self.profile.get("menu_suppress_colors")
+        if menu_colors:
+            for mc in menu_colors:
+                mask = cv2.inRange(hsv, mc["lower"], mc["upper"])
+                coverage = np.count_nonzero(mask) / max(mask.size, 1)
+                if coverage >= mc.get("min_coverage", 0.4):
+                    return True
+
+        return False
+
     def _analyze_video_pass(self, video_path, audio_levels, progress_callback):
         """Single pass through video computing motion + scene change + audio fusion."""
         cap = cv2.VideoCapture(video_path)
@@ -138,6 +183,21 @@ class HybridDetector:
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 gray_blur = cv2.GaussianBlur(gray, (5, 5), 0)
                 brightness = np.mean(gray) / 255.0
+
+                # Menu/inventory suppression — skip UI frames entirely
+                if self._is_menu_frame(frame, gray):
+                    scores.append({
+                        "score": 0.0,
+                        "label": "Menu/UI",
+                        "timestamp": timestamp,
+                    })
+                    prev_gray = gray_blur
+                    prev_brightness = brightness
+                    analyzed += 1
+                    if progress_callback and analyzed % 20 == 0:
+                        progress_callback(0.20 + (analyzed / max(frames_to_analyze, 1)) * 0.70)
+                    frame_idx += 1
+                    continue
 
                 # Color histograms for scene change
                 hists = []
@@ -264,9 +324,12 @@ class HybridDetector:
         above = [s for s in window_scores if s["score"] >= self.intensity_threshold]
 
         if not above:
+            # Much less aggressive fallback — only take genuinely notable moments
             sorted_scores = sorted(window_scores, key=lambda s: s["score"], reverse=True)
-            fallback = self.intensity_threshold * 0.4
-            above = [s for s in sorted_scores[:10] if s["score"] >= fallback]
+            fallback = self.intensity_threshold * self.profile.get("fallback_threshold_ratio", 0.15)
+            # Only top 5, and exclude idle/menu labels
+            above = [s for s in sorted_scores[:5]
+                     if s["score"] >= fallback and s["label"] not in ("Idle", "Menu/UI")]
 
         if not above:
             return []
