@@ -1256,8 +1256,26 @@ For each frame, respond with ONLY a JSON object (no markdown):
 
 
 def get_profile(game_id):
-    """Get a game profile by ID. Falls back to arc_raiders if not found."""
-    return GAME_PROFILES.get(game_id, GAME_PROFILES["arc_raiders"])
+    """Get a game profile by ID. Checks custom profiles first, falls back to arc_raiders."""
+    if game_id in GAME_PROFILES:
+        return GAME_PROFILES[game_id]
+
+    # Check custom profiles
+    import os, json
+    custom_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "custom_profiles.json")
+    if os.path.exists(custom_file):
+        try:
+            with open(custom_file) as f:
+                custom = json.load(f)
+            if game_id in custom:
+                # Merge with arc_raiders defaults so all keys exist
+                base = dict(GAME_PROFILES["arc_raiders"])
+                base.update(custom[game_id])
+                return base
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    return GAME_PROFILES["arc_raiders"]
 
 
 def get_all_games():

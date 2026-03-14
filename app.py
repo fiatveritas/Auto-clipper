@@ -111,8 +111,23 @@ def index():
 
 @app.route("/api/games")
 def list_games():
-    """Return list of supported games for the UI."""
-    return jsonify({"games": get_all_games()})
+    """Return list of supported games for the UI, including custom profiles."""
+    games = get_all_games()
+    # Add custom profiles
+    cp_file = os.path.join(BASE_DIR, "custom_profiles.json")
+    if os.path.exists(cp_file):
+        try:
+            with open(cp_file) as f:
+                custom = json.load(f)
+            for pid, profile in custom.items():
+                games.append({
+                    "id": pid,
+                    "name": profile.get("name", pid),
+                    "description": "Custom profile",
+                })
+        except (json.JSONDecodeError, KeyError):
+            pass
+    return jsonify({"games": games})
 
 
 @app.route("/api/analyze", methods=["POST"])
@@ -125,6 +140,7 @@ def start_analysis():
     time_end = data.get("time_end", "").strip()
     game_id = data.get("game", "arc_raiders").strip()
     detection_method = data.get("detection_method", "audio_cv").strip()
+    sensitivity = int(data.get("sensitivity", 50))
 
     # Option 1: Re-analyze a saved VOD from the library
     if library_file:
@@ -146,7 +162,7 @@ def start_analysis():
         }
 
         thread = threading.Thread(
-            target=_run_analysis_on_file, args=(job_id, lib_path, api_key, time_start, time_end, game_id, detection_method), daemon=True
+            target=_run_analysis_on_file, args=(job_id, lib_path, api_key, time_start, time_end, game_id, detection_method, sensitivity), daemon=True
         )
         thread.start()
         return jsonify({"job_id": job_id})
@@ -171,7 +187,7 @@ def start_analysis():
     }
 
     thread = threading.Thread(
-        target=_run_analysis, args=(job_id, url, api_key, time_start, time_end, game_id, detection_method), daemon=True
+        target=_run_analysis, args=(job_id, url, api_key, time_start, time_end, game_id, detection_method, sensitivity), daemon=True
     )
     thread.start()
 
@@ -261,6 +277,7 @@ def upload_vod():
     time_end = request.form.get("time_end", "").strip()
     game_id = request.form.get("game", "arc_raiders").strip()
     detection_method = request.form.get("detection_method", "audio_cv").strip()
+    sensitivity = int(request.form.get("sensitivity", 50))
 
     job_id = str(uuid.uuid4())[:8]
 
@@ -282,7 +299,7 @@ def upload_vod():
 
     thread = threading.Thread(
         target=_run_analysis_on_file,
-        args=(job_id, lib_path, api_key, time_start, time_end, game_id, detection_method),
+        args=(job_id, lib_path, api_key, time_start, time_end, game_id, detection_method, sensitivity),
         daemon=True,
     )
     thread.start()
@@ -1368,7 +1385,180 @@ def _save_to_library(url, video_path):
     return lib_path
 
 
-def _run_analysis(job_id, url, api_key="", time_start="", time_end="", game_id="arc_raiders", detection_method="audio_cv"):
+CUSTOM_PROFILES_FILE = os.path.join(BASE_DIR, "custom_profiles.json")
+
+
+@app.route("/api/batch-analyze", methods=["POST"])
+def batch_analyze():
+    """Queue multiple URLs for sequential analysis."""
+    data = request.get_json()
+    urls = data.get("urls", [])
+    if not urls:
+        return jsonify({"error": "No URLs provided"}), 400
+
+    api_key = data.get("api_key", "").strip()
+    game_id = data.get("game", "arc_raiders").strip()
+    detection_method = data.get("detection_method", "audio_cv").strip()
+    sensitivity = int(data.get("sensitivity", 50))
+
+    job_id = str(uuid.uuid4())[:8]
+    jobs[job_id] = {
+        "status": "downloading",
+        "progress": 0,
+        "message": f"Processing 1 of {len(urls)}...",
+        "clips": [],
+        "error": None,
+        "url": urls[0],
+        "vod_path": None,
+        "vod_duration": 0,
+    }
+
+    def run_batch():
+        all_clips = []
+        for i, url in enumerate(urls):
+            job = jobs[job_id]
+            job["message"] = f"Processing {i + 1} of {len(urls)}..."
+            job["url"] = url
+            try:
+                _run_analysis(job_id, url, api_key, "", "", game_id, detection_method, sensitivity)
+                all_clips.extend(job.get("clips", []))
+            except Exception as e:
+                print(f"  [Batch] Error on URL {i + 1}: {e}")
+        job = jobs[job_id]
+        job["clips"] = all_clips
+        job["status"] = "complete"
+        job["progress"] = 100
+        job["message"] = f"Batch complete! {len(all_clips)} clips from {len(urls)} VODs."
+
+    thread = threading.Thread(target=run_batch, daemon=True)
+    thread.start()
+    return jsonify({"job_id": job_id})
+
+
+@app.route("/api/clips/<job_id>/highlight-reel", methods=["POST"])
+def highlight_reel(job_id):
+    """Stitch all clips into one highlight reel video."""
+    data = request.get_json()
+    clip_ids = data.get("clip_ids", [])
+    transition = data.get("transition", "none")
+    resolution = data.get("resolution", "source")
+    quality = data.get("quality", "medium")
+
+    if not clip_ids:
+        return jsonify({"error": "No clips selected"}), 400
+
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    # Collect clip files in order
+    clip_files = []
+    for clip in job.get("clips", []):
+        if clip["id"] in clip_ids:
+            clip_path = os.path.join(CLIPS_DIR, clip["filename"])
+            if os.path.exists(clip_path):
+                clip_files.append(clip_path)
+
+    if len(clip_files) < 1:
+        return jsonify({"error": "No valid clips found"}), 400
+
+    try:
+        # Build ffmpeg concat filter
+        reel_name = f"highlight_reel_{job_id}_{uuid.uuid4().hex[:6]}.mp4"
+        reel_path = os.path.join(CLIPS_DIR, reel_name)
+
+        # Create concat file
+        concat_file = os.path.join(CLIPS_DIR, f"_concat_{job_id}.txt")
+        with open(concat_file, "w") as f:
+            for cf in clip_files:
+                f.write(f"file '{cf}'\n")
+
+        # Quality settings
+        crf = {"high": "18", "medium": "23", "low": "28"}.get(quality, "23")
+
+        cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_file]
+
+        # Resolution
+        if resolution == "1080p":
+            cmd += ["-vf", "scale=-2:1080"]
+        elif resolution == "720p":
+            cmd += ["-vf", "scale=-2:720"]
+        elif resolution == "480p":
+            cmd += ["-vf", "scale=-2:480"]
+
+        cmd += ["-c:v", "libx264", "-crf", crf, "-c:a", "aac", "-b:a", "128k", reel_path]
+
+        import subprocess
+        result = subprocess.run(cmd, capture_output=True, timeout=600)
+
+        # Cleanup
+        if os.path.exists(concat_file):
+            os.remove(concat_file)
+
+        if result.returncode != 0:
+            return jsonify({"error": "Failed to create highlight reel"}), 500
+
+        return jsonify({"success": True, "filename": reel_name})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/custom-profiles", methods=["POST"])
+def save_custom_profile():
+    """Save a custom game profile."""
+    data = request.get_json()
+    profile_id = data.get("id", "").strip()
+    name = data.get("name", "").strip()
+
+    if not profile_id or not name:
+        return jsonify({"error": "Name and ID are required"}), 400
+
+    # Load existing custom profiles
+    custom_profiles = {}
+    if os.path.exists(CUSTOM_PROFILES_FILE):
+        with open(CUSTOM_PROFILES_FILE) as f:
+            custom_profiles = json.load(f)
+
+    # Build the profile
+    profile = {
+        "name": name,
+        "audio_threshold_db": float(data.get("audio_threshold_db", -8)),
+        "audio_ceiling_db": float(data.get("audio_ceiling_db", -1)),
+        "audio_weight": float(data.get("audio_weight", 0.7)),
+        "intensity_threshold": float(data.get("intensity_threshold", 0.35)),
+        "min_clip_duration": int(data.get("min_clip_duration", 20)),
+        "max_clip_duration": int(data.get("max_clip_duration", 60)),
+        "clip_extension": int(data.get("clip_extension", 10)),
+        "pre_pad": int(data.get("pre_pad", 8)),
+        "merge_gap": int(data.get("merge_gap", 8)),
+        "detectors": {},
+        "custom": True,
+    }
+
+    ai_prompt = data.get("ai_system_prompt", "").strip()
+    if ai_prompt:
+        profile["ai_system_prompt"] = ai_prompt
+        profile["ai_user_prompt"] = f"Analyze this {name} gameplay frame. Is this an exciting moment?"
+
+    custom_profiles[profile_id] = profile
+
+    with open(CUSTOM_PROFILES_FILE, "w") as f:
+        json.dump(custom_profiles, f, indent=2)
+
+    return jsonify({"success": True, "id": profile_id})
+
+
+@app.route("/api/custom-profiles")
+def list_custom_profiles():
+    """List all custom game profiles."""
+    if not os.path.exists(CUSTOM_PROFILES_FILE):
+        return jsonify({"profiles": {}})
+    with open(CUSTOM_PROFILES_FILE) as f:
+        return jsonify({"profiles": json.load(f)})
+
+
+def _run_analysis(job_id, url, api_key="", time_start="", time_end="", game_id="arc_raiders", detection_method="audio_cv", sensitivity=50):
     job = jobs[job_id]
     platform = _get_platform_name(url)
 
@@ -1400,14 +1590,14 @@ def _run_analysis(job_id, url, api_key="", time_start="", time_end="", game_id="
         update("downloading", 40, "Saving to library...")
         video_path = _save_to_library(url, video_path)
 
-        _run_analysis_on_file(job_id, video_path, api_key, time_start, time_end, game_id, detection_method)
+        _run_analysis_on_file(job_id, video_path, api_key, time_start, time_end, game_id, detection_method, sensitivity)
 
     except Exception as e:
         job["error"] = str(e)
         update("error", 0, str(e))
 
 
-def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_end="", game_id="arc_raiders", detection_method="audio_cv"):
+def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_end="", game_id="arc_raiders", detection_method="audio_cv", sensitivity=50):
     """Run analysis on a local video file (from library or download)."""
     job = jobs[job_id]
 
@@ -1416,9 +1606,23 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
         job["progress"] = progress
         job["message"] = message
 
+    # Sensitivity maps 0-100 to a threshold multiplier:
+    # 0=very selective (threshold*1.6), 50=default (threshold*1.0), 100=catch everything (threshold*0.3)
+    sensitivity_multiplier = 1.6 - (sensitivity / 100) * 1.3
+
     try:
         job["vod_path"] = video_path
         job["vod_duration"] = clip_manager.get_vod_duration(video_path)
+
+        def _apply_sensitivity(det):
+            """Apply sensitivity multiplier to a detector's threshold."""
+            if hasattr(det, 'profile'):
+                det.profile = dict(det.profile)
+                original = det.profile.get("intensity_threshold", 0.35)
+                det.profile["intensity_threshold"] = max(0.05, original * sensitivity_multiplier)
+            if hasattr(det, 'intensity_threshold'):
+                det.intensity_threshold = max(0.05, det.intensity_threshold * sensitivity_multiplier)
+            return det
 
         if detection_method == "ai_vision" and api_key:
             update("analyzing", 42, "AI is watching your gameplay...")
@@ -1433,7 +1637,7 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
             )
         elif detection_method == "audio_only":
             update("analyzing", 42, "Listening for combat audio...")
-            detector = AudioDetector(game_id=game_id)
+            detector = _apply_sensitivity(AudioDetector(game_id=game_id))
             highlights = detector.analyze_video(
                 video_path,
                 progress_callback=lambda p: update(
@@ -1443,7 +1647,7 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
             )
         elif detection_method == "cv_only":
             update("analyzing", 42, "Scanning video frames...")
-            detector = GameDetector(game_id=game_id)
+            detector = _apply_sensitivity(GameDetector(game_id=game_id))
             # Override audio_weight to 0 for CV-only mode
             detector.profile = dict(detector.profile)
             detector.profile["audio_weight"] = 0
@@ -1456,7 +1660,7 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
             )
         elif detection_method == "motion":
             update("analyzing", 42, "Detecting motion energy...")
-            detector = MotionDetector(game_id=game_id)
+            detector = _apply_sensitivity(MotionDetector(game_id=game_id))
             highlights = detector.analyze_video(
                 video_path,
                 progress_callback=lambda p: update(
@@ -1466,7 +1670,7 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
             )
         elif detection_method == "scene_change":
             update("analyzing", 42, "Detecting scene changes...")
-            detector = SceneChangeDetector(game_id=game_id)
+            detector = _apply_sensitivity(SceneChangeDetector(game_id=game_id))
             highlights = detector.analyze_video(
                 video_path,
                 progress_callback=lambda p: update(
@@ -1476,7 +1680,7 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
             )
         elif detection_method == "hybrid":
             update("analyzing", 42, "Running hybrid analysis (audio + motion + scene)...")
-            detector = HybridDetector(game_id=game_id)
+            detector = _apply_sensitivity(HybridDetector(game_id=game_id))
             highlights = detector.analyze_video(
                 video_path,
                 progress_callback=lambda p: update(
@@ -1484,10 +1688,23 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
                     f"Hybrid scanning... {int(p * 100)}%"
                 )
             )
+        elif detection_method == "chat_spikes":
+            update("analyzing", 42, "Downloading Twitch chat data...")
+            from analysis.chat_detector import ChatSpikeDetector
+            detector = _apply_sensitivity(ChatSpikeDetector(game_id=game_id))
+            # Get the URL for chat data
+            vod_url = job.get("url", "")
+            highlights = detector.analyze_chat(
+                vod_url, video_path,
+                progress_callback=lambda p: update(
+                    "analyzing", 42 + int(p * 38),
+                    f"Analyzing chat activity... {int(p * 100)}%"
+                )
+            )
         else:
             # Default: audio_cv (combined)
             update("analyzing", 42, "Analyzing audio + video...")
-            detector = GameDetector(game_id=game_id)
+            detector = _apply_sensitivity(GameDetector(game_id=game_id))
             highlights = detector.analyze_video(
                 video_path,
                 progress_callback=lambda p: update(

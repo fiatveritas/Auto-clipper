@@ -19,6 +19,7 @@ function saveState() {
         timeEnd: document.getElementById("time-end").value.trim(),
         timeRangeOpen: !document.getElementById("time-range-wrapper").classList.contains("hidden"),
         detectionMethod: document.getElementById("detection-method").value,
+        sensitivity: document.getElementById("sensitivity").value,
         source: currentSource,
         currentJobId: currentJobId,
     };
@@ -62,6 +63,10 @@ function restoreState() {
     if (state.detectionMethod) {
         document.getElementById("detection-method").value = state.detectionMethod;
         onDetectionMethodChange(state.detectionMethod);
+    }
+    if (state.sensitivity) {
+        document.getElementById("sensitivity").value = state.sensitivity;
+        onSensitivityChange(state.sensitivity);
     }
     if (state.source) {
         setSource(state.source);
@@ -180,6 +185,7 @@ function startUploadAnalysis() {
     formData.append("time_end", document.getElementById("time-end").value.trim());
     formData.append("game", selectedGame);
     formData.append("detection_method", document.getElementById("detection-method").value);
+    formData.append("sensitivity", document.getElementById("sensitivity").value);
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/upload");
@@ -414,6 +420,7 @@ function startAnalysis() {
     const timeEnd = document.getElementById("time-end").value.trim();
 
     const detectionMethod = document.getElementById("detection-method").value;
+    const sensitivity = parseInt(document.getElementById("sensitivity").value);
 
     fetch("/api/analyze", {
         method: "POST",
@@ -425,6 +432,7 @@ function startAnalysis() {
             time_end: timeEnd,
             game: selectedGame,
             detection_method: detectionMethod,
+            sensitivity: sensitivity,
         }),
     })
     .then((res) => res.json())
@@ -444,7 +452,14 @@ function startAnalysis() {
 }
 
 document.getElementById("vod-url").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") startAnalysis();
+    if (e.key === "Enter") {
+        if (e.shiftKey) {
+            // Shift+Enter adds to batch queue
+            addToBatchQueue();
+        } else {
+            startAnalysis();
+        }
+    }
 });
 
 // Polling
@@ -474,6 +489,7 @@ function pollJob() {
 
             if (data.status === "complete") {
                 stopPolling();
+                showNotification("Analysis complete! Your clips are ready.");
                 fetchClips(currentJobId);
             } else if (data.status === "error") {
                 stopPolling();
@@ -561,6 +577,7 @@ function renderClips() {
                     </div>
                 </div>
             </div>
+            ${renderStars(clip.id, clip.rating)}
             <div class="clip-actions">
                 <button class="btn-download" onclick="event.stopPropagation(); downloadClip('${clip.id}', '${clip.filename}')">Download</button>
                 <button class="btn-trim" onclick="event.stopPropagation(); previewClip(${i})">Trim</button>
@@ -1170,6 +1187,7 @@ function onDetectionMethodChange(method) {
         motion: "Detects high-movement periods (combat, camera shakes, explosions). Pure pixel motion analysis.",
         scene_change: "Finds visual disruptions — explosions, flashes, damage effects. Measures how fast the scene shifts.",
         hybrid: "Runs audio + motion + scene change together. Slowest but catches everything — if any signal fires, it counts.",
+        chat_spikes: "Uses Twitch chat activity spikes to find hype moments. Only works with Twitch VOD URLs.",
         ai_vision: "AI analyzes screenshots of your gameplay. Most accurate but requires xAI API key and costs per use.",
     };
     document.getElementById("detection-hint").textContent = hints[method] || "";
@@ -2296,11 +2314,238 @@ function triggerDownload(filename) {
     document.body.removeChild(a);
 }
 
+// ===== SENSITIVITY SLIDER =====
+function onSensitivityChange(val) {
+    val = parseInt(val);
+    let hint;
+    if (val <= 20) hint = `${val}% — Very selective: only the most intense moments.`;
+    else if (val <= 40) hint = `${val}% — Conservative: fewer clips, higher quality.`;
+    else if (val <= 60) hint = `${val}% — Balanced: catches most action without too many false positives.`;
+    else if (val <= 80) hint = `${val}% — Sensitive: catches more subtle moments.`;
+    else hint = `${val}% — Maximum: captures everything, may include quiet moments.`;
+    document.getElementById("sensitivity-hint").textContent = hint;
+    saveState();
+}
+
+// ===== BATCH QUEUE =====
+let batchQueue = [];
+
+function addToBatchQueue() {
+    const url = document.getElementById("vod-url").value.trim();
+    if (!url) return;
+    if (batchQueue.includes(url)) return;
+    batchQueue.push(url);
+    document.getElementById("vod-url").value = "";
+    renderBatchQueue();
+}
+
+function removeBatchItem(index) {
+    batchQueue.splice(index, 1);
+    renderBatchQueue();
+}
+
+function clearBatchQueue() {
+    batchQueue = [];
+    renderBatchQueue();
+}
+
+function renderBatchQueue() {
+    const section = document.getElementById("batch-queue-section");
+    const list = document.getElementById("batch-queue-list");
+    const count = document.getElementById("batch-count");
+    const startBtn = document.getElementById("batch-start-btn");
+
+    if (batchQueue.length === 0) {
+        section.classList.add("hidden");
+        return;
+    }
+
+    section.classList.remove("hidden");
+    count.textContent = batchQueue.length + " queued";
+    startBtn.classList.remove("hidden");
+
+    list.innerHTML = batchQueue.map((url, i) => `
+        <div class="batch-queue-item">
+            <span class="batch-queue-url">${escapeHtml(url)}</span>
+            <button class="file-remove" onclick="removeBatchItem(${i})">&times;</button>
+        </div>
+    `).join("");
+}
+
+function startBatchAnalysis() {
+    if (batchQueue.length === 0) return;
+    const apiKey = document.getElementById("api-key").value.trim();
+    const detectionMethod = document.getElementById("detection-method").value;
+    const sensitivity = parseInt(document.getElementById("sensitivity").value);
+
+    showProgress();
+
+    fetch("/api/batch-analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            urls: batchQueue,
+            api_key: apiKey,
+            game: selectedGame,
+            detection_method: detectionMethod,
+            sensitivity: sensitivity,
+        }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) { showError(data.error); resetUI(); return; }
+        currentJobId = data.job_id;
+        batchQueue = [];
+        renderBatchQueue();
+        startPolling();
+    })
+    .catch(() => { showError("Batch analysis failed"); resetUI(); });
+}
+
+// ===== HIGHLIGHT REEL =====
+function exportHighlightReel() {
+    if (!currentJobId || currentClips.length === 0) return;
+
+    const transition = prompt("Transition type? (none, fade, wipe)", "fade");
+    if (transition === null) return;
+
+    showNotification("Creating highlight reel...");
+
+    const clipIds = currentClips.map(c => c.id);
+
+    fetch(`/api/clips/${currentJobId}/highlight-reel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            clip_ids: clipIds,
+            transition: transition || "none",
+            resolution: document.getElementById("export-resolution").value,
+            quality: document.getElementById("export-quality").value,
+        }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) { showNotification(data.error); return; }
+        showNotification("Highlight reel ready!");
+        triggerDownload(data.filename);
+        trackAnalytics("highlight_reel");
+    })
+    .catch(() => showNotification("Failed to create highlight reel"));
+}
+
+// ===== STAR RATING =====
+function setClipRating(clipId, rating) {
+    if (!currentJobId) return;
+    fetch(`/api/clips/${currentJobId}/${clipId}/metadata`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating: rating }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            const clip = currentClips.find(c => c.id === clipId);
+            if (clip) clip.rating = rating;
+            renderClips();
+        }
+    });
+}
+
+function renderStars(clipId, currentRating) {
+    let html = '<div class="clip-stars">';
+    for (let i = 1; i <= 5; i++) {
+        const filled = i <= (currentRating || 0);
+        html += `<span class="star ${filled ? 'star-filled' : 'star-empty'}" onclick="event.stopPropagation(); setClipRating('${clipId}', ${i})">&#9733;</span>`;
+    }
+    html += '</div>';
+    return html;
+}
+
+// ===== EXPORT SETTINGS =====
+function toggleExportSettings() {
+    document.getElementById("export-settings-content").classList.toggle("hidden");
+}
+
+// ===== CUSTOM GAME PROFILE =====
+function toggleCustomProfile() {
+    document.getElementById("custom-profile-content").classList.toggle("hidden");
+}
+
+function saveCustomProfile() {
+    const name = document.getElementById("cp-name").value.trim();
+    const id = document.getElementById("cp-id").value.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_");
+
+    if (!name || !id) {
+        document.getElementById("cp-status").textContent = "Name and ID are required";
+        document.getElementById("cp-status").className = "trim-status error";
+        return;
+    }
+
+    const profile = {
+        id: id,
+        name: name,
+        audio_threshold_db: parseFloat(document.getElementById("cp-audio-threshold").value),
+        audio_weight: parseFloat(document.getElementById("cp-audio-weight").value),
+        intensity_threshold: parseFloat(document.getElementById("cp-intensity").value),
+        min_clip_duration: parseInt(document.getElementById("cp-min-clip").value),
+        max_clip_duration: parseInt(document.getElementById("cp-max-clip").value),
+        merge_gap: parseInt(document.getElementById("cp-merge-gap").value),
+        ai_system_prompt: document.getElementById("cp-ai-prompt").value.trim(),
+    };
+
+    const statusEl = document.getElementById("cp-status");
+    statusEl.textContent = "Saving...";
+    statusEl.className = "trim-status working";
+
+    fetch("/api/custom-profiles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(profile),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            statusEl.textContent = data.error;
+            statusEl.className = "trim-status error";
+            return;
+        }
+        statusEl.textContent = "Profile saved! Refresh to see it in game list.";
+        statusEl.className = "trim-status success";
+        loadGames(); // Refresh game list
+    })
+    .catch(() => {
+        statusEl.textContent = "Failed to save";
+        statusEl.className = "trim-status error";
+    });
+}
+
+// ===== PLATFORM UPLOAD HELPERS =====
+function uploadToYouTube() {
+    if (!previewClipData) return;
+    // Can't do real OAuth in a local app, so open YouTube Studio upload page
+    window.open("https://studio.youtube.com/channel/UC/videos/upload", "_blank");
+    showNotification("YouTube Studio opened — upload your clip from the Downloads folder.");
+    downloadFromModal();
+}
+
+function uploadToTikTok() {
+    if (!previewClipData) return;
+    window.open("https://www.tiktok.com/upload", "_blank");
+    showNotification("TikTok upload opened — upload your clip from the Downloads folder.");
+    downloadFromModal();
+}
+
 // ===== INIT NEW FEATURES ON LOAD =====
 document.addEventListener("DOMContentLoaded", () => {
     // Show analytics section
     const analyticsSection = document.getElementById("analytics-section");
     if (analyticsSection) analyticsSection.classList.remove("hidden");
+
+    // Show export settings and custom profile sections
+    const exportSection = document.getElementById("export-settings-section");
+    if (exportSection) exportSection.classList.remove("hidden");
+    const cpSection = document.getElementById("custom-profile-section");
+    if (cpSection) cpSection.classList.remove("hidden");
 
     // Load export presets
     loadExportPresets();

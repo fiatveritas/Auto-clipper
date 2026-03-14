@@ -52,6 +52,19 @@
                 </button>
             </div>
 
+            <!-- Batch Queue -->
+            <div id="batch-queue-section" class="hidden">
+                <div class="batch-queue-header">
+                    <span class="badge" id="batch-count">0 queued</span>
+                    <button class="trim-btn" onclick="clearBatchQueue()">Clear Queue</button>
+                </div>
+                <div id="batch-queue-list" class="batch-queue-list"></div>
+                <button id="batch-start-btn" class="upload-btn hidden" onclick="startBatchAnalysis()">
+                    <span class="btn-text">Analyze All</span>
+                    <span class="btn-icon">&#9654;</span>
+                </button>
+            </div>
+
             <!-- Upload Mode -->
             <div id="upload-mode" class="hidden">
                 <div id="drop-zone" class="drop-zone">
@@ -103,9 +116,22 @@
                     <option value="motion">Motion Detection</option>
                     <option value="scene_change">Scene Change Detection</option>
                     <option value="hybrid">Hybrid (all signals combined)</option>
+                    <option value="chat_spikes">Chat Spikes (Twitch only)</option>
                     <option value="ai_vision">AI Vision (xAI Grok)</option>
                 </select>
                 <p class="api-hint" id="detection-hint">Uses audio spikes (gunshots/explosions) combined with visual detection. Best for most games.</p>
+            </div>
+
+            <!-- Sensitivity Slider -->
+            <div class="sensitivity-section">
+                <label class="game-label">Sensitivity</label>
+                <div class="sensitivity-slider-row">
+                    <span class="sensitivity-label-left">Fewer clips</span>
+                    <input type="range" id="sensitivity" min="0" max="100" value="50" step="5"
+                        oninput="onSensitivityChange(this.value)">
+                    <span class="sensitivity-label-right">More clips</span>
+                </div>
+                <p class="api-hint" id="sensitivity-hint">50% — Balanced: catches most action without too many false positives.</p>
             </div>
 
             <!-- API Key (shown only for AI Vision mode) -->
@@ -169,6 +195,105 @@
             </div>
         </section>
 
+        <!-- Export Settings -->
+        <section id="export-settings-section" class="card hidden">
+            <div class="library-header">
+                <h2>Export Settings</h2>
+                <button class="trim-btn" onclick="toggleExportSettings()">Show/Hide</button>
+            </div>
+            <div id="export-settings-content" class="hidden">
+                <div class="export-settings-grid">
+                    <div class="export-setting">
+                        <label>Resolution</label>
+                        <select id="export-resolution">
+                            <option value="source">Source (original)</option>
+                            <option value="1080p">1080p</option>
+                            <option value="720p">720p</option>
+                            <option value="480p">480p</option>
+                        </select>
+                    </div>
+                    <div class="export-setting">
+                        <label>Format</label>
+                        <select id="export-format">
+                            <option value="mp4">MP4 (H.264)</option>
+                            <option value="webm">WebM (VP9)</option>
+                            <option value="mov">MOV (ProRes)</option>
+                        </select>
+                    </div>
+                    <div class="export-setting">
+                        <label>Quality</label>
+                        <select id="export-quality">
+                            <option value="high">High (larger files)</option>
+                            <option value="medium" selected>Medium (balanced)</option>
+                            <option value="low">Low (smaller files)</option>
+                        </select>
+                    </div>
+                    <div class="export-setting">
+                        <label>Audio</label>
+                        <select id="export-audio">
+                            <option value="aac" selected>AAC</option>
+                            <option value="copy">Copy (no re-encode)</option>
+                            <option value="none">No audio</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Custom Game Profile Builder -->
+        <section id="custom-profile-section" class="card hidden">
+            <div class="library-header">
+                <h2>Custom Game Profile</h2>
+                <button class="trim-btn" onclick="toggleCustomProfile()">Show/Hide</button>
+            </div>
+            <div id="custom-profile-content" class="hidden">
+                <div class="custom-profile-form">
+                    <div class="export-setting">
+                        <label>Game Name</label>
+                        <input type="text" id="cp-name" placeholder="My Game" autocomplete="off">
+                    </div>
+                    <div class="export-setting">
+                        <label>Profile ID</label>
+                        <input type="text" id="cp-id" placeholder="my_game" autocomplete="off">
+                    </div>
+                    <div class="export-settings-grid">
+                        <div class="export-setting">
+                            <label>Audio Threshold (dB)</label>
+                            <input type="number" id="cp-audio-threshold" value="-8" min="-30" max="0" step="1">
+                        </div>
+                        <div class="export-setting">
+                            <label>Audio Weight (0-1)</label>
+                            <input type="number" id="cp-audio-weight" value="0.7" min="0" max="1" step="0.1">
+                        </div>
+                        <div class="export-setting">
+                            <label>Intensity Threshold</label>
+                            <input type="number" id="cp-intensity" value="0.35" min="0.1" max="1" step="0.05">
+                        </div>
+                        <div class="export-setting">
+                            <label>Min Clip (sec)</label>
+                            <input type="number" id="cp-min-clip" value="20" min="5" max="120">
+                        </div>
+                        <div class="export-setting">
+                            <label>Max Clip (sec)</label>
+                            <input type="number" id="cp-max-clip" value="60" min="10" max="300">
+                        </div>
+                        <div class="export-setting">
+                            <label>Merge Gap (sec)</label>
+                            <input type="number" id="cp-merge-gap" value="8" min="1" max="60">
+                        </div>
+                    </div>
+                    <div class="export-setting">
+                        <label>AI System Prompt (for AI Vision mode)</label>
+                        <textarea id="cp-ai-prompt" rows="3" placeholder="You are an expert analyst for this game. Analyze gameplay frames for exciting moments..."></textarea>
+                    </div>
+                    <div class="custom-profile-footer">
+                        <button class="btn-apply-trim" onclick="saveCustomProfile()">Save Profile</button>
+                        <span id="cp-status" class="trim-status"></span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- Progress Section -->
         <section id="progress-section" class="card hidden">
             <div class="progress-header">
@@ -206,6 +331,7 @@
                     </select>
                 </div>
                 <div class="clips-actions-bulk">
+                    <button class="trim-btn" onclick="exportHighlightReel()">Highlight Reel</button>
                     <button class="trim-btn" onclick="batchTikTok()">Batch TikTok</button>
                     <button class="trim-btn" onclick="findDuplicates()">Find Duplicates</button>
                     <button class="trim-btn" onclick="showMergePanel()">Merge Selected</button>
@@ -578,6 +704,8 @@
                     <button class="btn-download" onclick="downloadFromModal()">Download Clip</button>
                     <button class="btn-tiktok" onclick="openTikTokEditor()">Make TikTok</button>
                     <button class="btn-youtube" onclick="openYouTubeShortEditor()">YouTube Short</button>
+                    <button class="btn-upload-yt" onclick="uploadToYouTube()">Upload to YouTube</button>
+                    <button class="btn-upload-tt" onclick="uploadToTikTok()">Upload to TikTok</button>
                 </div>
             </div>
         </div>
