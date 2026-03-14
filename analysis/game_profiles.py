@@ -17,20 +17,27 @@ GAME_PROFILES = {
         "name": "Arc Raiders v1 (Simple)",
         "description": "Simple detection \u2014 Recommended, works best for most streams",
 
+        # NOTE: Arc Raiders has NO kill feed. Deaths emit a RED FLARE in the sky.
+        # It's a THIRD-PERSON shooter. No traditional hit markers exist.
+        # The original v1 worked well despite "wrong" detectors because:
+        # - The broad color ranges catch real combat signals (explosions, flashes)
+        # - Simple scoring without penalties lets signals through
+        # Keep it simple — that's why it works.
         "detectors": {
-            "kill_feed": {
-                "label": "Kill / Elimination",
+            "combat_flash": {
+                "label": "Combat / Muzzle Flash",
                 "weight": 0.25,
-                # Kill notifications: bright white/yellow text top-right
-                "lower": np.array([0, 0, 200]),
-                "upper": np.array([180, 50, 255]),
-                "region": [0.05, 0.25, 0.55, 0.95],
-                "multiplier": 6,
+                # Muzzle flash + explosions: orange-yellow bursts
+                # Third-person: flash appears on character model (lower-center)
+                "lower": np.array([10, 100, 150]),
+                "upper": np.array([35, 255, 255]),
+                "region": "full",
+                "multiplier": 4,
             },
             "damage": {
                 "label": "Taking Damage",
                 "weight": 0.15,
-                # Red vignette at screen edges
+                # Red directional damage indicators + vignette at screen edges
                 "lower": np.array([0, 120, 100]),
                 "upper": np.array([10, 255, 255]),
                 "lower2": np.array([170, 120, 100]),
@@ -42,44 +49,51 @@ GAME_PROFILES = {
             "health_bar": {
                 "label": "Health/Shield Drop",
                 "weight": 0.15,
-                # Detect health/shield bar depletion bottom-left HUD
+                # White health bar + blue segmented shield boxes, bottom-left HUD
                 "region": "health_bar",
                 "bar_region": [0.88, 0.95, 0.02, 0.22],
                 "bar_colors": [
                     # White health bar
                     {"lower": np.array([0, 0, 180]), "upper": np.array([180, 40, 255])},
-                    # Blue shield bar
+                    # Blue shield segments
                     {"lower": np.array([90, 60, 100]), "upper": np.array([130, 255, 255])},
                 ],
                 "depletion_threshold": 0.10,
                 "multiplier": 6,
             },
-            "hit_marker": {
-                "label": "Landing Hits",
+            "death_flare": {
+                "label": "Death / Kill",
                 "weight": 0.15,
-                # Bright white center crosshair flash
-                "lower": np.array([0, 0, 230]),
-                "upper": np.array([180, 30, 255]),
-                "region": [0.4, 0.6, 0.4, 0.6],
+                # When a player dies, a bright RED FLARE shoots skyward
+                # Visible from across the map — the game's "kill notification"
+                "lower": np.array([0, 150, 180]),
+                "upper": np.array([10, 255, 255]),
+                "lower2": np.array([170, 150, 180]),
+                "upper2": np.array([180, 255, 255]),
+                # Upper portion of screen where flares appear
+                "region": [0.0, 0.50, 0.10, 0.90],
+                "multiplier": 6,
+            },
+            "red_scanner": {
+                "label": "ARC Enemy Aggro",
+                "weight": 0.15,
+                # ARC scanner beams turn RED when attacking
+                # Universal across all ARC types (Wasps, Bastions, Turrets, etc.)
+                "lower": np.array([0, 140, 150]),
+                "upper": np.array([8, 255, 255]),
+                "lower2": np.array([172, 140, 150]),
+                "upper2": np.array([180, 255, 255]),
+                "region": [0.10, 0.75, 0.10, 0.90],
                 "multiplier": 5,
             },
             "explosion": {
-                "label": "Explosion / Combat",
+                "label": "Explosion",
                 "weight": 0.15,
-                # Orange-yellow muzzle flash / explosions
-                "lower": np.array([10, 100, 150]),
-                "upper": np.array([35, 255, 255]),
-                "region": "full",
-                "multiplier": 3,
-            },
-            "special": {
-                "label": "Arc Enemy Encounter",
-                "weight": 0.10,
-                # Blue glow from Arc enemies
-                "lower": np.array([90, 80, 100]),
-                "upper": np.array([130, 255, 255]),
-                "region": "full",
-                "multiplier": 4,
+                # Bright explosions, grenade blasts, ARC self-destruct
+                "lower": np.array([5, 150, 170]),
+                "upper": np.array([25, 255, 255]),
+                "region": [0.20, 0.90, 0.10, 0.90],
+                "multiplier": 5,
             },
         },
 
@@ -130,16 +144,19 @@ Score guide: 0.0 = menu/nothing happening, 0.3 = minor action, 0.6 = good combat
     # ===== ARC RAIDERS V2 — Research-based detection =====
     # Built from deep research of Arc Raiders HUD, enemy visuals, and combat feedback.
     # Key findings:
-    #   - Health/shield bars: bottom-left, WHITE (health) + BLUE (shield/armor durability)
-    #   - No enemy HP bars (by design) — physics-based feedback instead
-    #   - No traditional hit markers — crosshair is dynamic (tightens on ADS)
-    #   - Enemy scanner beam: White→Blue→Yellow→RED when attacking (universal combat indicator)
-    #   - Weak points glow YELLOW on enemies like Bastion
-    #   - Muzzle flash: orange-yellow + white energy weapon flash, lower-center screen
-    #   - Explosions: screen whites out, orange-red particles
-    #   - HUD is predominantly WHITE (community complaint about brightness)
-    #   - Ammo counter: bottom-right area
-    # Sources: ARC Raiders Wiki, GameRant, Steam Community, Beebom, GameSpot, Epiccarry
+    #   - THIRD-PERSON shooter — muzzle flash on character model, not center screen
+    #   - NO kill feed — deaths emit a RED FLARE skyward (visible across map)
+    #   - NO hit markers — crosshair is dynamic (tightens on ADS)
+    #   - NO enemy HP bars — physics feedback (stagger, parts breaking off, sparks)
+    #   - Health bar (WHITE) bottom-left, shield = BLUE SEGMENTED BOXES above it
+    #   - Shield = damage REDUCTION (not a second health pool)
+    #   - Red DIRECTIONAL damage indicators point toward damage source
+    #   - Enemy scanner beam: White→Blue→Yellow→RED when attacking
+    #   - Weak points glow YELLOW (Bastion kneecaps, Rocketeer core, Wasp thrusters)
+    #   - Session ID watermark always visible bottom-right (white text, ignore it)
+    #   - Stamina bar shrinks from middle, disappears when empty
+    # Sources: ARC Raiders Wiki, GameRant, GamingBolt, Steam Community, NerdSchalk,
+    #   Beebom, GameSpot, Epiccarry, NeonLightsMedia, The Escapist, Kotaku
     "arc_raiders_v2": {
         "name": "Arc Raiders v2 (Research)",
         "description": "Research-based detection \u2014 tuned to actual HUD colors and enemy visuals",
@@ -147,37 +164,48 @@ Score guide: 0.0 = menu/nothing happening, 0.3 = minor action, 0.6 = good combat
         "detectors": {
             "muzzle_flash": {
                 "label": "Gunfire / Muzzle Flash",
-                "weight": 0.30,
-                # PRIMARY combat indicator: orange-yellow muzzle flash from weapons
-                # fires in the lower-center screen where the weapon model renders
-                # Also detect bright white flash from energy weapons
+                "weight": 0.25,
+                # THIRD-PERSON: muzzle flash on character model (right side of screen,
+                # lower area where the over-the-shoulder weapon renders)
+                # Orange-yellow muzzle flash + white energy weapon flash
                 "lower": np.array([10, 120, 180]),
                 "upper": np.array([30, 255, 255]),
                 "lower2": np.array([0, 0, 240]),
                 "upper2": np.array([180, 40, 255]),
-                # Lower half center — weapon/muzzle area
-                "region": [0.50, 0.85, 0.30, 0.70],
-                "multiplier": 7,
+                # Right-center lower area (third-person weapon position)
+                "region": [0.40, 0.85, 0.40, 0.80],
+                "multiplier": 6,
+            },
+            "death_flare": {
+                "label": "Death / Kill",
+                "weight": 0.10,
+                # NO kill feed in Arc Raiders — instead a bright RED FLARE
+                # shoots skyward when a player dies, visible across the map
+                "lower": np.array([0, 150, 180]),
+                "upper": np.array([10, 255, 255]),
+                "lower2": np.array([170, 150, 180]),
+                "upper2": np.array([180, 255, 255]),
+                # Upper portion of screen where flares appear in the sky
+                "region": [0.0, 0.50, 0.10, 0.90],
+                "multiplier": 6,
             },
             "red_scanner": {
                 "label": "ARC Enemy Aggro",
                 "weight": 0.15,
                 # ARC enemies switch scanner beam to RED when attacking
-                # This is the universal combat indicator across all ARC types
-                # (Wasps, Bastions, Turrets, Hornets, etc.)
-                # Also detects red damage vignette at screen edges
+                # Universal combat indicator (Wasps, Bastions, Turrets, Hornets)
+                # Also catches red directional damage indicators
                 "lower": np.array([0, 140, 150]),
                 "upper": np.array([8, 255, 255]),
                 "lower2": np.array([172, 140, 150]),
                 "upper2": np.array([180, 255, 255]),
-                # Center gameplay area where enemies appear
                 "region": [0.10, 0.75, 0.10, 0.90],
                 "multiplier": 5,
             },
             "explosion": {
                 "label": "Explosion",
-                "weight": 0.15,
-                # Large explosions: orange-red with high saturation
+                "weight": 0.12,
+                # Large explosions, grenades, ARC self-destruct
                 # Restrict to center+lower to avoid sunset/sky false positives
                 "lower": np.array([5, 150, 170]),
                 "upper": np.array([25, 255, 255]),
@@ -186,38 +214,40 @@ Score guide: 0.0 = menu/nothing happening, 0.3 = minor action, 0.6 = good combat
             },
             "health_bar": {
                 "label": "Health/Shield Drop",
-                "weight": 0.15,
-                # Health bar (WHITE) + Shield bar (BLUE) — bottom-left HUD
-                # Shield = armor durability (damage reduction), not a second health pool
-                # Both are bright white/blue per community reports
+                "weight": 0.13,
+                # WHITE health bar + BLUE SEGMENTED shield boxes — bottom-left HUD
+                # Each blue segment = 10 shield charge points
+                # Shield = damage reduction, not a second health pool
                 "region": "health_bar",
                 "bar_region": [0.88, 0.95, 0.02, 0.22],
                 "bar_colors": [
                     # White health bar (very bright, low saturation)
                     {"lower": np.array([0, 0, 180]), "upper": np.array([180, 40, 255])},
-                    # Blue shield/armor bar
+                    # Blue shield segments
                     {"lower": np.array([90, 60, 100]), "upper": np.array([130, 255, 255])},
                 ],
                 "depletion_threshold": 0.10,
                 "multiplier": 6,
             },
-            "damage_vignette": {
+            "damage_indicators": {
                 "label": "Taking Damage",
                 "weight": 0.10,
-                # Red screen-edge vignette when taking hits
+                # Red DIRECTIONAL indicators pointing toward damage source
+                # + red vignette at screen edges when hit
                 "lower": np.array([0, 120, 100]),
                 "upper": np.array([10, 255, 255]),
                 "lower2": np.array([170, 120, 100]),
                 "upper2": np.array([180, 255, 255]),
                 "region": "edges",
-                "edge_size": 0.08,
+                "edge_size": 0.10,
                 "multiplier": 4,
             },
             "weak_point_glow": {
                 "label": "Weak Point Hit",
                 "weight": 0.05,
                 # Enemy weak points glow YELLOW when vulnerable
-                # (Bastion kneecaps, rear cylinders, Wasp thrusters)
+                # Bastion kneecaps/rear cylinder, Rocketeer red core,
+                # Wasp/Hornet thrusters
                 "lower": np.array([20, 100, 150]),
                 "upper": np.array([40, 255, 255]),
                 "region": "full",
@@ -226,11 +256,11 @@ Score guide: 0.0 = menu/nothing happening, 0.3 = minor action, 0.6 = good combat
             "crosshair_activity": {
                 "label": "Combat (Crosshair)",
                 "weight": 0.10,
-                # Dynamic crosshair tightens during ADS/combat
-                # Bright white center screen activity during firefights
+                # Dynamic crosshair tightens during ADS
+                # Circle crosshair = weapon spread indicator
+                # Default white but can be any RGB color
                 "lower": np.array([0, 0, 240]),
                 "upper": np.array([180, 25, 255]),
-                # Tight center crosshair region
                 "region": [0.43, 0.57, 0.43, 0.57],
                 "multiplier": 5,
             },
@@ -263,21 +293,25 @@ Score guide: 0.0 = menu/nothing happening, 0.3 = minor action, 0.6 = good combat
         "ai_system_prompt": """You are an expert Arc Raiders gameplay analyst. Arc Raiders is a PvE co-op extraction shooter by Embark Studios where players fight robot enemies called ARCs.
 
 IMPORTANT GAME KNOWLEDGE:
-- There are NO enemy health bars — enemies show damage through physics (staggering, parts breaking off, rotors failing)
+- THIRD-PERSON shooter — you see your character from behind
+- NO kill feed — when a player dies, a bright RED FLARE shoots skyward (visible across map)
+- NO enemy health bars — enemies show damage through physics (staggering, parts breaking off, sparks)
+- NO hit markers — crosshair dynamically tightens during ADS as accuracy feedback
 - ARC scanner beams turn RED when attacking (white=patrol, blue=curious, yellow=alert, red=aggro)
-- Weak points glow YELLOW (Bastion kneecaps, Wasp thrusters)
-- Player HUD: white health bar + blue shield bar (bottom-left), ammo (bottom-right)
-- Shield is damage REDUCTION, not a second health pool
+- Weak points glow YELLOW (Bastion kneecaps, Rocketeer glowing red core, Wasp thrusters)
+- Player HUD: white health bar + blue segmented shield boxes (bottom-left), ammo (bottom-right)
+- Shield is damage REDUCTION, not a second health pool — every hit still does health damage
+- Red directional indicators point toward damage source
 - Weapons: Stitcher SMG, Ferro, Rattler, Hullcracker, plus shotguns/energy weapons
 
 Look for these highlights:
-- **Active Combat**: Muzzle flash visible, enemies with RED scanners, explosions
-- **Kills**: ARC enemies staggering/collapsing/exploding, parts flying off
-- **Taking Damage**: Red screen edges, health bar depleting, shield breaking
+- **Active Combat**: Muzzle flash on character model, enemies with RED scanners, explosions
+- **Kills**: ARC enemies staggering/collapsing/exploding, parts flying off, rotors failing
+- **Deaths**: RED FLARE in the sky = someone died (exciting moment!)
+- **Taking Damage**: Red directional indicators, health bar depleting, shield breaking
 - **Boss Encounters**: Large ARCs (Bastion, Crusher, Matriarch) in combat
-- **Close Calls**: Very low health, downed state, crawling
+- **Close Calls**: Very low health, downed state (bleed-out timer), crawling
 - **Explosions**: Grenades, environmental destruction, ARC self-destruct
-- **Deaths**: Player going down (also entertaining content)
 
 Score 0.0 for: menus, inventory, crafting screens, loading, lobby (Speranza), map screen, settings.
 
