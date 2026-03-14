@@ -59,10 +59,19 @@ echo "  OK"
 
 # 2. Python, Git, FFmpeg
 echo "[2/4] Python, Git, FFmpeg..."
-brew install python git ffmpeg 2>/dev/null
+brew install python@3.12 git ffmpeg 2>/dev/null
+# Also try generic python as fallback
+brew install python 2>/dev/null
 
 MISSING=""
-command -v python3 &> /dev/null || MISSING="$MISSING python3"
+# Prefer python3.12 for inference-sdk compatibility (<3.13)
+if command -v python3.12 &> /dev/null; then
+    PY_CMD="python3.12"
+elif command -v python3 &> /dev/null; then
+    PY_CMD="python3"
+else
+    MISSING="$MISSING python3"
+fi
 command -v ffmpeg &> /dev/null || MISSING="$MISSING ffmpeg"
 
 if [ -n "$MISSING" ]; then
@@ -76,7 +85,7 @@ echo "  OK"
 
 # 3. Python virtual environment
 echo "[3/4] Python environment..."
-python3 -m venv venv
+$PY_CMD -m venv venv
 if [ $? -ne 0 ]; then
     echo "  Failed to create Python environment."
     read -p "  Press Enter to close..."
@@ -93,6 +102,8 @@ if [ $? -ne 0 ]; then
     read -p "  Press Enter to close..."
     exit 1
 fi
+# Optional: install inference-sdk for Roboflow features (requires Python <3.13)
+pip install inference-sdk --quiet 2>/dev/null && echo "  Roboflow SDK installed." || echo "  Note: Roboflow SDK skipped (requires Python <3.13). Other detection methods work fine."
 echo "  OK"
 
 # ---------- Done! Launch the app ----------
