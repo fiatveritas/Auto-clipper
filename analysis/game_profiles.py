@@ -15,130 +15,83 @@ import numpy as np
 GAME_PROFILES = {
     "arc_raiders": {
         "name": "Arc Raiders",
-        "description": "Sci-fi co-op PvE shooter \u2014 detects gunfire, explosions, Arc enemies, combat",
+        "description": "Sci-fi co-op shooter \u2014 detects kills, Arc enemies, damage, explosions",
 
-        # RESEARCH: Arc Raiders has NO traditional health bar and NO hitmakers by design.
-        # The devs use physics-based visual feedback (see GameRant interview).
-        # Detection focuses on: muzzle flash, explosions, red damage vignette,
-        # and the minimal HUD bars that exist (health/stamina bottom-left).
-        # This is a PvE game -- kills are against AI robots/creatures, not players.
         "detectors": {
             "kill_feed": {
-                "label": "Muzzle Flash / Gunfire",
-                "weight": 0.35,
-                # Primary combat indicator: muzzle flash from firing weapons
-                # Orange-yellow burst in the lower-center where the weapon model is
-                # This is the #1 way to distinguish combat from walking
-                "lower": np.array([10, 120, 180]),
-                "upper": np.array([30, 255, 255]),
-                # Also detect bright white flash from energy weapons
-                "lower2": np.array([0, 0, 240]),
-                "upper2": np.array([180, 40, 255]),
-                # Lower half center -- where weapon/muzzle appears on screen
-                "region": [0.50, 0.85, 0.30, 0.70],
-                "min_density": 0.008,
-                "max_density": 0.25,
-                "multiplier": 7,
+                "label": "Kill / Elimination",
+                "weight": 0.25,
+                # Kill notifications: bright white/yellow text top-right
+                "lower": np.array([0, 0, 200]),
+                "upper": np.array([180, 50, 255]),
+                "region": [0.05, 0.25, 0.55, 0.95],
+                "multiplier": 6,
             },
             "damage": {
                 "label": "Taking Damage",
-                "weight": 0.25,
-                # Red damage vignette on screen edges when hit
-                "lower": np.array([0, 100, 80]),
+                "weight": 0.20,
+                # Red vignette at screen edges
+                "lower": np.array([0, 120, 100]),
                 "upper": np.array([10, 255, 255]),
-                "lower2": np.array([170, 100, 80]),
+                "lower2": np.array([170, 120, 100]),
                 "upper2": np.array([180, 255, 255]),
                 "region": "edges",
-                "edge_size": 0.08,
-                "min_density": 0.02,
-                "max_density": 0.50,
-                "multiplier": 6,
+                "edge_size": 0.10,
+                "multiplier": 4,
             },
             "hit_marker": {
-                "label": "Combat Action",
+                "label": "Landing Hits",
                 "weight": 0.15,
-                # Crosshair area activity during combat -- tight center
-                "lower": np.array([0, 0, 240]),
-                "upper": np.array([180, 25, 255]),
-                "region": [0.43, 0.57, 0.43, 0.57],
-                "min_density": 0.01,
-                "max_density": 0.30,
+                # Bright white center crosshair flash
+                "lower": np.array([0, 0, 230]),
+                "upper": np.array([180, 30, 255]),
+                "region": [0.4, 0.6, 0.4, 0.6],
                 "multiplier": 5,
             },
             "explosion": {
-                "label": "Explosion",
-                "weight": 0.18,
-                # Large explosions -- orange-red with high saturation
-                # NOT full screen -- restrict to center+lower to avoid sunset/sky
-                "lower": np.array([5, 150, 170]),
-                "upper": np.array([25, 255, 255]),
-                "region": [0.25, 0.90, 0.15, 0.85],
-                "min_density": 0.01,
-                "max_density": 0.35,
-                "multiplier": 5,
+                "label": "Explosion / Combat",
+                "weight": 0.15,
+                # Orange-yellow muzzle flash / explosions
+                "lower": np.array([10, 100, 150]),
+                "upper": np.array([35, 255, 255]),
+                "region": "full",
+                "multiplier": 3,
             },
             "special": {
-                "label": "Arc Enemy Aggro",
+                "label": "Arc Enemy Encounter",
                 "weight": 0.10,
-                # Arc enemies are robots with scanner lasers that turn RED when attacking.
-                # Blue scanner = patrolling (NOT combat). Red scanner = aggro/combat.
-                # Detect red scanner lasers and red glowing eyes on Arc robots.
-                "lower": np.array([0, 140, 150]),
-                "upper": np.array([8, 255, 255]),
-                "lower2": np.array([172, 140, 150]),
-                "upper2": np.array([180, 255, 255]),
-                "region": [0.10, 0.75, 0.10, 0.90],
-                "min_density": 0.003,
-                "max_density": 0.15,
-                "multiplier": 5,
+                # Blue glow from Arc enemies
+                "lower": np.array([90, 80, 100]),
+                "upper": np.array([130, 255, 255]),
+                "region": "full",
+                "multiplier": 4,
             },
         },
 
-        # AUDIO DETECTION -- the #1 signal for Arc Raiders combat
-        # Gunshots, explosions, and enemy screams are far more reliable than colors
-        # audio_weight=0.65 means 65% audio + 35% visual
-        # Twitch VOD audio is compressed by streamer's OBS chain (compressor/limiter)
-        # so peaks are much lower than raw game audio — use -15 dB threshold
-        "audio_weight": 0.65,
-        "audio_threshold_db": -15,  # dB level that counts as "loud" (Twitch-compressed audio)
-        "audio_ceiling_db": -3,     # dB level that maps to max score (compressed peaks)
+        # Audio: helpful but don't let it dominate
+        "audio_weight": 0.30,
+        "audio_threshold_db": -15,
+        "audio_ceiling_db": -3,
 
-        # Motion -- high threshold so walking/camera pan does not trigger
-        "motion_weight": 0.02,
-        "motion_threshold": 0.12,
-        "motion_multiplier": 1.5,
+        # Motion
+        "motion_weight": 0.10,
+        "motion_multiplier": 3,
 
-        # Brightness -- very high threshold, only actual flashes (explosions)
-        "brightness_weight": 0.01,
-        "brightness_threshold": 0.80,
-        "brightness_multiplier": 1.5,
+        # Brightness spike
+        "brightness_weight": 0.05,
+        "brightness_threshold": 0.6,
+        "brightness_multiplier": 3,
 
-        # Require at least 1 detector (relaxed since audio carries most weight now)
-        "min_active_detectors": 1,
-
-        # Menu suppression -- detect Arc Raiders menu/inventory screens
-        # Arc Raiders inventory has dark semi-transparent overlays and UI panels
-        "menu_suppress_colors": [
-            # Dark UI overlay (inventory/menu background)
-            {"lower": np.array([0, 0, 10]), "upper": np.array([180, 30, 60]),
-             "min_coverage": 0.50},
-            # Medium-dark UI panels (settings, crafting, map screens)
-            {"lower": np.array([0, 0, 20]), "upper": np.array([180, 40, 100]),
-             "min_coverage": 0.60},
-        ],
-
-        # Scoring -- higher threshold to avoid clipping quiet/boring moments
-        # Combined with lower audio threshold, this means only genuinely loud
-        # combat (gunfire, explosions) will make the cut
-        "intensity_threshold": 0.40,
-        "fallback_threshold_ratio": 0.15,
+        # Scoring — original v1 values
+        "intensity_threshold": 0.35,
+        "fallback_threshold_ratio": 0.5,
         "merge_gap": 8,
         "min_clip_duration": 20,
         "max_clip_duration": 60,
         "clip_extension": 10,
         "pre_pad": 8,
 
-        # AI prompt -- simple and permissive (matches the original v1 that worked best)
+        # AI prompt
         "ai_system_prompt": """You are an expert Arc Raiders gameplay analyst. You analyze screenshots from Arc Raiders streams to identify exciting moments worth clipping.
 
 Look for these types of highlights:

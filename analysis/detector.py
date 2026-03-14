@@ -198,65 +198,20 @@ class GameDetector:
 
     def _is_menu_frame(self, frame, hsv, gray):
         """
-        Detect if the current frame is a menu/lobby/loading/inventory screen.
-        Menu screens typically have:
-        - Large areas of solid dark or light color
-        - High contrast UI text elements
-        - Low scene complexity (few distinct color clusters)
-        - Specific menu background colors
-        - Sharp rectangular UI panels with hard edges
-
-        Returns True if this looks like a menu frame.
+        Detect if the current frame is a menu/lobby/loading screen.
+        Only catch the most obvious cases to avoid suppressing real gameplay.
         """
         h, w = frame.shape[:2]
 
-        # Check 1: Very dark frame with sparse bright UI text = menu/loading
+        # Almost black frame = loading screen
         mean_brightness = np.mean(gray) / 255.0
-        if mean_brightness < 0.10:
-            # Almost black frame = loading screen, suppress
+        if mean_brightness < 0.08:
             return True
 
-        # Check 2: Large portion of frame is near-uniform color = menu background
-        # Sample the center 60% of the frame (menus are typically centered)
+        # Very uniform center = solid menu background (not gameplay)
         center = gray[int(h * 0.2):int(h * 0.8), int(w * 0.2):int(w * 0.8)]
         std_dev = np.std(center)
-        if std_dev < 18 and mean_brightness > 0.12:
-            # Very uniform center with reasonable brightness = menu/UI overlay
-            return True
-
-        # Check 3: Check for common menu indicators
-        # Many games have a dark semi-transparent overlay when menu is open
-        # This shows as low saturation + medium brightness across most of frame
-        mean_sat = np.mean(hsv[:, :, 1])
-        if mean_sat < 25 and mean_brightness > 0.20 and std_dev < 35:
-            # Low saturation + medium brightness + low variance = greyed-out menu
-            return True
-
-        # Check 4: Game-specific menu suppression colors
-        menu_colors = self.profile.get("menu_suppress_colors")
-        if menu_colors:
-            for mc in menu_colors:
-                mask = cv2.inRange(hsv, mc["lower"], mc["upper"])
-                coverage = np.count_nonzero(mask) / max(mask.size, 1)
-                if coverage >= mc.get("min_coverage", 0.4):
-                    return True
-
-        # Check 5: Inventory/UI detection — high edge density in structured grid pattern
-        # Inventory screens have many sharp horizontal/vertical edges from UI panels
-        # while gameplay has more organic, irregular edges
-        edges = cv2.Canny(gray, 50, 150)
-        edge_density = np.count_nonzero(edges) / max(edges.size, 1)
-        if edge_density > 0.12 and mean_sat < 40:
-            # Lots of sharp edges + low saturation = UI-heavy frame (inventory, settings)
-            return True
-
-        # Check 6: Bimodal brightness — dark background with bright UI text/icons
-        # Inventory screens often have a dark overlay with bright item icons
-        dark_pixels = np.sum(gray < 50) / max(gray.size, 1)
-        bright_pixels = np.sum(gray > 200) / max(gray.size, 1)
-        mid_pixels = 1.0 - dark_pixels - bright_pixels
-        if dark_pixels > 0.40 and bright_pixels > 0.08 and mid_pixels < 0.35:
-            # Bimodal distribution: dark background + bright UI elements = menu/inventory
+        if std_dev < 15:
             return True
 
         return False
@@ -312,37 +267,27 @@ class GameDetector:
             elif det["region"] == "edges":
                 # Edge detection (damage vignettes) — check all 4 edges
                 edge_size = det.get("edge_size", 0.10)
-                min_d = det.get("min_density", 0.01)
-                max_d = det.get("max_density", 0.60)
-                edges = [
+                edges_list = [
                     hsv[0:int(h * edge_size), :],              # top
                     hsv[int(h * (1 - edge_size)):, :],         # bottom
                     hsv[:, 0:int(w * edge_size)],              # left
                     hsv[:, int(w * (1 - edge_size)):],         # right
                 ]
                 best = 0
-                for edge in edges:
+                for edge in edges_list:
                     edge_pixels = max(edge.shape[0] * edge.shape[1], 1)
                     mask1 = cv2.inRange(edge, det["lower"], det["upper"])
                     density = np.count_nonzero(mask1) / edge_pixels
                     if "lower2" in det:
                         mask2 = cv2.inRange(edge, det["lower2"], det["upper2"])
                         density += np.count_nonzero(mask2) / edge_pixels
-                    # Apply density filtering
-                    if density < min_d or density > max_d:
-                        density = 0
                     best = max(best, density)
                 component_scores[det_id] = min(best * det["multiplier"], 1.0)
 
             elif det["region"] == "full":
-                # Full-frame detection — WITH density filtering
-                min_d = det.get("min_density", 0.002)
-                max_d = det.get("max_density", 0.30)
+                # Full-frame detection
                 mask = cv2.inRange(hsv, det["lower"], det["upper"])
                 density = np.count_nonzero(mask) / max(mask.size, 1)
-                # Filter: too few pixels = noise, too many = bright scene/menu
-                if density < min_d or density > max_d:
-                    density = 0
                 component_scores[det_id] = min(density * det["multiplier"], 1.0)
 
             elif isinstance(det["region"], list):
@@ -354,50 +299,31 @@ class GameDetector:
                 if "lower2" in det:
                     mask2 = cv2.inRange(region, det["lower2"], det["upper2"])
                     density += np.count_nonzero(mask2) / max(mask2.size, 1)
-
-                min_d = det.get("min_density", 0.003)
-                max_d = det.get("max_density", 0.50)
-                if density < min_d or density > max_d:
-                    density = 0
-
                 component_scores[det_id] = min(density * det["multiplier"], 1.0)
 
-        # Motion detection — only count if VERY high (gunfights, not walking)
-        motion_weight = self.profile.get("motion_weight", 0.05)
-        motion_threshold = self.profile.get("motion_threshold", 0.08)
+        # Motion detection (scene changes = action)
+        motion_weight = self.profile.get("motion_weight", 0.10)
         if prev_gray is not None:
             diff = cv2.absdiff(gray, prev_gray)
             motion = np.mean(diff) / 255.0
-            # Suppress low-level motion (walking, camera panning)
-            if motion < motion_threshold:
-                motion = 0
-            else:
-                # Scale remaining motion above threshold
-                motion = (motion - motion_threshold) / (1.0 - motion_threshold)
-            component_scores["motion"] = min(motion * self.profile.get("motion_multiplier", 2), 1.0)
+            component_scores["motion"] = min(motion * self.profile.get("motion_multiplier", 4), 1.0)
         else:
             component_scores["motion"] = 0
         weights["motion"] = motion_weight
         label_map["motion"] = "Intense Action"
 
-        # Brightness spike — only extreme flashes (explosions, not menus)
-        brightness_weight = self.profile.get("brightness_weight", 0.02)
+        # Brightness spike (flash from kills, explosions)
+        brightness_weight = self.profile.get("brightness_weight", 0.05)
         brightness = np.mean(gray) / 255.0
-        threshold = self.profile.get("brightness_threshold", 0.75)
-        mult = self.profile.get("brightness_multiplier", 2)
+        threshold = self.profile.get("brightness_threshold", 0.6)
+        mult = self.profile.get("brightness_multiplier", 3)
         brightness_spike = max(0, brightness - threshold) * mult
         component_scores["brightness"] = min(brightness_spike, 1.0)
         weights["brightness"] = brightness_weight
         label_map["brightness"] = "Flash Event"
 
-        # Weighted combination
+        # Weighted combination — no penalties, just straight weighted sum
         total_score = sum(component_scores.get(k, 0) * weights.get(k, 0) for k in weights)
-
-        # Require minimum active detectors to avoid single-source false positives
-        min_active = self.profile.get("min_active_detectors", 1)
-        active_count = sum(1 for k, v in component_scores.items() if v > 0.1 and k not in ("motion", "brightness"))
-        if active_count < min_active:
-            total_score *= 0.3  # Heavy penalty if only one detector fires
 
         # Determine the dominant label
         best_component = max(component_scores, key=component_scores.get)
