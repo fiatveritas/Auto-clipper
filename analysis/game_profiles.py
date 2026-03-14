@@ -29,7 +29,7 @@ GAME_PROFILES = {
             },
             "damage": {
                 "label": "Taking Damage",
-                "weight": 0.20,
+                "weight": 0.15,
                 # Red vignette at screen edges
                 "lower": np.array([0, 120, 100]),
                 "upper": np.array([10, 255, 255]),
@@ -38,6 +38,21 @@ GAME_PROFILES = {
                 "region": "edges",
                 "edge_size": 0.10,
                 "multiplier": 4,
+            },
+            "health_bar": {
+                "label": "Health/Shield Drop",
+                "weight": 0.15,
+                # Detect health/shield bar depletion bottom-left HUD
+                "region": "health_bar",
+                "bar_region": [0.88, 0.95, 0.02, 0.22],
+                "bar_colors": [
+                    # White health bar
+                    {"lower": np.array([0, 0, 180]), "upper": np.array([180, 40, 255])},
+                    # Blue shield bar
+                    {"lower": np.array([90, 60, 100]), "upper": np.array([130, 255, 255])},
+                ],
+                "depletion_threshold": 0.10,
+                "multiplier": 6,
             },
             "hit_marker": {
                 "label": "Landing Hits",
