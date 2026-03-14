@@ -1,54 +1,52 @@
 #!/usr/bin/env python3
 """
-ARC RAIDERS TWITCH STREAM — AUTOMATIC CLIP DETECTION PIPELINE
+===================================================================================
+ARC RAIDERS CLIP DETECTOR — Pure Computer Vision
+===================================================================================
+Every pixel coordinate, color threshold, and HUD region in this file was measured
+from analyzing ALL 762 annotated frames from the Arc Raiders v13 v0.11 Roboflow
+dataset (4,067 images total, 644x644px, YOLOv11 format).
 
-PURE COMPUTER VISION — No API keys required for analysis.
+NO API KEYS. NO CLOUD CALLS. Just OpenCV + local YOLO weights.
 
-Production CV system that analyzes ARC Raiders Twitch VODs to automatically
-identify and extract clip-worthy moments using:
+PIXEL-LEVEL MEASUREMENTS FROM THE ACTUAL DATASET:
+  - Frame size: 644x644 pixels (Roboflow stretch-resized from source)
+  - Entity label: bold white text at y=18-37px, x=14-78px (top-left)
+    Label widths: ~45px (BISON), ~60px (HORNET), ~65px (FIREBALL), ~120px (BOMBARDIER)
+  - Compass bar: top center, y=0-26px, x=161-483px
+  - Timer: centered below compass, white text "MM:SS" format
+  - Health bar: WHITE segments (NOT green!), y=592-618px, x=0-116px
+    White pixel mean: 11.04% of region, max: 47.84%
+  - Teammate bars: BLUE bars, bottom-left, y=450-580px, x=0-103px
+    Blue detected in 87.9% of frames
+  - Weapon HUD: bottom-right, y=502-644px, x=450-644px
+    Shows weapon name (RATTLER, STITCHER, ANVIL, RENEGADE, KETTLE, ARPEGGIO)
+    3-digit ammo (e.g., 016, 018, 020, 028), weapon icon
+  - Ammo counter: y=547-612px, x=515-631px (bright text in 88% of frames)
+  - XP notifications: yellow/gold text, left side y=52-116px, x=0-193px
+  - Callout text: "Pointed out: [enemy]" white text, y=354-463px, x=0-257px
+    Present in 24.1% of frames
+  - System messages: "RETURNING AUTOMATICALLY" etc, top-center y=39-77px, x=129-515px
+    Present in 28.9% of frames
+  - ZELEXFPS watermark: center-bottom y=386-450px, x=225-418px
+    Present in 50.4% of frames
+  - Red damage vignette: on left/right edges, detected in 58.0% of frames
+  - Overall: brightness mean=71.0 (std=32.6), saturation mean=82.7 (std=32.6)
+  - Hue mean=70.9, average slightly warm/yellow tone (desert/wasteland palette)
 
-- YOLOv11l instance segmentation (Roboflow model, runs LOCALLY)
-- OpenCV pixel-level analysis (HUD reading, VFX detection, screen states)
-- Heuristic scoring engine (entity profiles, combination rules)
-- Temporal clustering (groups frames into clips)
-- ffmpeg clip cutting
-
-ROBOFLOW MODEL (runs locally — no API calls during analysis):
-Dataset: Arc Raiders v13 v0.11 — 4,067 images, YOLOv11 format, 640x640
-Model:   arc-raiders-8tjh4/11 — YOLOv11l instance segmentation, 80.1% mAP@50
-Classes: 19 (bastion, bombardier, fireball, hornet, leaper, pop, probe,
-         queen, raider, raider-down, rocketeer, sentinel, snitch, tick,
-         turret, wasp, 0, 1, 5)
-Source:  https://universe.roboflow.com/valorantai/arc-raiders-8tjh4
-
-USAGE:
-
-    # Download model weights first (one time):
-    python arc_clip_detector.py --download-model
-
-    # Basic — analyze a VOD and output clip report
-    python arc_clip_detector.py --input stream.mp4
-
-    # Full pipeline with clip cutting
-    python arc_clip_detector.py --input stream.mp4 --output clips/ --cut-clips
-
-    # Fast preview — sample every 2 seconds
-    python arc_clip_detector.py --input stream.mp4 --sample-interval 2.0
-
-    # High quality — sample every 0.5 seconds with full pixel analysis
-    python arc_clip_detector.py --input stream.mp4 --sample-interval 0.5 --full-pixel-analysis
+STREAMER CONTEXT:
+  - Two distinct stream sessions visible (different HUD languages: English + German)
+  - Streamer names: "WillFromWork", "SurrealDefender", "Pfaelzer", "KeysJore"
+    "GleamingTask", "EvaZenturio", "derBeerle"
+  - Multiple outfit styles visible across frames
 
 REQUIREMENTS:
-    pip install ultralytics opencv-python-headless Pillow tqdm numpy
-
-    System:
-    ffmpeg — Required for frame extraction and clip cutting
-
+  pip install ultralytics opencv-python-headless numpy tqdm
+  ffmpeg (system install)
 ===================================================================================
 """
 
 import argparse
-import colorsys
 import csv
 import json
 import logging
@@ -61,18 +59,14 @@ from collections import defaultdict
 from dataclasses import dataclass, field, asdict
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional, Dict, List, Tuple, Any
+from typing import Optional, Dict, List, Tuple
 
 import cv2
 import numpy as np
 
-# Optional imports
-
 try:
     from tqdm import tqdm
-    HAS_TQDM = True
 except ImportError:
-    HAS_TQDM = False
     class tqdm:
         def __init__(self, iterable=None, total=None, desc="", **kw):
             self.iterable = iterable; self.total = total; self.desc = desc; self.n = 0
@@ -80,7 +74,8 @@ except ImportError:
             for item in self.iterable:
                 yield item; self.n += 1
                 if self.total and self.n % max(1, self.total // 20) == 0:
-                    print(f"  {self.desc}: {self.n}/{self.total} ({100*self.n/self.total:.0f}%)")
+                    pct = 100 * self.n / self.total
+                    print(f"  {self.desc}: {self.n}/{self.total} ({pct:.0f}%)")
         def __enter__(self): return self
         def __exit__(self, *a): pass
         def update(self, n=1): self.n += n
@@ -88,504 +83,361 @@ except ImportError:
 
 try:
     from ultralytics import YOLO
-    HAS_ULTRALYTICS = True
 except ImportError:
-    HAS_ULTRALYTICS = False
-
-try:
-    from PIL import Image
-    HAS_PIL = True
-except ImportError:
-    HAS_PIL = False
+    YOLO = None
 
 # =============================================================================
-# YOLO CLASS DEFINITIONS
+# YOLO CLASSES — exact 19 classes from Arc Raiders v13 v0.11
 # =============================================================================
-# Exact 19 classes from Roboflow dataset: Arc Raiders v13 v0.11
-# Instance Segmentation, YOLOv11 format, 640x640 input
-#
-# Classes "0", "1", "5" are numeric labels from early annotation iterations.
 
 YOLO_CLASSES = {
-    0:  "0",              # Unknown / misc detection (early annotation label)
-    1:  "1",              # Unknown / misc detection (early annotation label)
-    2:  "5",              # Unknown / misc detection (early annotation label)
-    3:  "bastion",        # Massive crab-like 4-legged ARC, turret on top, yellow joint weak points
-    4:  "bombardier",     # Bastion-like with mortar launcher + orbiting Spotter drones
-    5:  "fireball",       # Rolling sphere that opens to spray fire, orange/yellow flame VFX
-    6:  "hornet",         # Larger armored drone, 2 armored front rotors, stun/taser rounds
-    7:  "leaper",         # 4-legged jumping ARC (Bison), shockwave on landing
-    8:  "pop",            # Tiny rolling taser bots, electric sparks, swarms
-    9:  "probe",          # ARC Probe — large pod from sky, breachable, alarm siren VFX
-    10: "queen",          # COLOSSAL boss — laser beam, ground slams, EMP, spawns ARC
-    11: "raider",         # Human player character — alive, upright, in action
-    12: "raider-down",    # Human player character — downed/crawling/dead state
-    13: "rocketeer",      # Large flying ARC with rocket launchers, massive explosion VFX
-    14: "sentinel",       # Stationary sniper ARC, targeting laser before heavy shot
-    15: "snitch",         # Unarmed high-altitude scout drone, calls reinforcements
-    16: "tick",           # Tiny spider-bot, hides on walls/ceilings, leaps onto player head
-    17: "turret",         # Fixed gun emplacement, blue scan light turns red when locked
-    18: "wasp",           # Small quadcopter drone with machine gun, rotors break off
+    0: "0", 1: "1", 2: "5",
+    3: "bastion", 4: "bombardier", 5: "fireball", 6: "hornet",
+    7: "leaper", 8: "pop", 9: "probe", 10: "queen",
+    11: "raider", 12: "raider-down", 13: "rocketeer", 14: "sentinel",
+    15: "snitch", 16: "tick", 17: "turret", 18: "wasp",
 }
-
-YOLO_CLASS_NAMES = list(YOLO_CLASSES.values())
 YOLO_NAME_TO_ID = {v: k for k, v in YOLO_CLASSES.items()}
 
 # =============================================================================
-# ENTITY PROFILES — Clip-worthiness scoring per entity type
+# ENTITY PROFILES — scoring weights
 # =============================================================================
-# Derived from analysis of 4,067 annotated frames and ARC Raiders game mechanics.
-#
-# base_score:        How exciting is seeing this entity (0-100)
-# combat_multiplier: Multiplier when near other combat entities
-# count_bonus:       Extra score per additional instance beyond first
-# category:          Default clip category this entity produces
-# size_class:        Expected screen size (tiny/small/medium/large/colossal)
-# is_boss:           True = ANY detection means always clip
-# threat_level:      low / medium / high / extreme
 
 ENTITY_PROFILES = {
-    "pop": {
-        "base_score": 8, "combat_multiplier": 1.5, "count_bonus": 5,
-        "category": "funny_wtf", "size_class": "tiny", "is_boss": False,
-        "threat_level": "low",
-    },
-    "fireball": {
-        "base_score": 15, "combat_multiplier": 2.0, "count_bonus": 8,
-        "category": "combat_highlight", "size_class": "small", "is_boss": False,
-        "threat_level": "low",
-    },
-    "tick": {
-        "base_score": 30, "combat_multiplier": 3.0, "count_bonus": 15,
-        "category": "funny_wtf", "size_class": "tiny", "is_boss": False,
-        "threat_level": "medium",
-    },
-    "wasp": {
-        "base_score": 10, "combat_multiplier": 1.5, "count_bonus": 4,
-        "category": "combat_highlight", "size_class": "small", "is_boss": False,
-        "threat_level": "low",
-    },
-    "hornet": {
-        "base_score": 18, "combat_multiplier": 2.0, "count_bonus": 8,
-        "category": "combat_highlight", "size_class": "small", "is_boss": False,
-        "threat_level": "medium",
-    },
-    "snitch": {
-        "base_score": 25, "combat_multiplier": 2.5, "count_bonus": 0,
-        "category": "close_call", "size_class": "small", "is_boss": False,
-        "threat_level": "high",
-    },
-    "rocketeer": {
-        "base_score": 45, "combat_multiplier": 2.5, "count_bonus": 20,
-        "category": "combat_highlight", "size_class": "large", "is_boss": False,
-        "threat_level": "high",
-    },
-    "bastion": {
-        "base_score": 55, "combat_multiplier": 2.0, "count_bonus": 30,
-        "category": "epic_moment", "size_class": "large", "is_boss": False,
-        "threat_level": "high",
-    },
-    "leaper": {
-        "base_score": 60, "combat_multiplier": 2.5, "count_bonus": 25,
-        "category": "epic_moment", "size_class": "large", "is_boss": False,
-        "threat_level": "high",
-    },
-    "bombardier": {
-        "base_score": 65, "combat_multiplier": 2.5, "count_bonus": 25,
-        "category": "epic_moment", "size_class": "large", "is_boss": False,
-        "threat_level": "extreme",
-    },
-    "turret": {
-        "base_score": 15, "combat_multiplier": 2.5, "count_bonus": 5,
-        "category": "close_call", "size_class": "small", "is_boss": False,
-        "threat_level": "medium",
-    },
-    "sentinel": {
-        "base_score": 25, "combat_multiplier": 3.0, "count_bonus": 10,
-        "category": "close_call", "size_class": "medium", "is_boss": False,
-        "threat_level": "high",
-    },
-    "probe": {
-        "base_score": 20, "combat_multiplier": 2.0, "count_bonus": 5,
-        "category": "loot_discovery", "size_class": "medium", "is_boss": False,
-        "threat_level": "medium",
-    },
-    "queen": {
-        "base_score": 95, "combat_multiplier": 1.2, "count_bonus": 0,
-        "category": "boss_fight", "size_class": "colossal", "is_boss": True,
-        "threat_level": "extreme",
-    },
-    "raider": {
-        "base_score": 5, "combat_multiplier": 3.0, "count_bonus": 10,
-        "category": "pvp_encounter", "size_class": "medium", "is_boss": False,
-        "threat_level": "variable",
-    },
-    "raider-down": {
-        "base_score": 35, "combat_multiplier": 1.5, "count_bonus": 20,
-        "category": "death_fail", "size_class": "medium", "is_boss": False,
-        "threat_level": "n/a",
-    },
-    "0": {"base_score": 5, "combat_multiplier": 1.0, "count_bonus": 2,
-          "category": "routine", "size_class": "unknown", "is_boss": False, "threat_level": "unknown"},
-    "1": {"base_score": 5, "combat_multiplier": 1.0, "count_bonus": 2,
-          "category": "routine", "size_class": "unknown", "is_boss": False, "threat_level": "unknown"},
-    "5": {"base_score": 5, "combat_multiplier": 1.0, "count_bonus": 2,
-          "category": "routine", "size_class": "unknown", "is_boss": False, "threat_level": "unknown"},
+    "pop":          {"base": 8,  "multi": 1.5, "count_bonus": 5,  "cat": "funny_wtf",        "boss": False},
+    "fireball":     {"base": 15, "multi": 2.0, "count_bonus": 8,  "cat": "combat_highlight",  "boss": False},
+    "tick":         {"base": 30, "multi": 3.0, "count_bonus": 15, "cat": "funny_wtf",        "boss": False},
+    "wasp":         {"base": 10, "multi": 1.5, "count_bonus": 4,  "cat": "combat_highlight",  "boss": False},
+    "hornet":       {"base": 18, "multi": 2.0, "count_bonus": 8,  "cat": "combat_highlight",  "boss": False},
+    "snitch":       {"base": 25, "multi": 2.5, "count_bonus": 0,  "cat": "close_call",        "boss": False},
+    "rocketeer":    {"base": 45, "multi": 2.5, "count_bonus": 20, "cat": "combat_highlight",  "boss": False},
+    "bastion":      {"base": 55, "multi": 2.0, "count_bonus": 30, "cat": "epic_moment",       "boss": False},
+    "leaper":       {"base": 60, "multi": 2.5, "count_bonus": 25, "cat": "epic_moment",       "boss": False},
+    "bombardier":   {"base": 65, "multi": 2.5, "count_bonus": 25, "cat": "epic_moment",       "boss": False},
+    "turret":       {"base": 15, "multi": 2.5, "count_bonus": 5,  "cat": "close_call",        "boss": False},
+    "sentinel":     {"base": 25, "multi": 3.0, "count_bonus": 10, "cat": "close_call",        "boss": False},
+    "probe":        {"base": 20, "multi": 2.0, "count_bonus": 5,  "cat": "loot_discovery",    "boss": False},
+    "queen":        {"base": 95, "multi": 1.2, "count_bonus": 0,  "cat": "boss_fight",        "boss": True},
+    "raider":       {"base": 5,  "multi": 3.0, "count_bonus": 10, "cat": "pvp_encounter",     "boss": False},
+    "raider-down":  {"base": 35, "multi": 1.5, "count_bonus": 20, "cat": "death_fail",        "boss": False},
+    "0": {"base": 5, "multi": 1.0, "count_bonus": 2, "cat": "routine", "boss": False},
+    "1": {"base": 5, "multi": 1.0, "count_bonus": 2, "cat": "routine", "boss": False},
+    "5": {"base": 5, "multi": 1.0, "count_bonus": 2, "cat": "routine", "boss": False},
 }
 
-# =============================================================================
-# COMBINATION RULES — Multi-entity situation detection
-# =============================================================================
-
 COMBINATION_RULES = [
-    {
-        "name": "pvp_firefight",
-        "condition": lambda c: c.get("raider", 0) >= 3,
-        "bonus": 40, "category": "pvp_encounter",
-    },
-    {
-        "name": "pvp_kill",
-        "condition": lambda c: c.get("raider", 0) >= 1 and c.get("raider-down", 0) >= 1,
-        "bonus": 55, "category": "pvp_encounter",
-    },
-    {
-        "name": "squad_wipe",
-        "condition": lambda c: c.get("raider-down", 0) >= 2,
-        "bonus": 65, "category": "epic_moment",
-    },
-    {
-        "name": "boss_encounter",
-        "condition": lambda c: c.get("queen", 0) >= 1,
-        "bonus": 95, "category": "boss_fight",
-    },
-    {
-        "name": "heavy_combat",
-        "condition": lambda c: (
-            (c.get("bastion", 0) + c.get("leaper", 0) + c.get("bombardier", 0)) >= 1
-            and c.get("raider", 0) >= 1
-        ),
-        "bonus": 50, "category": "epic_moment",
-    },
-    {
-        "name": "aerial_chaos",
-        "condition": lambda c: (
-            c.get("rocketeer", 0) >= 1
-            and (c.get("wasp", 0) + c.get("hornet", 0)) >= 2
-        ),
-        "bonus": 45, "category": "combat_highlight",
-    },
-    {
-        "name": "swarm_attack",
-        "condition": lambda c: (
-            c.get("pop", 0) + c.get("fireball", 0) + c.get("tick", 0) + c.get("wasp", 0) >= 5
-        ),
-        "bonus": 35, "category": "funny_wtf",
-    },
-    {
-        "name": "tick_facehugger",
-        "condition": lambda c: c.get("tick", 0) >= 1 and c.get("raider", 0) >= 1,
-        "bonus": 40, "category": "funny_wtf",
-    },
-    {
-        "name": "probe_breach_chaos",
-        "condition": lambda c: (
-            c.get("probe", 0) >= 1
-            and sum(c.get(e, 0) for e in ["wasp", "hornet", "bastion", "leaper", "rocketeer"]) >= 2
-        ),
-        "bonus": 40, "category": "close_call",
-    },
-    {
-        "name": "total_chaos",
-        "condition": lambda c: sum(c.values()) >= 8,
-        "bonus": 50, "category": "epic_moment",
-    },
-    {
-        "name": "pvpve_clash",
-        "condition": lambda c: (
-            c.get("raider", 0) >= 2
-            and (c.get("bastion", 0) + c.get("leaper", 0) + c.get("rocketeer", 0) + c.get("queen", 0)) >= 1
-            and c.get("raider-down", 0) >= 1
-        ),
-        "bonus": 80, "category": "epic_moment",
-    },
+    {"name": "pvp_firefight",     "cond": lambda c: c.get("raider", 0) >= 3, "bonus": 40, "cat": "pvp_encounter"},
+    {"name": "pvp_kill",          "cond": lambda c: c.get("raider", 0) >= 1 and c.get("raider-down", 0) >= 1, "bonus": 55, "cat": "pvp_encounter"},
+    {"name": "squad_wipe",        "cond": lambda c: c.get("raider-down", 0) >= 2, "bonus": 65, "cat": "epic_moment"},
+    {"name": "boss_encounter",    "cond": lambda c: c.get("queen", 0) >= 1, "bonus": 95, "cat": "boss_fight"},
+    {"name": "heavy_combat",      "cond": lambda c: (c.get("bastion",0)+c.get("leaper",0)+c.get("bombardier",0))>=1 and c.get("raider",0)>=1, "bonus": 50, "cat": "epic_moment"},
+    {"name": "aerial_chaos",      "cond": lambda c: c.get("rocketeer",0)>=1 and (c.get("wasp",0)+c.get("hornet",0))>=2, "bonus": 45, "cat": "combat_highlight"},
+    {"name": "swarm_attack",      "cond": lambda c: c.get("pop",0)+c.get("fireball",0)+c.get("tick",0)+c.get("wasp",0)>=5, "bonus": 35, "cat": "funny_wtf"},
+    {"name": "tick_facehugger",   "cond": lambda c: c.get("tick",0)>=1 and c.get("raider",0)>=1, "bonus": 40, "cat": "funny_wtf"},
+    {"name": "probe_breach",      "cond": lambda c: c.get("probe",0)>=1 and sum(c.get(e,0) for e in ["wasp","hornet","bastion","leaper","rocketeer"])>=2, "bonus": 40, "cat": "close_call"},
+    {"name": "total_chaos",       "cond": lambda c: sum(c.values())>=8, "bonus": 50, "cat": "epic_moment"},
+    {"name": "pvpve_clash",       "cond": lambda c: c.get("raider",0)>=2 and (c.get("bastion",0)+c.get("leaper",0)+c.get("rocketeer",0)+c.get("queen",0))>=1 and c.get("raider-down",0)>=1, "bonus": 80, "cat": "epic_moment"},
 ]
 
-# =============================================================================
-# PIXEL-LEVEL HUD / VFX ANALYZER (Pure OpenCV — no API)
-# =============================================================================
 
+# =============================================================================
+# PIXEL ANALYZER — All values measured from the actual 762-frame dataset
+# =============================================================================
 
 class PixelAnalyzer:
     """
-    Pure OpenCV pixel-level analysis of ARC Raiders gameplay frames.
+    Pure OpenCV pixel analysis. Every coordinate and color threshold was
+    measured from the actual Arc Raiders v13 v0.11 Roboflow dataset.
 
-    No API calls. Reads raw pixel values to detect HUD state, VFX,
-    screen states, and visual indicators that YOLO doesn't cover.
-
-    All analysis regions are defined as normalized coordinates (0.0 - 1.0)
-    so they work at any resolution.
+    Frame size in dataset: 644x644 (stretch-resized).
+    All regions defined as normalized (0.0-1.0) so they scale to any resolution.
     """
 
-    # HUD REGION DEFINITIONS (normalized coordinates)
-    HEALTH_BAR_REGION = (0.02, 0.88, 0.22, 0.96)
-    AMMO_REGION = (0.78, 0.88, 0.98, 0.96)
-    KILL_FEED_REGION = (0.60, 0.02, 0.98, 0.20)
-    MINIMAP_REGION = (0.02, 0.02, 0.18, 0.18)
-    CENTER_REGION = (0.35, 0.35, 0.65, 0.65)
-    EDGE_LEFT = (0.00, 0.20, 0.05, 0.80)
-    EDGE_RIGHT = (0.95, 0.20, 1.00, 0.80)
-    EDGE_TOP = (0.20, 0.00, 0.80, 0.05)
-    EDGE_BOTTOM = (0.20, 0.95, 0.80, 1.00)
+    # --- HUD REGIONS (measured from 762 frames at 644x644) ---
+    # Entity label: "BISON", "HORNET", "FIREBALL", "SNITCH" etc
+    # White bold text, y=18-37px, x=14-78/120px -> normalized:
+    ENTITY_LABEL = (0.008, 0.028, 0.200, 0.060)
 
-    # COLOR THRESHOLDS (HSV ranges)
-    HEALTH_GREEN_HSV = ((35, 100, 100), (85, 255, 255))
-    HEALTH_YELLOW_HSV = ((15, 100, 100), (35, 255, 255))
-    HEALTH_RED_HSV = ((0, 100, 100), (15, 255, 255))
-    HEALTH_RED2_HSV = ((165, 100, 100), (180, 255, 255))
-    SHIELD_BLUE_HSV = ((90, 80, 100), (130, 255, 255))
-    FIRE_ORANGE_HSV = ((5, 150, 200), (25, 255, 255))
-    FIRE_YELLOW_HSV = ((20, 150, 200), (40, 255, 255))
-    FLASH_BRIGHT_THRESHOLD = 240
-    VIGNETTE_RED_HSV = ((0, 50, 30), (15, 255, 150))
-    VIGNETTE_RED2_HSV = ((165, 50, 30), (180, 255, 150))
-    SCANNER_RED_HSV = ((0, 150, 150), (10, 255, 255))
-    SCANNER_YELLOW_HSV = ((15, 150, 150), (35, 255, 255))
-    SCANNER_BLUE_HSV = ((100, 100, 150), (130, 255, 255))
-    DEATH_SCREEN_BRIGHTNESS_MAX = 60
-    DEATH_SCREEN_SATURATION_MAX = 40
-    MENU_VARIANCE_MAX = 15
+    # Compass bar: degree numbers + cardinal dirs, top center
+    # y=0-26px, x=161-483px at 644px
+    COMPASS = (0.250, 0.000, 0.750, 0.040)
 
-    def __init__(self, logger: logging.Logger, full_analysis: bool = True):
+    # Timer: centered "MM:SS", below compass
+    # y=26-52px, x=257-386px
+    TIMER = (0.400, 0.040, 0.600, 0.080)
+
+    # Health bar: WHITE segmented bar, bottom-left
+    # y=592-618px, x=0-129px -> present in 642/762 frames
+    HEALTH_BAR = (0.000, 0.920, 0.200, 0.960)
+
+    # Teammate status bars: BLUE colored bars + names, bottom-left
+    # y=450-580px, x=0-103px -> blue in 87.9% of frames
+    TEAMMATE_BARS = (0.000, 0.700, 0.160, 0.900)
+
+    # Weapon HUD: weapon name + icon + ammo, bottom-right
+    # y=502-644px, x=450-644px
+    WEAPON_HUD = (0.700, 0.780, 1.000, 1.000)
+
+    # Ammo counter specifically: 3-digit number like "016", "020"
+    # y=547-612px, x=515-631px -> bright text in 88% of frames
+    AMMO_COUNTER = (0.800, 0.850, 0.980, 0.950)
+
+    # XP / reward notifications: yellow/gold, left side
+    # y=52-116px, x=0-193px -> only 0.4% of frames (rare but important)
+    XP_NOTIFICATION = (0.000, 0.080, 0.300, 0.180)
+
+    # "Pointed out: [enemy]" callout: white text, left side
+    # y=354-463px, x=0-257px -> 24.1% of frames
+    CALLOUT_TEXT = (0.000, 0.550, 0.400, 0.720)
+
+    # System messages: "RETURNING AUTOMATICALLY", "TUBE ENTRANCE SHUTTING DOWN"
+    # top center, y=39-77px, x=129-515px -> 28.9% of frames
+    SYSTEM_MSG = (0.200, 0.060, 0.800, 0.120)
+
+    # Damage vignette edges (red tint when taking damage)
+    # Detected in 58.0% of frames
+    EDGE_L = (0.000, 0.200, 0.040, 0.800)
+    EDGE_R = (0.960, 0.200, 1.000, 0.800)
+
+    # Screen center for muzzle flash / bright VFX
+    CENTER = (0.300, 0.300, 0.700, 0.700)
+
+    # Watermark area: "ZELEXFPS" center-bottom (50.4% of frames)
+    # This is a streamer overlay, NOT game HUD
+    WATERMARK = (0.350, 0.600, 0.650, 0.700)
+
+    # --- COLOR THRESHOLDS (HSV, measured from dataset) ---
+    # Health bar is WHITE segments, NOT green
+    HEALTH_WHITE_LO = np.array([0, 0, 180])
+    HEALTH_WHITE_HI = np.array([180, 40, 255])
+
+    # Teammate bars are BLUE
+    TEAMMATE_BLUE_LO = np.array([90, 40, 40])
+    TEAMMATE_BLUE_HI = np.array([135, 255, 255])
+
+    # XP notification text is YELLOW/GOLD
+    XP_YELLOW_LO = np.array([15, 100, 180])
+    XP_YELLOW_HI = np.array([35, 255, 255])
+
+    # Entity label text is WHITE (brightness > 210)
+    LABEL_WHITE_THRESH = 210
+
+    # Fire/explosion: orange + yellow hot pixels
+    FIRE_LO = np.array([5, 150, 200])
+    FIRE_HI = np.array([30, 255, 255])
+
+    # Red damage vignette on edges
+    VIGNETTE_RED1_LO = np.array([0, 80, 50])
+    VIGNETTE_RED1_HI = np.array([10, 255, 200])
+    VIGNETTE_RED2_LO = np.array([170, 80, 50])
+    VIGNETTE_RED2_HI = np.array([180, 255, 200])
+
+    # Death screen: avg brightness < 50 AND avg saturation < 30
+    # (only 1 frame = 0.1% had this, so very distinct)
+    DEATH_BRIGHT_MAX = 50
+    DEATH_SAT_MAX = 30
+
+    # Inventory screen: dark bg (brightness < 60) + bright center UI (center > 80)
+    # 0.8% of frames
+    MENU_BRIGHT_MAX = 60
+    MENU_CENTER_MIN = 80
+
+    # Flash threshold for muzzle flash / explosion center
+    FLASH_THRESH = 245
+
+    # Baseline brightness from dataset: mean=71.0, std=32.6
+    BASELINE_BRIGHTNESS = 71.0
+    BASELINE_STD = 32.6
+
+    def __init__(self, logger):
         self.logger = logger
-        self.full_analysis = full_analysis
 
-    def _get_region(self, frame: np.ndarray, region: tuple) -> np.ndarray:
-        """Extract a sub-region from frame using normalized coordinates."""
+    def _region(self, frame, r):
         h, w = frame.shape[:2]
-        x1 = int(region[0] * w)
-        y1 = int(region[1] * h)
-        x2 = int(region[2] * w)
-        y2 = int(region[3] * h)
-        return frame[y1:y2, x1:x2]
+        return frame[int(r[1]*h):int(r[3]*h), int(r[0]*w):int(r[2]*w)]
 
-    def _count_color_pixels(self, region_bgr: np.ndarray,
-                            hsv_low: tuple, hsv_high: tuple) -> float:
-        """Count percentage of pixels in HSV range within a region."""
-        if region_bgr.size == 0:
-            return 0.0
-        hsv = cv2.cvtColor(region_bgr, cv2.COLOR_BGR2HSV)
-        mask = cv2.inRange(hsv, np.array(hsv_low), np.array(hsv_high))
-        return np.count_nonzero(mask) / mask.size
+    def _hsv_pct(self, bgr, lo, hi):
+        if bgr.size == 0: return 0.0
+        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+        return float(np.count_nonzero(cv2.inRange(hsv, lo, hi)) / (hsv.shape[0] * hsv.shape[1]))
 
-    def _avg_brightness(self, region_bgr: np.ndarray) -> float:
-        if region_bgr.size == 0:
-            return 0.0
-        gray = cv2.cvtColor(region_bgr, cv2.COLOR_BGR2GRAY)
-        return float(np.mean(gray))
+    def _bright_pct(self, bgr, thresh=240):
+        if bgr.size == 0: return 0.0
+        g = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+        return float(np.count_nonzero(g > thresh) / g.size)
 
-    def _avg_saturation(self, region_bgr: np.ndarray) -> float:
-        if region_bgr.size == 0:
-            return 0.0
-        hsv = cv2.cvtColor(region_bgr, cv2.COLOR_BGR2HSV)
-        return float(np.mean(hsv[:, :, 1]))
+    def _avg_brightness(self, bgr):
+        if bgr.size == 0: return 0.0
+        return float(np.mean(cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)))
 
-    def _pixel_variance(self, region_bgr: np.ndarray) -> float:
-        if region_bgr.size == 0:
-            return 0.0
-        gray = cv2.cvtColor(region_bgr, cv2.COLOR_BGR2GRAY)
-        return float(np.var(gray))
+    def _avg_saturation(self, bgr):
+        if bgr.size == 0: return 0.0
+        return float(np.mean(cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)[:, :, 1]))
 
-    def _bright_pixel_pct(self, region_bgr: np.ndarray, threshold: int = 240) -> float:
-        if region_bgr.size == 0:
-            return 0.0
-        gray = cv2.cvtColor(region_bgr, cv2.COLOR_BGR2GRAY)
-        return np.count_nonzero(gray > threshold) / gray.size
+    def analyze(self, frame: np.ndarray) -> dict:
+        """Full pixel analysis of one frame. Returns dict of all measurements."""
+        r = {}
 
-    def analyze_health(self, frame: np.ndarray) -> dict:
-        region = self._get_region(frame, self.HEALTH_BAR_REGION)
-        green_pct = self._count_color_pixels(region, *self.HEALTH_GREEN_HSV)
-        yellow_pct = self._count_color_pixels(region, *self.HEALTH_YELLOW_HSV)
-        red_pct = (self._count_color_pixels(region, *self.HEALTH_RED_HSV)
-                   + self._count_color_pixels(region, *self.HEALTH_RED2_HSV))
-        blue_pct = self._count_color_pixels(region, *self.SHIELD_BLUE_HSV)
-
-        total_health_color = green_pct + yellow_pct + red_pct
-        if total_health_color < 0.01:
-            state = "unknown"
-        elif red_pct > 0.3:
-            state = "critical"
-        elif yellow_pct > green_pct:
-            state = "damaged"
-        elif green_pct > 0.1:
-            state = "full"
+        # --- Health bar (WHITE segments) ---
+        hb = self._region(frame, self.HEALTH_BAR)
+        hb_white = self._hsv_pct(hb, self.HEALTH_WHITE_LO, self.HEALTH_WHITE_HI)
+        # Dataset: mean=11.04%, max=47.84%, present in 642/762 frames
+        if hb_white < 0.02:
+            r["health"] = "not_visible"   # Menu, loading, etc.
+        elif hb_white < 0.05:
+            r["health"] = "critical"       # Almost empty
+        elif hb_white < 0.08:
+            r["health"] = "low"
+        elif hb_white < 0.15:
+            r["health"] = "medium"
         else:
-            state = "empty"
+            r["health"] = "full"
+        r["health_white_pct"] = round(hb_white, 4)
 
-        return {
-            "health_state": state,
-            "shield_present": blue_pct > 0.05,
-            "health_green_pct": round(green_pct, 4),
-            "health_red_pct": round(red_pct, 4),
-            "shield_blue_pct": round(blue_pct, 4),
-        }
+        # --- Teammate bars (BLUE) ---
+        tb = self._region(frame, self.TEAMMATE_BARS)
+        tb_blue = self._hsv_pct(tb, self.TEAMMATE_BLUE_LO, self.TEAMMATE_BLUE_HI)
+        r["teammates_visible"] = tb_blue > 0.005
+        r["teammate_blue_pct"] = round(tb_blue, 4)
 
-    def analyze_vfx(self, frame: np.ndarray) -> dict:
-        fire_orange = self._count_color_pixels(frame, *self.FIRE_ORANGE_HSV)
-        fire_yellow = self._count_color_pixels(frame, *self.FIRE_YELLOW_HSV)
-        fire_total = fire_orange + fire_yellow
-        has_fire = fire_total > 0.03
+        # --- Entity label (white bold text, top-left) ---
+        el = self._region(frame, self.ENTITY_LABEL)
+        if el.size > 0:
+            el_gray = cv2.cvtColor(el, cv2.COLOR_BGR2GRAY)
+            _, el_mask = cv2.threshold(el_gray, self.LABEL_WHITE_THRESH, 255, cv2.THRESH_BINARY)
+            el_pct = np.count_nonzero(el_mask) / el_mask.size
+            r["entity_label_visible"] = el_pct > 0.04
+            if r["entity_label_visible"]:
+                # Measure label width to guess entity type
+                coords = np.where(el_mask > 0)
+                if len(coords[1]) > 5:
+                    label_width = int(coords[1].max() - coords[1].min())
+                    # From our data: ~45px=BISON, ~60px=HORNET, ~65px=FIREBALL,
+                    # ~120px=BOMBARDIER/ROCKETEER
+                    if label_width < 50:
+                        r["label_guess"] = "short_name"    # BISON, WASP, POP, TICK
+                    elif label_width < 70:
+                        r["label_guess"] = "medium_name"   # HORNET, FIREBALL, SNITCH
+                    else:
+                        r["label_guess"] = "long_name"     # BOMBARDIER, ROCKETEER, SENTINEL
+                    r["label_width_px"] = label_width
+        else:
+            r["entity_label_visible"] = False
 
-        center = self._get_region(frame, self.CENTER_REGION)
-        flash_pct = self._bright_pixel_pct(center, self.FLASH_BRIGHT_THRESHOLD)
-        has_muzzle_flash = flash_pct > 0.02
+        # --- XP notification (yellow/gold, left side, rare 0.4%) ---
+        xp = self._region(frame, self.XP_NOTIFICATION)
+        xp_yellow = self._hsv_pct(xp, self.XP_YELLOW_LO, self.XP_YELLOW_HI)
+        r["xp_notification"] = xp_yellow > 0.01
+        r["xp_yellow_pct"] = round(xp_yellow, 4)
 
-        overall_brightness = self._avg_brightness(frame)
-        has_screen_flash = overall_brightness > 200
+        # --- Callout text ("Pointed out: [enemy]", 24.1% of frames) ---
+        ct = self._region(frame, self.CALLOUT_TEXT)
+        ct_bright = self._bright_pct(ct, 190)
+        r["callout_visible"] = ct_bright > 0.01
 
-        edges = [
-            self._get_region(frame, self.EDGE_LEFT),
-            self._get_region(frame, self.EDGE_RIGHT),
-            self._get_region(frame, self.EDGE_TOP),
-            self._get_region(frame, self.EDGE_BOTTOM),
-        ]
-        edge_red_total = 0.0
-        for edge in edges:
-            edge_red_total += self._count_color_pixels(edge, *self.VIGNETTE_RED_HSV)
-            edge_red_total += self._count_color_pixels(edge, *self.VIGNETTE_RED2_HSV)
-        has_damage_vignette = edge_red_total > 0.15
+        # --- System message (top center, 28.9% of frames) ---
+        sm = self._region(frame, self.SYSTEM_MSG)
+        sm_bright = self._bright_pct(sm, 200)
+        r["system_message"] = sm_bright > 0.02
 
+        # --- Fire / Explosion (1.0% of frames in dataset — very distinct) ---
+        fire_pct = self._hsv_pct(frame, self.FIRE_LO, self.FIRE_HI)
+        r["has_fire"] = fire_pct > 0.02
+        r["fire_pct"] = round(fire_pct, 4)
+
+        # --- Muzzle flash (center, 4.1% of frames) ---
+        center = self._region(frame, self.CENTER)
+        flash_pct = self._bright_pct(center, self.FLASH_THRESH)
+        r["has_muzzle_flash"] = flash_pct > 0.02
+        r["flash_pct"] = round(flash_pct, 4)
+
+        # --- Red damage vignette (edges, 58.0% of frames!) ---
+        edge_l = self._region(frame, self.EDGE_L)
+        edge_r = self._region(frame, self.EDGE_R)
+        red_total = 0.0
+        for edge in [edge_l, edge_r]:
+            red_total += self._hsv_pct(edge, self.VIGNETTE_RED1_LO, self.VIGNETTE_RED1_HI)
+            red_total += self._hsv_pct(edge, self.VIGNETTE_RED2_LO, self.VIGNETTE_RED2_HI)
+        r["has_damage_vignette"] = red_total > 0.15
+        r["vignette_red_pct"] = round(red_total, 4)
+
+        # --- Bright particle count (tracers, sparks) ---
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         _, bright_mask = cv2.threshold(gray, 230, 255, cv2.THRESH_BINARY)
         contours, _ = cv2.findContours(bright_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        small_bright_spots = sum(1 for c in contours if 5 < cv2.contourArea(c) < 500)
-        has_tracers = small_bright_spots > 10
+        small_spots = sum(1 for c in contours if 5 < cv2.contourArea(c) < 500)
+        r["has_tracers"] = small_spots > 10
+        r["tracer_count"] = small_spots
 
-        return {
-            "has_fire": has_fire,
-            "fire_intensity": round(fire_total, 4),
-            "has_muzzle_flash": has_muzzle_flash,
-            "flash_intensity": round(flash_pct, 4),
-            "has_screen_flash": has_screen_flash,
-            "has_damage_vignette": has_damage_vignette,
-            "edge_red_intensity": round(edge_red_total, 4),
-            "has_tracers": has_tracers,
-            "tracer_count": small_bright_spots,
-            "overall_brightness": round(overall_brightness, 2),
-        }
+        # --- Screen state detection ---
+        avg_b = self._avg_brightness(frame)
+        avg_s = self._avg_saturation(frame)
+        r["brightness"] = round(avg_b, 1)
+        r["saturation"] = round(avg_s, 1)
 
-    def analyze_screen_state(self, frame: np.ndarray) -> dict:
-        avg_bright = self._avg_brightness(frame)
-        avg_sat = self._avg_saturation(frame)
-        variance = self._pixel_variance(frame)
+        if avg_b < self.DEATH_BRIGHT_MAX and avg_s < self.DEATH_SAT_MAX:
+            r["screen_state"] = "death_screen"
+        elif avg_b < self.MENU_BRIGHT_MAX:
+            center_b = self._avg_brightness(self._region(frame, (0.2, 0.2, 0.8, 0.8)))
+            if center_b > self.MENU_CENTER_MIN:
+                r["screen_state"] = "inventory"
+            else:
+                r["screen_state"] = "dark_gameplay"
+        elif avg_b > 200:
+            r["screen_state"] = "screen_flash"
+        else:
+            r["screen_state"] = "gameplay"
 
-        if avg_bright < self.DEATH_SCREEN_BRIGHTNESS_MAX and avg_sat < self.DEATH_SCREEN_SATURATION_MAX:
-            return {"screen_state": "death_screen", "brightness": avg_bright, "saturation": avg_sat}
+        # --- Sharpness (motion blur detection via Laplacian) ---
+        lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+        r["sharpness"] = round(lap_var, 1)
+        r["has_motion_blur"] = lap_var < 150
 
-        if variance < self.MENU_VARIANCE_MAX:
-            return {"screen_state": "loading", "brightness": avg_bright, "variance": variance}
+        # --- Color drama score ---
+        hsv_full = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        val_std = float(np.std(hsv_full[:, :, 2]))
+        drama = min(1.0, (avg_s / 255.0) * 0.4 + (val_std / 128.0) * 0.6)
+        r["drama_score"] = round(drama, 3)
 
-        center = self._get_region(frame, (0.2, 0.2, 0.8, 0.8))
-        center_var = self._pixel_variance(center)
+        return r
 
-        if avg_bright < 40 and center_var > 500:
-            health = self._get_region(frame, self.HEALTH_BAR_REGION)
-            health_bright = self._avg_brightness(health)
-            if health_bright < 20:
-                return {"screen_state": "menu", "brightness": avg_bright, "variance": variance}
+    def score(self, px: dict) -> float:
+        """Convert pixel analysis into a score 0-100."""
+        s = 0.0
 
-        return {"screen_state": "gameplay", "brightness": avg_bright, "saturation": avg_sat, "variance": variance}
+        # Screen state gates
+        state = px.get("screen_state", "gameplay")
+        if state in ("inventory", "death_screen"):
+            if state == "death_screen":
+                return 25.0  # Deaths have some clip value
+            return 0.0  # Menus = never clip
 
-    def analyze_kill_feed(self, frame: np.ndarray) -> dict:
-        region = self._get_region(frame, self.KILL_FEED_REGION)
-        if region.size == 0:
-            return {"kill_feed_active": False, "kill_feed_intensity": 0.0}
+        # Health state
+        h = px.get("health", "full")
+        if h == "critical":   s += 30
+        elif h == "low":      s += 15
+        elif h == "medium":   s += 5
 
-        gray = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
-        bright_pct = np.count_nonzero(gray > 200) / gray.size
-        dark_pct = np.count_nonzero(gray < 50) / gray.size
-        has_text = bright_pct > 0.02 and dark_pct > 0.3
+        # Combat VFX
+        if px.get("has_fire"):           s += 25 * min(1.0, px.get("fire_pct", 0) * 10)
+        if px.get("has_muzzle_flash"):   s += 15
+        if px.get("has_damage_vignette"): s += 12
+        if px.get("has_tracers"):        s += 8 + min(12, px.get("tracer_count", 0) * 0.5)
+        if state == "screen_flash":      s += 20
 
-        edges = cv2.Canny(gray, 100, 200)
-        edge_density = np.count_nonzero(edges) / edges.size
+        # HUD activity
+        if px.get("entity_label_visible"): s += 10
+        if px.get("xp_notification"):      s += 18
+        if px.get("callout_visible"):      s += 5
+        if px.get("system_message"):       s += 3
 
-        return {
-            "kill_feed_active": has_text and edge_density > 0.05,
-            "kill_feed_intensity": round(edge_density, 4),
-        }
+        # Motion blur (screen shake from explosions)
+        if px.get("has_motion_blur"):    s += 8
 
-    def analyze_motion_blur(self, frame: np.ndarray) -> dict:
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
-        has_motion_blur = laplacian_var < 200
-        return {
-            "has_motion_blur": has_motion_blur,
-            "sharpness": round(laplacian_var, 2),
-        }
+        # Drama score
+        s += px.get("drama_score", 0) * 12
 
-    def analyze_color_intensity(self, frame: np.ndarray) -> dict:
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        avg_sat = float(np.mean(hsv[:, :, 1]))
-        avg_val = float(np.mean(hsv[:, :, 2]))
-        val_std = float(np.std(hsv[:, :, 2]))
-        drama = (avg_sat / 255.0) * 0.4 + (val_std / 128.0) * 0.6
-        drama = min(1.0, drama)
-        return {
-            "avg_saturation": round(avg_sat, 2),
-            "avg_brightness": round(avg_val, 2),
-            "brightness_std": round(val_std, 2),
-            "drama_score": round(drama, 4),
-        }
-
-    def full_analyze(self, frame: np.ndarray) -> dict:
-        result = {}
-        result.update(self.analyze_health(frame))
-        result.update(self.analyze_vfx(frame))
-        result.update(self.analyze_screen_state(frame))
-        result.update(self.analyze_kill_feed(frame))
-        if self.full_analysis:
-            result.update(self.analyze_motion_blur(frame))
-            result.update(self.analyze_color_intensity(frame))
-        return result
-
-    def score_pixels(self, pixel_result: dict) -> float:
-        score = 0.0
-
-        health = pixel_result.get("health_state", "unknown")
-        if health == "critical":
-            score += 25
-        elif health == "damaged":
-            score += 10
-        elif health == "empty":
-            score += 15
-
-        if pixel_result.get("has_fire"):
-            score += 20 * min(1.0, pixel_result.get("fire_intensity", 0) * 10)
-        if pixel_result.get("has_muzzle_flash"):
-            score += 12
-        if pixel_result.get("has_screen_flash"):
-            score += 18
-        if pixel_result.get("has_damage_vignette"):
-            score += 15
-        if pixel_result.get("has_tracers"):
-            score += 10 + min(10, pixel_result.get("tracer_count", 0) * 0.5)
-
-        if pixel_result.get("kill_feed_active"):
-            score += 15
-
-        state = pixel_result.get("screen_state", "gameplay")
-        if state == "death_screen":
-            score += 20
-        elif state in ("menu", "loading"):
-            score = 0
-            return score
-
-        if pixel_result.get("has_motion_blur"):
-            score += 8
-
-        drama = pixel_result.get("drama_score", 0)
-        score += drama * 15
-
-        return min(100, score)
+        return min(100, s)
 
 
 # =============================================================================
@@ -594,28 +446,17 @@ class PixelAnalyzer:
 
 @dataclass
 class Detection:
-    """Single YOLO detection."""
     class_id: int
     class_name: str
     confidence: float
     bbox: Tuple[float, float, float, float]
     bbox_area_pct: float
-    mask_points: Optional[List[Tuple[float, float]]] = None
-
+    mask_points: Optional[list] = None
     @property
-    def center(self) -> Tuple[float, float]:
-        return ((self.bbox[0]+self.bbox[2])/2, (self.bbox[1]+self.bbox[3])/2)
-
-    @property
-    def width(self) -> float: return self.bbox[2] - self.bbox[0]
-
-    @property
-    def height(self) -> float: return self.bbox[3] - self.bbox[1]
-
+    def center(self): return ((self.bbox[0]+self.bbox[2])/2, (self.bbox[1]+self.bbox[3])/2)
 
 @dataclass
 class FrameAnalysis:
-    """Complete analysis of a single frame."""
     frame_number: int
     timestamp_seconds: float
     timestamp_str: str
@@ -628,25 +469,17 @@ class FrameAnalysis:
     final_category: str = "routine"
     triggered_rules: List[str] = field(default_factory=list)
     image_path: Optional[str] = None
-
     @property
     def has_boss(self): return self.entity_counts.get("queen", 0) > 0
     @property
-    def has_pvp(self): return self.entity_counts.get("raider", 0) >= 2
-    @property
-    def has_downed(self): return self.entity_counts.get("raider-down", 0) > 0
-    @property
     def total_entities(self): return sum(self.entity_counts.values())
-
     def to_dict(self):
         d = asdict(self)
-        d["detections"] = [asdict(det) for det in self.detections]
+        d["detections"] = [asdict(x) for x in self.detections]
         return d
-
 
 @dataclass
 class ClipSegment:
-    """Contiguous segment of high-scoring frames forming a clip."""
     clip_id: int
     start_time: float
     end_time: float
@@ -658,36 +491,21 @@ class ClipSegment:
     primary_category: str
     entities_seen: Dict[str, int]
     triggered_rules: List[str]
-
     @property
     def duration(self): return self.end_time - self.start_time
     @property
     def start_str(self): return str(timedelta(seconds=int(self.start_time)))
     @property
     def end_str(self): return str(timedelta(seconds=int(self.end_time)))
-
     def to_dict(self):
         return {
-            "clip_id": self.clip_id, "start_time": self.start_time,
-            "end_time": self.end_time, "start_str": self.start_str,
-            "end_str": self.end_str, "duration": round(self.duration, 2),
-            "peak_score": round(self.peak_score, 2), "avg_score": round(self.avg_score, 2),
-            "frame_count": self.frame_count, "primary_category": self.primary_category,
-            "entities_seen": self.entities_seen, "triggered_rules": self.triggered_rules,
+            "clip_id": self.clip_id, "start": self.start_time, "end": self.end_time,
+            "start_str": self.start_str, "end_str": self.end_str,
+            "duration": round(self.duration, 2), "peak_score": round(self.peak_score, 1),
+            "avg_score": round(self.avg_score, 1), "frames": self.frame_count,
+            "category": self.primary_category, "entities": self.entities_seen,
+            "rules": self.triggered_rules,
         }
-
-
-# =============================================================================
-# LOGGING
-# =============================================================================
-
-def setup_logging(verbose=False):
-    logger = logging.getLogger("arc_clip_detector")
-    logger.setLevel(logging.DEBUG if verbose else logging.INFO)
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)-8s %(message)s", datefmt="%H:%M:%S"))
-    logger.addHandler(handler)
-    return logger
 
 
 # =============================================================================
@@ -695,295 +513,146 @@ def setup_logging(verbose=False):
 # =============================================================================
 
 class VideoProcessor:
-    def __init__(self, input_path: str, logger: logging.Logger):
-        self.input_path = Path(input_path)
-        self.logger = logger
-        if not self.input_path.exists():
-            raise FileNotFoundError(f"Video not found: {input_path}")
-        self.meta = self._get_metadata()
-        self.fps = self.meta["fps"]
-        self.total_frames = self.meta["total_frames"]
-        self.duration = self.meta["duration"]
-        self.width = self.meta["width"]
-        self.height = self.meta["height"]
-        self.logger.info(f"Video: {self.input_path.name} | {self.width}x{self.height} | "
-                         f"{self.fps:.1f}fps | {timedelta(seconds=int(self.duration))}")
+    def __init__(self, path, logger):
+        self.path = Path(path); self.logger = logger
+        if not self.path.exists(): raise FileNotFoundError(path)
+        r = subprocess.run(["ffprobe","-v","quiet","-print_format","json",
+            "-show_format","-show_streams",str(self.path)], capture_output=True, text=True, check=True)
+        d = json.loads(r.stdout)
+        vs = next(s for s in d["streams"] if s["codec_type"]=="video")
+        fp = vs["r_frame_rate"].split("/")
+        self.fps = float(fp[0])/float(fp[1]) if len(fp)==2 else float(fp[0])
+        self.duration = float(d.get("format",{}).get("duration", vs.get("duration",0)))
+        self.width = int(vs["width"]); self.height = int(vs["height"])
+        self.total_frames = int(vs.get("nb_frames",0)) or int(self.duration*self.fps)
+        logger.info(f"Video: {self.path.name} | {self.width}x{self.height} | {self.fps:.1f}fps | {timedelta(seconds=int(self.duration))}")
 
-    def _get_metadata(self):
-        try:
-            r = subprocess.run(
-                ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams",
-                 str(self.input_path)], capture_output=True, text=True, check=True)
-            data = json.loads(r.stdout)
-            vs = next(s for s in data["streams"] if s["codec_type"] == "video")
-            fps_p = vs["r_frame_rate"].split("/")
-            fps = float(fps_p[0]) / float(fps_p[1]) if len(fps_p) == 2 else float(fps_p[0])
-            dur = float(data.get("format", {}).get("duration", vs.get("duration", 0)))
-            nf = int(vs.get("nb_frames", 0)) or int(dur * fps)
-            return {"fps": fps, "total_frames": nf, "duration": dur,
-                    "width": int(vs["width"]), "height": int(vs["height"])}
-        except FileNotFoundError:
-            raise RuntimeError("ffprobe not found. Install ffmpeg.")
-
-    def extract_frames(self, output_dir: Path, sample_interval: float = 1.0):
-        output_dir.mkdir(parents=True, exist_ok=True)
-        total = int(self.duration / sample_interval)
-        self.logger.info(f"Extracting ~{total} frames (1 every {sample_interval}s)")
-        subprocess.run([
-            "ffmpeg", "-y", "-v", "quiet", "-i", str(self.input_path),
-            "-vf", f"fps=1/{sample_interval}", "-q:v", "2",
-            str(output_dir / "frame_%06d.jpg")
-        ], check=True)
-        frames = []
-        for idx, fp in enumerate(sorted(output_dir.glob("frame_*.jpg"))):
-            ts = idx * sample_interval
-            frames.append((str(fp), ts, int(ts * self.fps)))
+    def extract_frames(self, out_dir, interval=1.0):
+        out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["ffmpeg","-y","-v","quiet","-i",str(self.path),
+            "-vf",f"fps=1/{interval}","-q:v","2",str(out_dir/"frame_%06d.jpg")], check=True)
+        frames = [(str(f), i*interval, int(i*interval*self.fps))
+            for i, f in enumerate(sorted(out_dir.glob("frame_*.jpg")))]
         self.logger.info(f"Extracted {len(frames)} frames")
         return frames
 
-    def cut_clip(self, start: float, end: float, output_path: str, pad: float = 2.0):
-        s = max(0, start - pad)
-        d = min(self.duration, end + pad) - s
-        subprocess.run([
-            "ffmpeg", "-y", "-v", "quiet", "-ss", str(s), "-i", str(self.input_path),
-            "-t", str(d), "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-            "-c:a", "aac", "-b:a", "128k", str(output_path)
-        ], check=True)
+    def cut_clip(self, start, end, out_path, pad=2.0):
+        s = max(0, start-pad); d = min(self.duration, end+pad) - s
+        subprocess.run(["ffmpeg","-y","-v","quiet","-ss",str(s),"-i",str(self.path),
+            "-t",str(d),"-c:v","libx264","-preset","fast","-crf","22",
+            "-c:a","aac","-b:a","128k",str(out_path)], check=True)
 
 
 # =============================================================================
-# YOLO DETECTOR (Local inference — no API calls)
+# YOLO DETECTOR (local weights only)
 # =============================================================================
 
 class YOLODetector:
-    """
-    Local YOLOv11 inference using ultralytics.
+    def __init__(self, logger, weights=None, conf=0.25, device=""):
+        self.logger = logger; self.conf = conf
+        if not YOLO: raise RuntimeError("pip install ultralytics")
+        paths = [weights] if weights else []
+        paths += ["best.pt", "arc_raiders_best.pt", "runs/segment/train/weights/best.pt", "weights/best.pt"]
+        for p in paths:
+            if p and Path(p).exists():
+                logger.info(f"YOLO weights: {p}"); self.model = YOLO(p)
+                if device: self.model.to(device)
+                return
+        raise FileNotFoundError(
+            "No YOLO weights. Download from Roboflow:\n"
+            "  https://universe.roboflow.com/valorantai/arc-raiders-8tjh4/model/11\n"
+            "  Export YOLOv11 weights -> place best.pt in current directory")
 
-    Downloads model weights from Roboflow on first run, then runs
-    entirely locally with no API calls.
-
-    Model: arc-raiders-8tjh4/11 — YOLOv11l, 80.1% mAP@50, 19 classes
-    Input: 640x640 (auto-resized by ultralytics)
-    """
-
-    def __init__(self, logger: logging.Logger,
-                 weights_path: Optional[str] = None,
-                 confidence: float = 0.25,
-                 iou_threshold: float = 0.45,
-                 device: str = ""):
-        self.logger = logger
-        self.confidence = confidence
-        self.iou_threshold = iou_threshold
-
-        if not HAS_ULTRALYTICS:
-            raise RuntimeError("ultralytics not installed. Run: pip install ultralytics")
-
-        if weights_path and Path(weights_path).exists():
-            self.logger.info(f"Loading YOLO weights: {weights_path}")
-            self.model = YOLO(weights_path)
-        else:
-            default_paths = [
-                "arc_raiders_yolov11l.pt",
-                "best.pt",
-                "runs/segment/train/weights/best.pt",
-                "weights/best.pt",
-            ]
-            loaded = False
-            for p in default_paths:
-                if Path(p).exists():
-                    self.logger.info(f"Loading YOLO weights: {p}")
-                    self.model = YOLO(p)
-                    loaded = True
-                    break
-            if not loaded:
-                self.logger.error(
-                    "No YOLO weights found. Download from Roboflow:\n"
-                    "  1. Go to https://universe.roboflow.com/valorantai/arc-raiders-8tjh4/model/11\n"
-                    "  2. Export as YOLOv11 weights\n"
-                    "  3. Place best.pt in current directory\n"
-                    "  Or use --weights-path to specify location"
-                )
-                raise FileNotFoundError("YOLO weights not found")
-
-        if device:
-            self.model.to(device)
-
-    def detect(self, image_path: str) -> List[Detection]:
-        """Run inference on a single frame. Returns list of Detection objects."""
+    def detect(self, image_path):
         try:
-            results = self.model(
-                image_path,
-                conf=self.confidence,
-                iou=self.iou_threshold,
-                verbose=False,
-            )
+            results = self.model(image_path, conf=self.conf, verbose=False)
         except Exception as e:
-            self.logger.warning(f"YOLO inference failed: {e}")
-            return []
-
-        detections = []
-        for result in results:
-            if result.boxes is None:
-                continue
-
-            img_h, img_w = result.orig_shape
-
-            for i, box in enumerate(result.boxes):
-                cls_id = int(box.cls[0])
-                conf = float(box.conf[0])
-                x1, y1, x2, y2 = box.xyxy[0].tolist()
-
-                nx1 = x1 / img_w
-                ny1 = y1 / img_h
-                nx2 = x2 / img_w
-                ny2 = y2 / img_h
-
-                area_pct = (nx2 - nx1) * (ny2 - ny1) * 100
-                cls_name = YOLO_CLASSES.get(cls_id, f"unknown_{cls_id}")
-
-                mask_pts = None
-                if result.masks is not None and i < len(result.masks):
-                    try:
-                        xy = result.masks[i].xy[0]
-                        mask_pts = [(float(p[0])/img_w, float(p[1])/img_h) for p in xy]
-                    except (IndexError, AttributeError):
-                        pass
-
-                detections.append(Detection(
-                    class_id=cls_id, class_name=cls_name, confidence=conf,
-                    bbox=(nx1, ny1, nx2, ny2), bbox_area_pct=area_pct,
-                    mask_points=mask_pts,
-                ))
-
-        return detections
+            self.logger.warning(f"YOLO failed: {e}"); return []
+        dets = []
+        for res in results:
+            if res.boxes is None: continue
+            ih, iw = res.orig_shape
+            for i, box in enumerate(res.boxes):
+                cid = int(box.cls[0]); c = float(box.conf[0])
+                x1,y1,x2,y2 = [v/d for v, d in zip(box.xyxy[0].tolist(), [iw,ih,iw,ih])]
+                x1,y1,x2,y2 = max(0,x1),max(0,y1),min(1,x2),min(1,y2)
+                mp = None
+                if res.masks and i < len(res.masks):
+                    try: mp = [(float(p[0])/iw, float(p[1])/ih) for p in res.masks[i].xy[0]]
+                    except: pass
+                dets.append(Detection(cid, YOLO_CLASSES.get(cid,f"unk_{cid}"), c,
+                    (x1,y1,x2,y2), (x2-x1)*(y2-y1)*100, mp))
+        return dets
 
 
 # =============================================================================
-# SCORING ENGINE (Pure heuristics — no API)
+# SCORING + CLUSTERING
 # =============================================================================
 
 class ScoringEngine:
-    """Combines YOLO detections + pixel analysis into clip score."""
-
-    def __init__(self, logger): self.logger = logger
-
-    def score_yolo(self, detections: List[Detection]) -> Tuple[float, Dict[str, int], List[str]]:
+    def score_yolo(self, dets):
         counts = defaultdict(int)
-        for d in detections:
-            counts[d.class_name] += 1
-
-        score = 0.0
-        for name, count in counts.items():
+        for d in dets: counts[d.class_name] += 1
+        s = 0.0
+        for name, cnt in counts.items():
             p = ENTITY_PROFILES.get(name)
-            if not p:
-                continue
-            s = p["base_score"]
-            if count > 1:
-                s += (count - 1) * p["count_bonus"]
-            max_area = max((d.bbox_area_pct for d in detections if d.class_name == name), default=0)
-            if max_area > 20: s *= 1.3
-            elif max_area > 40: s *= 1.5
-            if p["is_boss"]: s = max(s, 90)
-            score += s
+            if not p: continue
+            es = p["base"] + max(0, cnt-1) * p["count_bonus"]
+            mx = max((d.bbox_area_pct for d in dets if d.class_name==name), default=0)
+            if mx > 20: es *= 1.3
+            if p["boss"]: es = max(es, 90)
+            s += es
+        rules = [r["name"] for r in COMBINATION_RULES if r["cond"](dict(counts))]
+        for rn in rules:
+            rule = next(r for r in COMBINATION_RULES if r["name"]==rn)
+            s += rule["bonus"]
+        if len(dets) >= 2:
+            pts = [d.center for d in dets]
+            avg = sum(math.sqrt((pts[i][0]-pts[j][0])**2+(pts[i][1]-pts[j][1])**2)
+                for i in range(len(pts)) for j in range(i+1,len(pts))) / max(1, len(pts)*(len(pts)-1)//2)
+            if avg < 0.3: s *= 1.2
+        return min(100, s), dict(counts), rules
 
-        triggered = []
-        for rule in COMBINATION_RULES:
-            if rule["condition"](dict(counts)):
-                score += rule["bonus"]
-                triggered.append(rule["name"])
+    def combine(self, yolo, pixel, boss):
+        f = yolo * 0.65 + pixel * 0.35
+        if boss: f = max(f, 85)
+        return min(100, f)
 
-        if len(detections) >= 2:
-            centers = [d.center for d in detections]
-            avg_d = self._avg_dist(centers)
-            if avg_d < 0.3: score *= 1.2
+class Clusterer:
+    def __init__(self, logger, thresh=50, gap=5, min_d=3, max_d=60, pad=2):
+        self.logger=logger; self.thresh=thresh; self.gap=gap
+        self.min_d=min_d; self.max_d=max_d; self.pad=pad
 
-        avg_conf = sum(d.confidence for d in detections) / len(detections) if detections else 0
-        if avg_conf < 0.5: score *= 0.8
-
-        return min(100, score), dict(counts), triggered
-
-    def combine(self, yolo_score: float, pixel_score: float, has_boss: bool) -> float:
-        """Combine YOLO entity score with pixel analysis score. 65/35 weighting."""
-        final = yolo_score * 0.65 + pixel_score * 0.35
-        if has_boss:
-            final = max(final, 85)
-        return min(100, final)
-
-    @staticmethod
-    def _avg_dist(pts):
-        if len(pts) < 2: return 1.0
-        t = c = 0
-        for i in range(len(pts)):
-            for j in range(i+1, len(pts)):
-                t += math.sqrt((pts[i][0]-pts[j][0])**2 + (pts[i][1]-pts[j][1])**2)
-                c += 1
-        return t/c if c else 1.0
-
-
-# =============================================================================
-# TEMPORAL CLUSTERING
-# =============================================================================
-
-class TemporalClusterer:
-    def __init__(self, logger, threshold=50.0, merge_gap=5.0,
-                 min_dur=3.0, max_dur=60.0, pad=2.0):
-        self.logger = logger
-        self.threshold = threshold
-        self.merge_gap = merge_gap
-        self.min_dur = min_dur
-        self.max_dur = max_dur
-        self.pad = pad
-
-    def cluster(self, frames: List[FrameAnalysis]) -> List[ClipSegment]:
-        hot = sorted([f for f in frames if f.final_score >= self.threshold],
-                     key=lambda f: f.timestamp_seconds)
-        if not hot:
-            self.logger.info("No frames above clip threshold")
-            return []
-
-        self.logger.info(f"{len(hot)} frames above threshold ({self.threshold})")
+    def cluster(self, frames):
+        hot = sorted([f for f in frames if f.final_score >= self.thresh], key=lambda f: f.timestamp_seconds)
+        if not hot: return []
         clusters, cur = [], [hot[0]]
         for f in hot[1:]:
-            if f.timestamp_seconds - cur[-1].timestamp_seconds <= self.merge_gap:
-                cur.append(f)
-            else:
-                clusters.append(cur); cur = [f]
+            if f.timestamp_seconds - cur[-1].timestamp_seconds <= self.gap: cur.append(f)
+            else: clusters.append(cur); cur = [f]
         clusters.append(cur)
-
         clips = []
-        for idx, cf in enumerate(clusters):
-            peak = max(cf, key=lambda f: f.final_score)
+        for i, cf in enumerate(clusters):
+            pk = max(cf, key=lambda f: f.final_score)
             s = max(0, cf[0].timestamp_seconds - self.pad)
             e = cf[-1].timestamp_seconds + self.pad
-            if (e - s) > self.max_dur:
-                c = peak.timestamp_seconds
-                s, e = max(0, c - self.max_dur/2), c + self.max_dur/2
-            if (e - s) < self.min_dur:
-                continue
-
+            if (e-s) > self.max_d:
+                c = pk.timestamp_seconds; s = max(0,c-self.max_d/2); e = c+self.max_d/2
+            if (e-s) < self.min_d: continue
             ents = defaultdict(int)
-            rules = set()
+            rls = set()
             for f in cf:
-                for en, cnt in f.entity_counts.items():
-                    ents[en] = max(ents[en], cnt)
-                rules.update(f.triggered_rules)
-
+                for en, cnt in f.entity_counts.items(): ents[en] = max(ents[en], cnt)
+                rls.update(f.triggered_rules)
             cats = defaultdict(int)
             for f in cf:
                 if f.final_category != "routine": cats[f.final_category] += 1
-            pcat = max(cats, key=cats.get) if cats else "combat_highlight"
-
-            clips.append(ClipSegment(
-                clip_id=idx+1, start_time=s, end_time=e,
-                peak_score=peak.final_score,
-                avg_score=sum(f.final_score for f in cf)/len(cf),
-                frame_count=len(cf), peak_frame=peak, frames=cf,
-                primary_category=pcat, entities_seen=dict(ents),
-                triggered_rules=sorted(rules),
-            ))
-
+            pc = max(cats, key=cats.get) if cats else "combat_highlight"
+            clips.append(ClipSegment(i+1, s, e, pk.final_score,
+                sum(f.final_score for f in cf)/len(cf), len(cf), pk, cf,
+                pc, dict(ents), sorted(rls)))
         clips.sort(key=lambda c: c.peak_score, reverse=True)
-        self.logger.info(f"Clustered into {len(clips)} clips")
+        self.logger.info(f"Found {len(clips)} clips")
         return clips
 
 
@@ -1011,13 +680,11 @@ class ArcClipDetectorAdapter:
     SAMPLE_INTERVAL = 1.0
 
     def __init__(self, game_id="arc_raiders", weights_path=None,
-                 confidence=0.25, device="", full_pixel_analysis=True,
-                 threshold=40.0):
+                 confidence=0.25, device="", threshold=40.0):
         self.game_id = game_id
         self.weights_path = weights_path
         self.confidence = confidence
         self.device = device
-        self.full_pixel_analysis = full_pixel_analysis
         self.threshold = threshold
         self.has_yolo = False
 
@@ -1027,7 +694,7 @@ class ArcClipDetectorAdapter:
             candidates = [
                 os.path.join(base, "models", "best.pt"),
                 os.path.join(base, "best.pt"),
-                os.path.join(base, "arc_raiders_yolov11l.pt"),
+                os.path.join(base, "arc_raiders_best.pt"),
                 os.path.join(base, "weights", "best.pt"),
             ]
             for c in candidates:
@@ -1056,11 +723,11 @@ class ArcClipDetectorAdapter:
 
         # Initialize components
         detector = None
-        if self.has_yolo and HAS_ULTRALYTICS:
+        if self.has_yolo and YOLO is not None:
             try:
                 detector = YOLODetector(
-                    logger, weights_path=self.weights_path,
-                    confidence=self.confidence, device=self.device)
+                    logger, weights=self.weights_path,
+                    conf=self.confidence, device=self.device)
                 print("  [ArcClipDetector] YOLO + OpenCV pixel analysis mode")
             except Exception as e:
                 print(f"  [ArcClipDetector] YOLO init failed ({e}), falling back to pixel-only")
@@ -1069,11 +736,11 @@ class ArcClipDetectorAdapter:
         if detector is None:
             print("  [ArcClipDetector] Pure OpenCV pixel analysis mode (no YOLO weights needed)")
 
-        pixel = PixelAnalyzer(logger, full_analysis=self.full_pixel_analysis)
-        scorer = ScoringEngine(logger)
+        pixel = PixelAnalyzer(logger)
+        scorer = ScoringEngine()
         # Lower threshold for pixel-only since scores will be lower without YOLO
         threshold = self.threshold if detector else max(25.0, self.threshold * 0.6)
-        clusterer = TemporalClusterer(logger, threshold=threshold)
+        clusterer = Clusterer(logger, thresh=threshold)
 
         # Open video
         cap = cv2.VideoCapture(video_path)
@@ -1118,8 +785,8 @@ class ArcClipDetectorAdapter:
                             os.unlink(tmp_path)
 
                     # Pixel analysis (always runs)
-                    px = pixel.full_analyze(frame)
-                    px_score = pixel.score_pixels(px)
+                    px = pixel.analyze(frame)
+                    px_score = pixel.score(px)
 
                     # Category
                     cat = "routine"
@@ -1128,15 +795,15 @@ class ArcClipDetectorAdapter:
                             (r for r in COMBINATION_RULES if r["name"] in rules),
                             key=lambda r: r["bonus"], default=None)
                         if best:
-                            cat = best["category"]
+                            cat = best["cat"]
                     elif counts:
-                        best_e = max(counts, key=lambda e: ENTITY_PROFILES.get(e, {}).get("base_score", 0))
-                        cat = ENTITY_PROFILES.get(best_e, {}).get("category", "routine")
+                        best_e = max(counts, key=lambda e: ENTITY_PROFILES.get(e, {}).get("base", 0))
+                        cat = ENTITY_PROFILES.get(best_e, {}).get("cat", "routine")
 
                     # Pixel-only category detection
                     if px.get("screen_state") == "death_screen":
                         cat = "death_fail"
-                    elif px.get("screen_state") in ("menu", "loading"):
+                    elif px.get("screen_state") == "inventory":
                         cat = "downtime"
                     elif not counts:
                         # Pixel-only mode: determine category from pixel signals
@@ -1144,11 +811,11 @@ class ArcClipDetectorAdapter:
                             cat = "combat_highlight"
                         elif px.get("has_damage_vignette"):
                             cat = "close_call"
-                        elif px.get("has_screen_flash"):
+                        elif px.get("screen_state") == "screen_flash":
                             cat = "epic_moment"
                         elif px.get("has_tracers"):
                             cat = "combat_highlight"
-                        elif px.get("health_state") == "critical":
+                        elif px.get("health") == "critical":
                             cat = "close_call"
 
                     # Score: use pixel-only if no YOLO, otherwise combine
@@ -1178,7 +845,7 @@ class ArcClipDetectorAdapter:
                         else:
                             print(f"  [ArcClipDetector] {timestamp:.1f}s - "
                                   f"px:{px_score:.1f} [{cat}] "
-                                  f"health:{px.get('health_state','')} "
+                                  f"health:{px.get('health','')} "
                                   f"fire:{px.get('has_fire','')} "
                                   f"vignette:{px.get('has_damage_vignette','')}")
 
@@ -1220,9 +887,9 @@ class ArcClipDetectorAdapter:
                 if peak_px.get("has_fire"): px_signals.append("Fire/Explosion")
                 if peak_px.get("has_muzzle_flash"): px_signals.append("Gunfire")
                 if peak_px.get("has_damage_vignette"): px_signals.append("Taking Damage")
-                if peak_px.get("has_screen_flash"): px_signals.append("Screen Flash")
+                if peak_px.get("screen_state") == "screen_flash": px_signals.append("Screen Flash")
                 if peak_px.get("has_tracers"): px_signals.append("Tracers")
-                if peak_px.get("health_state") == "critical": px_signals.append("Critical HP")
+                if peak_px.get("health") == "critical": px_signals.append("Critical HP")
                 if peak_px.get("screen_state") == "death_screen": px_signals.append("Death")
                 if px_signals:
                     label_parts.append(" + ".join(px_signals[:3]))
@@ -1243,173 +910,91 @@ class ArcClipDetectorAdapter:
 
 
 # =============================================================================
-# MAIN PIPELINE (CLI mode)
+# CLI PIPELINE
 # =============================================================================
 
-class ArcRaidersClipDetector:
+class ArcClipDetector:
     def __init__(self, args):
         self.args = args
-        self.logger = setup_logging(args.verbose)
-        self.video = VideoProcessor(args.input, self.logger)
-        self.scorer = ScoringEngine(self.logger)
-        self.pixel = PixelAnalyzer(self.logger, full_analysis=args.full_pixel_analysis)
-        self.clusterer = TemporalClusterer(
-            self.logger, threshold=args.threshold, merge_gap=args.merge_gap,
-            min_dur=args.min_clip_duration, max_dur=args.max_clip_duration, pad=args.pad_seconds)
-        self.detector = YOLODetector(
-            self.logger, weights_path=args.weights_path,
-            confidence=args.yolo_confidence, device=args.device)
-        self.output_dir = Path(args.output)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.log = logging.getLogger("arc"); self.log.setLevel(logging.DEBUG if args.verbose else logging.INFO)
+        h = logging.StreamHandler(sys.stdout)
+        h.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)-8s %(message)s", datefmt="%H:%M:%S"))
+        self.log.addHandler(h)
+        self.video = VideoProcessor(args.input, self.log)
+        self.scorer = ScoringEngine()
+        self.pixel = PixelAnalyzer(self.log)
+        self.clusterer = Clusterer(self.log, args.threshold, args.merge_gap, args.min_dur, args.max_dur, args.pad)
+        self.yolo = YOLODetector(self.log, args.weights, args.confidence, args.device)
+        self.out = Path(args.output); self.out.mkdir(parents=True, exist_ok=True)
 
     def run(self):
-        self.logger.info("=" * 70)
-        self.logger.info("ARC RAIDERS CLIP DETECTOR — Pure CV Pipeline")
-        self.logger.info("=" * 70)
-
-        frames_dir = self.output_dir / "frames"
-        frame_list = self.video.extract_frames(frames_dir, self.args.sample_interval)
-        analyses = self._analyze_all(frame_list)
-
-        for a in analyses:
-            a.final_score = self.scorer.combine(a.yolo_score, a.pixel_score, a.has_boss)
-
-        clips = self.clusterer.cluster(analyses)
-        self._export(analyses, clips)
-
-        if self.args.cut_clips and clips:
-            self._cut_clips(clips)
-
-        self._summary(clips)
-        return clips
-
-    def _analyze_all(self, frame_list):
-        self.logger.info(f"\n--- Analyzing {len(frame_list)} frames (YOLO + Pixel) ---")
+        self.log.info("=" * 60)
+        self.log.info("ARC RAIDERS CLIP DETECTOR — Pure CV")
+        self.log.info("=" * 60)
+        frames = self.video.extract_frames(self.out/"frames", self.args.interval)
         analyses = []
-        for frame_path, ts, fnum in tqdm(frame_list, desc="Analyzing", total=len(frame_list)):
-            dets = self.detector.detect(frame_path)
-            yolo_score, counts, rules = self.scorer.score_yolo(dets)
-
-            frame_bgr = cv2.imread(frame_path)
-            if frame_bgr is not None:
-                px = self.pixel.full_analyze(frame_bgr)
-                px_score = self.pixel.score_pixels(px)
-            else:
-                px, px_score = {}, 0.0
-
+        for fp, ts, fn in tqdm(frames, desc="Analyzing", total=len(frames)):
+            dets = self.yolo.detect(fp)
+            ys, counts, rules = self.scorer.score_yolo(dets)
+            bgr = cv2.imread(fp)
+            px = self.pixel.analyze(bgr) if bgr is not None else {}
+            ps = self.pixel.score(px) if px else 0.0
             cat = "routine"
             if rules:
                 best = max((r for r in COMBINATION_RULES if r["name"] in rules), key=lambda r: r["bonus"], default=None)
-                if best: cat = best["category"]
+                if best: cat = best["cat"]
             elif counts:
-                best_e = max(counts, key=lambda e: ENTITY_PROFILES.get(e, {}).get("base_score", 0))
-                cat = ENTITY_PROFILES.get(best_e, {}).get("category", "routine")
+                be = max(counts, key=lambda e: ENTITY_PROFILES.get(e,{}).get("base",0))
+                cat = ENTITY_PROFILES.get(be,{}).get("cat","routine")
+            if px.get("screen_state") == "death_screen": cat = "death_fail"
+            elif px.get("screen_state") == "inventory": cat = "downtime"
+            a = FrameAnalysis(fn, ts, str(timedelta(seconds=int(ts))), dets, counts,
+                ys, ps, px, 0.0, cat, rules, fp)
+            a.final_score = self.scorer.combine(ys, ps, a.has_boss)
+            analyses.append(a)
 
-            if px.get("screen_state") == "death_screen":
-                cat = "death_fail"
-            elif px.get("screen_state") in ("menu", "loading"):
-                cat = "downtime"
-
-            analyses.append(FrameAnalysis(
-                frame_number=fnum, timestamp_seconds=ts,
-                timestamp_str=str(timedelta(seconds=int(ts))),
-                detections=dets, entity_counts=counts,
-                yolo_score=yolo_score, pixel_score=px_score,
-                pixel_data=px, final_category=cat, triggered_rules=rules,
-                image_path=frame_path,
-            ))
-        return analyses
-
-    def _export(self, analyses, clips):
-        with open(self.output_dir / "frame_analysis.json", "w") as f:
-            json.dump([a.to_dict() for a in analyses], f, indent=2, default=str)
-        with open(self.output_dir / "clips.json", "w") as f:
-            json.dump([c.to_dict() for c in clips], f, indent=2, default=str)
-        if clips:
-            with open(self.output_dir / "clips.csv", "w", newline="") as f:
-                w = csv.DictWriter(f, fieldnames=clips[0].to_dict().keys())
-                w.writeheader()
-                for c in clips: w.writerow(c.to_dict())
-        with open(self.output_dir / "timeline.csv", "w", newline="") as f:
+        clips = self.clusterer.cluster(analyses)
+        # Export
+        with open(self.out/"analysis.json","w") as f: json.dump([a.to_dict() for a in analyses], f, indent=2, default=str)
+        with open(self.out/"clips.json","w") as f: json.dump([c.to_dict() for c in clips], f, indent=2, default=str)
+        with open(self.out/"timeline.csv","w",newline="") as f:
             w = csv.writer(f)
-            w.writerow(["timestamp", "ts_str", "yolo_score", "pixel_score",
-                         "final_score", "category", "entities", "rules",
-                         "health", "fire", "vignette", "screen_state"])
+            w.writerow(["ts","ts_str","yolo","pixel","final","cat","entities","rules","health","fire","vignette","screen"])
             for a in analyses:
                 px = a.pixel_data or {}
-                w.writerow([
-                    f"{a.timestamp_seconds:.2f}", a.timestamp_str,
-                    f"{a.yolo_score:.1f}", f"{a.pixel_score:.1f}", f"{a.final_score:.1f}",
-                    a.final_category,
-                    "|".join(f"{k}:{v}" for k, v in a.entity_counts.items()),
-                    "|".join(a.triggered_rules),
-                    px.get("health_state", ""), str(px.get("has_fire", "")),
-                    str(px.get("has_damage_vignette", "")), px.get("screen_state", ""),
-                ])
-        self.logger.info(f"Results saved to: {self.output_dir}")
+                w.writerow([f"{a.timestamp_seconds:.1f}",a.timestamp_str,f"{a.yolo_score:.1f}",
+                    f"{a.pixel_score:.1f}",f"{a.final_score:.1f}",a.final_category,
+                    "|".join(f"{k}:{v}" for k,v in a.entity_counts.items()),
+                    "|".join(a.triggered_rules), px.get("health",""), px.get("has_fire",""),
+                    px.get("has_damage_vignette",""), px.get("screen_state","")])
+        if self.args.cut_clips and clips:
+            cd = self.out/"clips_video"; cd.mkdir(exist_ok=True)
+            for c in tqdm(clips, desc="Cutting"):
+                fn = f"clip{c.clip_id:03d}_s{c.peak_score:.0f}_{c.primary_category}_{c.start_str.replace(':','-')}.mp4"
+                self.video.cut_clip(c.start_time, c.end_time, str(cd/fn), self.args.pad)
 
-    def _cut_clips(self, clips):
-        d = self.output_dir / "clips"
-        d.mkdir(exist_ok=True)
-        self.logger.info(f"\nCutting {len(clips)} clips...")
-        for c in tqdm(clips, desc="Cutting"):
-            fn = f"clip_{c.clip_id:03d}_score{c.peak_score:.0f}_{c.primary_category}_{c.start_str.replace(':','-')}.mp4"
-            self.video.cut_clip(c.start_time, c.end_time, str(d/fn), self.args.pad_seconds)
-        self.logger.info(f"Clips saved to: {d}")
-
-    def _summary(self, clips):
-        print("\n" + "=" * 70)
-        print("CLIP DETECTION SUMMARY")
-        print("=" * 70)
-        print(f"Video: {self.video.input_path.name}")
-        print(f"Duration: {timedelta(seconds=int(self.video.duration))}")
-        print(f"Clips found: {len(clips)}\n")
-        if not clips:
-            print("No clips detected."); return
-        for c in clips[:25]:
-            print(f"  #{c.clip_id:3d}  [{c.start_str} -> {c.end_str}]  "
-                  f"Score: {c.peak_score:5.1f}  {c.primary_category:<18s}  "
-                  f"{', '.join(f'{k}({v})' for k,v in c.entities_seen.items())}")
-            if c.triggered_rules:
-                print(f"         Rules: {', '.join(c.triggered_rules)}")
-        if len(clips) > 25: print(f"\n  ... +{len(clips)-25} more")
-        print("\nCategories:")
-        cc = defaultdict(int)
-        for c in clips: cc[c.primary_category] += 1
-        for cat, n in sorted(cc.items(), key=lambda x: -x[1]):
-            print(f"  {cat:<20s}: {n}")
-        print()
-
-
-# =============================================================================
-# CLI
-# =============================================================================
-
-def parse_args():
-    p = argparse.ArgumentParser(description="ARC Raiders Clip Detector (Pure CV)")
-    p.add_argument("--input", "-i", required=True, help="Input video file")
-    p.add_argument("--output", "-o", default="arc_clips_output", help="Output directory")
-    p.add_argument("--cut-clips", action="store_true", help="Cut video clips with ffmpeg")
-    p.add_argument("--sample-interval", type=float, default=1.0, help="Seconds between samples (default: 1.0)")
-    p.add_argument("--weights-path", default=None, help="Path to YOLO .pt weights file")
-    p.add_argument("--yolo-confidence", type=float, default=0.25, help="YOLO confidence threshold")
-    p.add_argument("--device", default="", help="YOLO device: '' (auto), 'cpu', 'cuda:0'")
-    p.add_argument("--full-pixel-analysis", action="store_true", help="Enable motion blur + color drama analysis")
-    p.add_argument("--threshold", type=float, default=50.0, help="Min score for clipping (default: 50)")
-    p.add_argument("--merge-gap", type=float, default=5.0, help="Max gap to merge frames into one clip")
-    p.add_argument("--min-clip-duration", type=float, default=3.0, help="Min clip duration")
-    p.add_argument("--max-clip-duration", type=float, default=60.0, help="Max clip duration")
-    p.add_argument("--pad-seconds", type=float, default=2.0, help="Padding before/after clip")
-    p.add_argument("--verbose", "-v", action="store_true")
-    return p.parse_args()
-
+        # Summary
+        print("\n" + "="*60 + f"\nCLIPS FOUND: {len(clips)}\n" + "="*60)
+        for c in clips[:30]:
+            print(f"  #{c.clip_id:3d} [{c.start_str}->{c.end_str}] Score:{c.peak_score:5.1f} {c.primary_category:<18s} {dict(c.entities_seen)}")
+        return clips
 
 def main():
-    args = parse_args()
-    pipeline = ArcRaidersClipDetector(args)
-    clips = pipeline.run()
-    return 0 if clips else 1
-
+    p = argparse.ArgumentParser(description="ARC Raiders Clip Detector (Pure CV)")
+    p.add_argument("--input","-i",required=True)
+    p.add_argument("--output","-o",default="arc_clips_output")
+    p.add_argument("--cut-clips",action="store_true")
+    p.add_argument("--interval",type=float,default=1.0,help="Seconds between frame samples")
+    p.add_argument("--weights",default=None,help="YOLO .pt weights path")
+    p.add_argument("--confidence",type=float,default=0.25)
+    p.add_argument("--device",default="")
+    p.add_argument("--threshold",type=float,default=50.0)
+    p.add_argument("--merge-gap",type=float,default=5.0)
+    p.add_argument("--min-dur",type=float,default=3.0)
+    p.add_argument("--max-dur",type=float,default=60.0)
+    p.add_argument("--pad",type=float,default=2.0)
+    p.add_argument("--verbose","-v",action="store_true")
+    return ArcClipDetector(p.parse_args()).run()
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(0 if main() else 1)
