@@ -11,6 +11,8 @@ from flask import Flask, render_template, request, jsonify, send_from_directory,
 from analysis.detector import GameDetector
 from analysis.ai_analyzer import GrokVisionAnalyzer
 from analysis.audio_detector import AudioDetector
+from analysis.motion_detector import MotionDetector
+from analysis.scene_detector import SceneChangeDetector
 from analysis.game_profiles import get_all_games
 from clip_manager import ClipManager
 
@@ -1449,6 +1451,26 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
                 progress_callback=lambda p: update(
                     "analyzing", 42 + int(p * 38),
                     f"Scanning frames... {int(p * 100)}%"
+                )
+            )
+        elif detection_method == "motion":
+            update("analyzing", 42, "Detecting motion energy...")
+            detector = MotionDetector(game_id=game_id)
+            highlights = detector.analyze_video(
+                video_path,
+                progress_callback=lambda p: update(
+                    "analyzing", 42 + int(p * 38),
+                    f"Analyzing motion... {int(p * 100)}%"
+                )
+            )
+        elif detection_method == "scene_change":
+            update("analyzing", 42, "Detecting scene changes...")
+            detector = SceneChangeDetector(game_id=game_id)
+            highlights = detector.analyze_video(
+                video_path,
+                progress_callback=lambda p: update(
+                    "analyzing", 42 + int(p * 38),
+                    f"Analyzing scene changes... {int(p * 100)}%"
                 )
             )
         else:

@@ -1167,6 +1167,8 @@ function onDetectionMethodChange(method) {
         audio_cv: "Uses audio spikes (gunshots/explosions) combined with visual detection. Best for most games.",
         audio_only: "Detects loud moments only (gunfire, explosions). Fastest method, no video scanning needed.",
         cv_only: "Frame-by-frame color/motion analysis. Works without audio but less accurate for some games.",
+        motion: "Detects high-movement periods (combat, camera shakes, explosions). Pure pixel motion analysis.",
+        scene_change: "Finds visual disruptions — explosions, flashes, damage effects. Measures how fast the scene shifts.",
         ai_vision: "AI analyzes screenshots of your gameplay. Most accurate but requires xAI API key and costs per use.",
     };
     document.getElementById("detection-hint").textContent = hints[method] || "";
