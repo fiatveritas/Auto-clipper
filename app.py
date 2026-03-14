@@ -17,6 +17,7 @@ from analysis.hybrid_detector import HybridDetector
 from analysis.roboflow_analyzer import RoboflowWorkflowAnalyzer
 from analysis.roboflow_model_analyzer import RoboflowModelAnalyzer
 from analysis.yolo_local_analyzer import YoloLocalAnalyzer
+from analysis.arc_clip_detector import ArcClipDetectorAdapter
 from analysis.game_profiles import get_all_games
 from clip_manager import ClipManager
 
@@ -1775,6 +1776,23 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
                 print(f"  [YoloLocal] Fatal error: {error_msg}")
                 job["error"] = f"YOLO analysis failed: {error_msg}"
                 update("error", 0, f"YOLO error: {error_msg}")
+                return
+        elif detection_method == "arc_cv_pipeline":
+            update("analyzing", 42, "Running YOLO + CV pipeline (Arc Raiders)...")
+            try:
+                analyzer = ArcClipDetectorAdapter(game_id=game_id)
+                highlights = analyzer.analyze_video(
+                    video_path,
+                    progress_callback=lambda p: update(
+                        "analyzing", 42 + int(p * 38),
+                        f"YOLO + CV analyzing... {int(p * 100)}%"
+                    )
+                )
+            except Exception as arc_err:
+                error_msg = str(arc_err)
+                print(f"  [ArcCVPipeline] Fatal error: {error_msg}")
+                job["error"] = f"YOLO + CV pipeline failed: {error_msg}"
+                update("error", 0, f"YOLO + CV error: {error_msg}")
                 return
         elif detection_method == "chat_spikes":
             update("analyzing", 42, "Downloading Twitch chat data...")
