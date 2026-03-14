@@ -43,6 +43,8 @@ class GrokVisionAnalyzer:
         frame_interval = int(fps * sample_interval_sec)
         total_samples = total_frames // frame_interval if frame_interval > 0 else 0
 
+        print(f"  [AI] Sampling {total_samples} frames from {duration:.0f}s video (every {sample_interval_sec}s)")
+
         # Collect sampled frames
         frames_data = []
         frame_idx = 0
@@ -69,47 +71,64 @@ class GrokVisionAnalyzer:
         if not frames_data:
             return []
 
-        # Analyze frames in batches (send 4 at a time to reduce API calls)
-        batch_size = 4
+        # Analyze frames individually (batching causes issues with API)
         all_results = []
-        total_batches = (len(frames_data) + batch_size - 1) // batch_size
+        error_count = 0
+        last_error = ""
 
-        for batch_idx in range(0, len(frames_data), batch_size):
-            batch = frames_data[batch_idx:batch_idx + batch_size]
-            batch_num = batch_idx // batch_size
+        for i, frame_data in enumerate(frames_data):
+            result = self._analyze_single(frame_data)
+            all_results.append(result)
 
-            results = self._analyze_batch(batch)
-            all_results.extend(results)
+            if result.get("_error"):
+                error_count += 1
+                last_error = result.get("reason", "Unknown error")
 
             if progress_callback:
-                progress_callback((batch_num + 1) / total_batches)
+                progress_callback((i + 1) / len(frames_data))
+
+        # Report error stats
+        success_count = len(all_results) - error_count
+        print(f"  [AI] Results: {success_count}/{len(all_results)} frames analyzed successfully")
+        if error_count > 0:
+            print(f"  [AI] WARNING: {error_count} frames failed - last error: {last_error}")
+
+        # If ALL frames failed, raise so the user sees the actual error
+        if error_count == len(all_results) and last_error:
+            raise Exception(f"AI analysis failed for all frames: {last_error}")
 
         # Filter to exciting moments and build highlights
         highlights = self._build_highlights(all_results, sample_interval_sec)
         return highlights
 
-    def _analyze_batch(self, frames_batch):
-        """Send a batch of frames to Grok for analysis."""
-        results = []
+    def _analyze_single(self, frame_data):
+        """Analyze a single frame with Grok, with retry on transient errors."""
+        ts = frame_data["timestamp"]
+        retries = 2
 
-        for frame_data in frames_batch:
+        for attempt in range(retries + 1):
             try:
                 result = self._call_grok(frame_data["b64"])
-                result["timestamp"] = frame_data["timestamp"]
-                results.append(result)
-                ts = frame_data["timestamp"]
+                result["timestamp"] = ts
                 print(f"  [AI] {ts:.0f}s - score:{result.get('score',0)} exciting:{result.get('exciting')} - {result.get('label','')}")
+                return result
             except Exception as e:
-                print(f"  [AI] {frame_data['timestamp']:.0f}s - ERROR: {e}")
-                results.append({
-                    "timestamp": frame_data["timestamp"],
+                error_str = str(e)
+                if attempt < retries and ("429" in error_str or "500" in error_str or "503" in error_str or "timeout" in error_str.lower()):
+                    import time
+                    wait = 2 ** (attempt + 1)
+                    print(f"  [AI] {ts:.0f}s - retrying in {wait}s ({error_str[:80]})")
+                    time.sleep(wait)
+                    continue
+                print(f"  [AI] {ts:.0f}s - ERROR: {e}")
+                return {
+                    "timestamp": ts,
                     "exciting": False,
                     "score": 0,
                     "label": "Analysis failed",
-                    "reason": str(e),
-                })
-
-        return results
+                    "reason": error_str,
+                    "_error": True,
+                }
 
     def _call_grok(self, image_b64):
         """Call xAI Grok vision API with a single frame."""
@@ -162,9 +181,44 @@ class GrokVisionAnalyzer:
 
         # Parse JSON from response (handle markdown code blocks)
         if content.startswith("```"):
-            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+            # Strip ```json or ``` wrapper
+            lines = content.split("\n")
+            # Remove first and last ``` lines
+            json_lines = []
+            in_block = False
+            for line in lines:
+                if line.strip().startswith("```") and not in_block:
+                    in_block = True
+                    continue
+                elif line.strip() == "```" and in_block:
+                    break
+                elif in_block:
+                    json_lines.append(line)
+            content = "\n".join(json_lines).strip()
 
-        parsed = json.loads(content)
+        # Try to extract JSON object if mixed with text
+        if not content.startswith("{"):
+            # Look for JSON object in the response
+            start = content.find("{")
+            end = content.rfind("}")
+            if start >= 0 and end > start:
+                content = content[start:end + 1]
+
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError:
+            # Grok returned non-JSON — try to interpret as text
+            print(f"  [AI] Non-JSON response: {content[:100]}")
+            # Heuristic: if it mentions combat/fighting/shooting, consider it exciting
+            lower = content.lower()
+            has_action = any(w in lower for w in ["combat", "fight", "shoot", "explos", "kill", "attack", "gunfire", "battle"])
+            return {
+                "exciting": has_action,
+                "score": 0.5 if has_action else 0.0,
+                "label": content[:50] if has_action else "Non-combat",
+                "reason": "Parsed from text response",
+            }
+
         # Normalize types
         parsed["exciting"] = bool(parsed.get("exciting", False))
         parsed["score"] = float(parsed.get("score", 0))

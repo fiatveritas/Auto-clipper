@@ -1633,15 +1633,26 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
 
         if detection_method == "ai_vision" and api_key:
             update("analyzing", 42, "AI is watching your gameplay...")
-            analyzer = GrokVisionAnalyzer(api_key, game_id=game_id)
-            highlights = analyzer.analyze_frames(
-                video_path,
-                sample_interval_sec=8,
-                progress_callback=lambda p: update(
-                    "analyzing", 42 + int(p * 38),
-                    f"AI analyzing frames... {int(p * 100)}%"
+            try:
+                analyzer = GrokVisionAnalyzer(api_key, game_id=game_id)
+                highlights = analyzer.analyze_frames(
+                    video_path,
+                    sample_interval_sec=8,
+                    progress_callback=lambda p: update(
+                        "analyzing", 42 + int(p * 38),
+                        f"AI analyzing frames... {int(p * 100)}%"
+                    )
                 )
-            )
+            except Exception as ai_err:
+                error_msg = str(ai_err)
+                print(f"  [AI] Fatal error: {error_msg}")
+                job["error"] = f"AI analysis failed: {error_msg}"
+                update("error", 0, f"AI error: {error_msg}")
+                return
+        elif detection_method == "ai_vision" and not api_key:
+            job["error"] = "AI Vision requires a Grok API key. Enter your key in the API Key field."
+            update("error", 0, "AI Vision requires a Grok API key")
+            return
         elif detection_method == "audio_only":
             update("analyzing", 42, "Listening for combat audio...")
             detector = _apply_sensitivity(AudioDetector(game_id=game_id))
