@@ -17,11 +17,14 @@ class GrokVisionAnalyzer:
     API_URL = "https://api.x.ai/v1/chat/completions"
     MODELS_URL = "https://api.x.ai/v1/models"
 
-    # Preferred vision models in order of priority
+    # Preferred vision-capable models in order of priority (cheapest first)
     VISION_MODEL_CANDIDATES = [
+        "grok-4-1-fast-non-reasoning",
+        "grok-4-1-fast-reasoning",
+        "grok-4.20-beta-0309-non-reasoning",
+        "grok-4.20-beta-0309-reasoning",
         "grok-2-vision-latest",
         "grok-2-vision-1212",
-        "grok-2-vision",
     ]
 
     def __init__(self, api_key, game_id="arc_raiders"):
@@ -53,12 +56,16 @@ class GrokVisionAnalyzer:
                 if vision_models:
                     print(f"  [AI] Using vision model: {vision_models[0]}")
                     return vision_models[0]
-                print(f"  [AI] WARNING: No vision model found. Available: {sorted(available)}")
+                # Last resort — pick any non-reasoning fast model
+                fast_models = sorted([m for m in available if "fast" in m.lower() and "non-reasoning" in m.lower()])
+                if fast_models:
+                    print(f"  [AI] No vision-specific model; using: {fast_models[0]}")
+                    return fast_models[0]
+                print(f"  [AI] WARNING: No suitable model found. Available: {sorted(available)}")
         except Exception as e:
             print(f"  [AI] Could not query models endpoint: {e}")
 
-        # Fallback to the versioned name (most likely to still work)
-        fallback = "grok-2-vision-1212"
+        fallback = "grok-4-1-fast-non-reasoning"
         print(f"  [AI] Falling back to: {fallback}")
         return fallback
 
