@@ -1192,7 +1192,7 @@ function onDetectionMethodChange(method) {
         roboflow_workflow: "Roboflow AI workflow for Arc Raiders — streams video through a detect-and-classify pipeline. Requires Roboflow API key.",
         roboflow_model: "Sends frames directly to your Roboflow model for object detection. Simpler setup — just needs a Roboflow API key.",
         yolo_local: "Runs a YOLO model locally on your machine. No API key needed — place your best.pt in the models/ folder.",
-        arc_cv_pipeline: "Full YOLO + OpenCV pipeline for Arc Raiders. Combines entity detection (19 ARC classes) with pixel-level HUD/VFX analysis. No API key needed.",
+        arc_cv_pipeline: "Pure OpenCV pipeline for Arc Raiders. Detects combat via HUD reading, VFX, muzzle flash, damage vignette, fire, and screen states. No API key or model weights needed. Optionally enhanced with YOLO if best.pt is in models/ folder.",
     };
     document.getElementById("detection-hint").textContent = hints[method] || "";
     const apiSection = document.getElementById("api-key-section");
