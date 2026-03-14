@@ -5,3 +5,5 @@ numpy
 Pillow
 pywebview
 requests
+ultralytics
+tqdm
