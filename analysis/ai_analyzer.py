@@ -15,6 +15,14 @@ class GrokVisionAnalyzer:
     """
 
     API_URL = "https://api.x.ai/v1/chat/completions"
+    MODELS_URL = "https://api.x.ai/v1/models"
+
+    # Preferred vision models in order of priority
+    VISION_MODEL_CANDIDATES = [
+        "grok-2-vision-latest",
+        "grok-2-vision-1212",
+        "grok-2-vision",
+    ]
 
     def __init__(self, api_key, game_id="arc_raiders"):
         self.api_key = api_key
@@ -26,6 +34,33 @@ class GrokVisionAnalyzer:
             "User-Agent": "AutoClipper/1.0",
             "Accept": "application/json",
         })
+        self.model = self._resolve_vision_model()
+
+    def _resolve_vision_model(self):
+        """Query the xAI models endpoint to find an available vision model."""
+        try:
+            resp = self.session.get(self.MODELS_URL, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                available = {m["id"] for m in data.get("data", [])}
+                # Pick the first candidate that exists
+                for candidate in self.VISION_MODEL_CANDIDATES:
+                    if candidate in available:
+                        print(f"  [AI] Using vision model: {candidate}")
+                        return candidate
+                # No exact match — look for any model with "vision" in the name
+                vision_models = sorted([m for m in available if "vision" in m.lower()])
+                if vision_models:
+                    print(f"  [AI] Using vision model: {vision_models[0]}")
+                    return vision_models[0]
+                print(f"  [AI] WARNING: No vision model found. Available: {sorted(available)}")
+        except Exception as e:
+            print(f"  [AI] Could not query models endpoint: {e}")
+
+        # Fallback to the versioned name (most likely to still work)
+        fallback = "grok-2-vision-1212"
+        print(f"  [AI] Falling back to: {fallback}")
+        return fallback
 
     def analyze_frames(self, video_path, sample_interval_sec=10, progress_callback=None):
         """
@@ -151,7 +186,7 @@ class GrokVisionAnalyzer:
         user_prompt = self.profile.get("ai_user_prompt", "Is this an exciting moment?")
 
         payload = {
-            "model": "grok-2-vision-latest",
+            "model": self.model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {
