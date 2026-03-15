@@ -206,6 +206,10 @@ class PixelAnalyzer:
     # This is a streamer overlay, NOT game HUD
     WATERMARK = (0.350, 0.600, 0.650, 0.700)
 
+    # ARC scanner beam detection — main gameplay area (exclude HUD corners)
+    # Scanner beams appear in the 3D world, typically from center to upper areas
+    SCAN_AREA = (0.10, 0.10, 0.90, 0.80)
+
     # --- COLOR THRESHOLDS (HSV, measured from dataset) ---
     # Health bar is WHITE segments, NOT green
     HEALTH_WHITE_LO = np.array([0, 0, 180])
@@ -221,6 +225,20 @@ class PixelAnalyzer:
 
     # Entity label text is WHITE (brightness > 210)
     LABEL_WHITE_THRESH = 210
+
+    # ARC scanner beams — distinct saturated narrow beams
+    # Blue scanner (passive/searching): bright cyan-blue, very saturated
+    SCAN_BLUE_LO = np.array([85, 120, 140])
+    SCAN_BLUE_HI = np.array([115, 255, 255])
+    # Red scanner (aggro/attacking): bright red, very saturated
+    # ARC scanner beams turn RED when they detect and engage the player
+    SCAN_RED1_LO = np.array([0, 150, 150])
+    SCAN_RED1_HI = np.array([8, 255, 255])
+    SCAN_RED2_LO = np.array([172, 150, 150])
+    SCAN_RED2_HI = np.array([180, 255, 255])
+    # Yellow/amber scanner (transitional — some ARCs flash yellow briefly)
+    SCAN_AMBER_LO = np.array([15, 120, 160])
+    SCAN_AMBER_HI = np.array([25, 255, 255])
 
     # Fire/explosion: orange + yellow hot pixels
     FIRE_LO = np.array([5, 150, 200])
@@ -266,6 +284,10 @@ class PixelAnalyzer:
         self._prev_ammo_gray = None   # Previous ammo region for frame diff
         self._prev_edge_brightness = None
         self._brightness_history = []  # last N center brightness values
+        # ARC scanner tracking
+        self._prev_scan_red_pct = 0.0
+        self._prev_scan_blue_pct = 0.0
+        self._scan_red_history = []   # last N red scan values for sustained detection
 
     def _region(self, frame, r):
         h, w = frame.shape[:2]
@@ -386,6 +408,63 @@ class PixelAnalyzer:
             red_total += self._hsv_pct(edge, self.VIGNETTE_RED2_LO, self.VIGNETTE_RED2_HI)
         r["has_damage_vignette"] = red_total > 0.15
         r["vignette_red_pct"] = round(red_total, 4)
+
+        # --- ARC Scanner Beam Detection ---
+        # ARC enemies emit visible scanner beams that are VERY saturated and distinct
+        # Blue = passive (searching), Red = aggro (detected player), Amber = transitional
+        scan_area = self._region(frame, self.SCAN_AREA)
+        scan_red = (self._hsv_pct(scan_area, self.SCAN_RED1_LO, self.SCAN_RED1_HI) +
+                    self._hsv_pct(scan_area, self.SCAN_RED2_LO, self.SCAN_RED2_HI))
+        scan_blue = self._hsv_pct(scan_area, self.SCAN_BLUE_LO, self.SCAN_BLUE_HI)
+        scan_amber = self._hsv_pct(scan_area, self.SCAN_AMBER_LO, self.SCAN_AMBER_HI)
+        r["scan_red_pct"] = round(scan_red, 4)
+        r["scan_blue_pct"] = round(scan_blue, 4)
+        r["scan_amber_pct"] = round(scan_amber, 4)
+
+        # Detect scanner beam shape: narrow bright lines in the gameplay area
+        # Scanner beams are thin (2-8px wide) and elongated (aspect ratio > 4:1)
+        scan_hsv = cv2.cvtColor(scan_area, cv2.COLOR_BGR2HSV)
+        # Red scanner mask (both ends of hue wheel)
+        red_mask1 = cv2.inRange(scan_hsv, self.SCAN_RED1_LO, self.SCAN_RED1_HI)
+        red_mask2 = cv2.inRange(scan_hsv, self.SCAN_RED2_LO, self.SCAN_RED2_HI)
+        red_mask = cv2.bitwise_or(red_mask1, red_mask2)
+        # Blue scanner mask
+        blue_mask = cv2.inRange(scan_hsv, self.SCAN_BLUE_LO, self.SCAN_BLUE_HI)
+
+        # Check for elongated beam shapes (characteristic of scanner beams)
+        arc_beam_detected = False
+        scan_beam_count = 0
+        for mask, color_name in [(red_mask, "red"), (blue_mask, "blue")]:
+            beam_contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            for cnt in beam_contours:
+                area = cv2.contourArea(cnt)
+                if area < 50:
+                    continue
+                # Check elongation — scanner beams are narrow lines
+                x_c, y_c, w_c, h_c = cv2.boundingRect(cnt)
+                aspect = max(w_c, h_c) / max(min(w_c, h_c), 1)
+                if aspect > 3.0 and area > 80:
+                    scan_beam_count += 1
+                    arc_beam_detected = True
+
+        r["arc_beam_detected"] = arc_beam_detected
+        r["scan_beam_count"] = scan_beam_count
+
+        # Scanner state classification
+        has_red_scan = scan_red > 0.003 or (arc_beam_detected and scan_red > 0.001)
+        has_blue_scan = scan_blue > 0.005
+        has_amber_scan = scan_amber > 0.003
+
+        if has_red_scan:
+            r["arc_scan_state"] = "aggro"      # ARC has spotted you — combat imminent
+        elif has_amber_scan:
+            r["arc_scan_state"] = "alert"      # ARC is transitioning — about to detect
+        elif has_blue_scan:
+            r["arc_scan_state"] = "searching"  # ARC nearby, scanning passively
+        else:
+            r["arc_scan_state"] = "none"
+
+        r["arc_scanning"] = r["arc_scan_state"] != "none"
 
         # --- Bright particle count (tracers, sparks) ---
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -520,6 +599,41 @@ class PixelAnalyzer:
             r["ammo_changed"] = False
             r["ammo_diff"] = 0.0
 
+        # --- ARC Scanner Transitions ---
+        # The most exciting moment: blue→red = ARC just detected the player
+        current_scan_red = r.get("scan_red_pct", 0.0)
+        current_scan_blue = r.get("scan_blue_pct", 0.0)
+        r["scan_aggro_onset"] = (current_scan_red > 0.002 and self._prev_scan_red_pct < 0.001)
+        r["scan_appeared"] = (r["arc_scanning"] and self._prev_scan_red_pct < 0.001 and self._prev_scan_blue_pct < 0.002)
+        # Track sustained scanning (red beams present over multiple frames = active fight)
+        self._scan_red_history.append(current_scan_red)
+        if len(self._scan_red_history) > 5:
+            self._scan_red_history.pop(0)
+        r["sustained_scan"] = (len(self._scan_red_history) >= 3 and
+                               sum(1 for v in self._scan_red_history if v > 0.001) >= 2)
+
+        # Entity label + scan state = can guess ARC type + threat level
+        if r.get("entity_label_visible") and r["arc_scan_state"] == "aggro":
+            r["arc_encounter"] = True
+            # Entity label width hints at which ARC type
+            lw = r.get("label_width_px", 0)
+            if lw > 0:
+                # Map label width to threat level
+                # Short names (POP, TICK, WASP): low-medium threat
+                # Medium names (HORNET, SNITCH, LEAPER): medium-high threat
+                # Long names (BASTION, BOMBARDIER, ROCKETEER, SENTINEL): high threat
+                if lw >= 80:
+                    r["arc_threat"] = "boss"       # BOMBARDIER, ROCKETEER, SENTINEL-class
+                elif lw >= 55:
+                    r["arc_threat"] = "heavy"      # HORNET, SNITCH, LEAPER, BASTION, FIREBALL
+                else:
+                    r["arc_threat"] = "standard"   # POP, TICK, WASP
+            else:
+                r["arc_threat"] = "unknown"
+        else:
+            r["arc_encounter"] = False
+            r["arc_threat"] = "none"
+
         # Update previous frame state
         self._prev_brightness = avg_b
         self._prev_center_brightness = center_b
@@ -528,6 +642,8 @@ class PixelAnalyzer:
         self._prev_vignette_pct = current_vignette
         self._prev_xp_pct = current_xp
         self._prev_edge_brightness = edge_avg_b
+        self._prev_scan_red_pct = current_scan_red
+        self._prev_scan_blue_pct = current_scan_blue
 
         return r
 
@@ -625,6 +741,17 @@ class PixelAnalyzer:
         if strong_count == 0:
             return min(5.0, s)
 
+        # ARC scanner detection — scanner beams = ARC encounter
+        if px.get("scan_aggro_onset"):
+            s += 35  # Scanner just turned red = ARC detected you
+            strong_count += 1
+        elif px.get("arc_encounter"):
+            s += 25  # Entity label + red scanner
+            strong_count += 1
+        elif px.get("sustained_scan"):
+            s += 15
+            strong_count += 1
+
         # Small bonus for supporting signals
         if px.get("has_tracers") and px.get("tracer_count", 0) > 15:
             s += 5
@@ -684,6 +811,16 @@ class PixelAnalyzer:
 
         if px.get("has_motion_blur"):
             s += 4
+
+        # ARC scanner detection
+        if px.get("scan_aggro_onset"):
+            s += 30  # Scanner just went red
+        elif px.get("arc_encounter"):
+            s += 20  # Entity label + aggro scan
+        elif px.get("sustained_scan"):
+            s += 12
+        if px.get("arc_beam_detected"):
+            s += 5   # Visible beam shape
 
         # WEAK SIGNALS (barely contribute)
         if px.get("has_damage_vignette"): s += 2
@@ -780,6 +917,22 @@ class PixelAnalyzer:
         if px.get("has_motion_blur"):
             s += 5
 
+        # ARC scanner detection (temporal: scanner state CHANGED)
+        if px.get("scan_aggro_onset"):
+            s += 30  # Scanner JUST went red this frame = most exciting
+        elif px.get("arc_encounter"):
+            s += 22  # Entity label + red scanner present
+        elif px.get("sustained_scan"):
+            s += 12  # Red beams over multiple frames = active fight
+        if px.get("scan_appeared"):
+            s += 8   # Any scanner beam just appeared
+        # Beam shape bonus (confirms it's a real beam, not ambient red)
+        if px.get("arc_beam_detected") and px.get("arc_scan_state") == "aggro":
+            s += 8
+        # Boss-class ARC encounter = always clip
+        if px.get("arc_threat") == "boss":
+            s += 15
+
         # Weak ambient signals (tiny contribution, only with action)
         if px.get("has_damage_vignette") and has_action: s += 2
         if px.get("entity_label_visible"): s += 1
@@ -835,6 +988,14 @@ class PixelAnalyzer:
         if px.get("has_motion_blur"):     s += 6
         s += px.get("drama_score", 0) * 4
 
+        # ARC scanner (aggressive catches all scanner activity)
+        if px.get("scan_aggro_onset"):   s += 28
+        elif px.get("arc_encounter"):    s += 20
+        elif px.get("sustained_scan"):   s += 12
+        if px.get("arc_scanning"):       s += 6  # Any scan = interesting
+        if px.get("arc_beam_detected"):  s += 4
+        if px.get("arc_threat") == "boss": s += 15
+
         return min(100, s)
 
     def _score_v5_combat_only(self, px: dict) -> float:
@@ -867,6 +1028,9 @@ class PixelAnalyzer:
         if px.get("ammo_changed"): temporal_signals += 1
         if px.get("vignette_onset"): temporal_signals += 1
         if px.get("sudden_dark"): temporal_signals += 1
+        # Scanner transitions are temporal (state changed this frame)
+        if px.get("scan_aggro_onset"): temporal_signals += 1
+        if px.get("scan_appeared"): temporal_signals += 1
 
         static_signals = 0
         if px.get("has_fire"): static_signals += 1
@@ -877,6 +1041,9 @@ class PixelAnalyzer:
         h = px.get("health", "full")
         if h in ("critical", "low"): static_signals += 1
         if px.get("has_damage_vignette"): static_signals += 1
+        # Sustained scanner is static (already present for multiple frames)
+        if px.get("sustained_scan"): static_signals += 1
+        if px.get("arc_beam_detected"): static_signals += 1
 
         total = temporal_signals + static_signals
 
@@ -905,6 +1072,13 @@ class PixelAnalyzer:
             s += 15  # Shooting + muzzle bloom confirmed
         if h == "critical" and px.get("big_health_drop"):
             s += 20  # Near death moment
+        # ARC scanner combos
+        if px.get("scan_aggro_onset") and px.get("has_damage_vignette"):
+            s += 20  # ARC spotted you AND you're taking damage
+        if px.get("arc_encounter") and px.get("health_dropping"):
+            s += 18  # Named ARC attacking + health dropping
+        if px.get("arc_threat") == "boss":
+            s += 25  # Boss-class ARC = always clip
 
         return min(100, s)
 

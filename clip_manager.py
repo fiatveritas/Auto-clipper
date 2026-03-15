@@ -443,21 +443,29 @@ class ClipManager:
         filename = f"{job_id}_{clip_id}_tiktok.mp4"
         out_path = os.path.join(self.clips_dir, filename)
 
-        # Convert ratio-based regions to pixel coordinates
+        # Convert ratio-based regions to pixel coordinates (ensure even for libx264)
         gx = int(gameplay_region["x"] * src_w)
         gy = int(gameplay_region["y"] * src_h)
-        gw = int(gameplay_region["w"] * src_w)
-        gh = int(gameplay_region["h"] * src_h)
+        gw = int(gameplay_region["w"] * src_w) // 2 * 2
+        gh = int(gameplay_region["h"] * src_h) // 2 * 2
+        gx = min(gx, src_w - gw)
+        gy = min(gy, src_h - gh)
+        gw = max(gw, 2)
+        gh = max(gh, 2)
 
         if webcam_region and layout == "stacked":
             wx = int(webcam_region["x"] * src_w)
             wy = int(webcam_region["y"] * src_h)
-            ww = int(webcam_region["w"] * src_w)
-            wh = int(webcam_region["h"] * src_h)
+            ww = int(webcam_region["w"] * src_w) // 2 * 2
+            wh = int(webcam_region["h"] * src_h) // 2 * 2
+            wx = min(wx, src_w - ww)
+            wy = min(wy, src_h - wh)
+            ww = max(ww, 2)
+            wh = max(wh, 2)
 
             # Gameplay takes top 70%, webcam takes bottom 30%
-            gameplay_h = int(out_h * 0.70)
-            webcam_h = out_h - gameplay_h
+            gameplay_h = int(out_h * 0.70) // 2 * 2
+            webcam_h = (out_h - gameplay_h) // 2 * 2
 
             filter_complex = (
                 f"[0:v]crop={gw}:{gh}:{gx}:{gy},scale={out_w}:{gameplay_h}:force_original_aspect_ratio=decrease,"
@@ -524,8 +532,14 @@ class ClipManager:
         ]
         probe = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=10)
         if probe.returncode != 0:
+            print(f"  [YTShort] ffprobe failed: {probe.stderr[:200]}")
             return None
-        src_w, src_h = [int(x) for x in probe.stdout.strip().split(",")]
+
+        try:
+            src_w, src_h = [int(x) for x in probe.stdout.strip().split(",")]
+        except (ValueError, IndexError) as e:
+            print(f"  [YTShort] Failed to parse dimensions from ffprobe: {probe.stdout.strip()!r}")
+            return None
 
         out_w, out_h = 1080, 1920
         safe_zone = 80  # pixels reserved at top for YT UI
@@ -533,21 +547,31 @@ class ClipManager:
         filename = f"{job_id}_{clip_id}_ytshort.mp4"
         out_path = os.path.join(self.clips_dir, filename)
 
-        # Convert ratio-based regions to pixel coordinates
+        # Convert ratio-based regions to pixel coordinates (ensure even dimensions for libx264)
         gx = int(gameplay_region["x"] * src_w)
         gy = int(gameplay_region["y"] * src_h)
-        gw = int(gameplay_region["w"] * src_w)
-        gh = int(gameplay_region["h"] * src_h)
+        gw = int(gameplay_region["w"] * src_w) // 2 * 2
+        gh = int(gameplay_region["h"] * src_h) // 2 * 2
+
+        # Clamp to source bounds
+        gx = min(gx, src_w - gw)
+        gy = min(gy, src_h - gh)
+        gw = max(gw, 2)
+        gh = max(gh, 2)
 
         if webcam_region and layout == "stacked":
             wx = int(webcam_region["x"] * src_w)
             wy = int(webcam_region["y"] * src_h)
-            ww = int(webcam_region["w"] * src_w)
-            wh = int(webcam_region["h"] * src_h)
+            ww = int(webcam_region["w"] * src_w) // 2 * 2
+            wh = int(webcam_region["h"] * src_h) // 2 * 2
+            wx = min(wx, src_w - ww)
+            wy = min(wy, src_h - wh)
+            ww = max(ww, 2)
+            wh = max(wh, 2)
 
             # Gameplay takes top 70% of content area, webcam takes bottom 30%
-            gameplay_h = int(content_h * 0.70)
-            webcam_h = content_h - gameplay_h
+            gameplay_h = int(content_h * 0.70) // 2 * 2
+            webcam_h = (content_h - gameplay_h) // 2 * 2
 
             filter_complex = (
                 f"[0:v]crop={gw}:{gh}:{gx}:{gy},scale={out_w}:{gameplay_h}:force_original_aspect_ratio=decrease,"
@@ -555,8 +579,8 @@ class ClipManager:
                 f"[0:v]crop={ww}:{wh}:{wx}:{wy},scale={out_w}:{webcam_h}:force_original_aspect_ratio=decrease,"
                 f"pad={out_w}:{webcam_h}:(ow-iw)/2:(oh-ih)/2:color=black[bot];"
                 f"[top][bot]vstack=inputs=2[content];"
-                f"color=black:{out_w}:{safe_zone}:d=1[safezone];"
-                f"[safezone][content]vstack=inputs=2,"
+                f"color=black:s={out_w}x{safe_zone}[safezone];"
+                f"[safezone][content]vstack=inputs=2:shortest=1,"
                 f"pad=ceil(iw/2)*2:ceil(ih/2)*2[out]"
             )
         else:
@@ -564,8 +588,8 @@ class ClipManager:
             filter_complex = (
                 f"[0:v]crop={gw}:{gh}:{gx}:{gy},scale={out_w}:{content_h}:force_original_aspect_ratio=decrease,"
                 f"pad={out_w}:{content_h}:(ow-iw)/2:(oh-ih)/2:color=black[content];"
-                f"color=black:{out_w}:{safe_zone}:d=1[safezone];"
-                f"[safezone][content]vstack=inputs=2,"
+                f"color=black:s={out_w}x{safe_zone}[safezone];"
+                f"[safezone][content]vstack=inputs=2:shortest=1,"
                 f"pad=ceil(iw/2)*2:ceil(ih/2)*2[out]"
             )
 
@@ -586,7 +610,7 @@ class ClipManager:
 
         result = subprocess.run(cmd, capture_output=True, timeout=300)
         if result.returncode != 0 or not os.path.exists(out_path):
-            print(f"  [YTShort] ffmpeg error: {result.stderr.decode('utf-8', errors='replace')[-300:]}")
+            print(f"  [YTShort] ffmpeg error: {result.stderr.decode('utf-8', errors='replace')[-500:]}")
             return None
 
         return {"filename": filename}
