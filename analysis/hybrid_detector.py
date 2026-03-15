@@ -110,40 +110,31 @@ class HybridDetector:
         return min(max(raw, 0.0), 1.0)
 
     def _is_menu_frame(self, frame, gray):
-        """Detect menu/inventory/UI overlay frames that should not be clipped."""
+        """Detect menu/inventory/UI overlay frames that should not be clipped.
+
+        Intentionally strict — false negatives (scoring a menu frame) are
+        much less harmful than false positives (suppressing real gameplay).
+        """
         h, w = frame.shape[:2]
         brightness = np.mean(gray) / 255.0
 
-        # Very dark frame = loading screen
-        if brightness < 0.10:
+        # Completely black frame = loading screen
+        if brightness < 0.04:
             return True
 
-        # Uniform center = menu background
+        # Very uniform AND dim center = solid menu background
         center = gray[int(h * 0.2):int(h * 0.8), int(w * 0.2):int(w * 0.8)]
         std_dev = np.std(center)
-        if std_dev < 18 and brightness > 0.12:
+        if std_dev < 10 and brightness < 0.25:
             return True
 
-        # Low saturation + low variance = greyed-out menu overlay
+        # Low saturation + very low variance = greyed-out menu overlay
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         mean_sat = np.mean(hsv[:, :, 1])
-        if mean_sat < 25 and brightness > 0.20 and std_dev < 35:
+        if mean_sat < 15 and std_dev < 20:
             return True
 
-        # High edge density + low saturation = UI-heavy frame (inventory, settings)
-        edges = cv2.Canny(gray, 50, 150)
-        edge_density = np.count_nonzero(edges) / max(edges.size, 1)
-        if edge_density > 0.12 and mean_sat < 40:
-            return True
-
-        # Bimodal brightness = dark overlay with bright UI elements
-        dark_pixels = np.sum(gray < 50) / max(gray.size, 1)
-        bright_pixels = np.sum(gray > 200) / max(gray.size, 1)
-        mid_pixels = 1.0 - dark_pixels - bright_pixels
-        if dark_pixels > 0.40 and bright_pixels > 0.08 and mid_pixels < 0.35:
-            return True
-
-        # Game-specific menu colors
+        # Game-specific menu colors (keep — these are intentionally targeted)
         menu_colors = self.profile.get("menu_suppress_colors")
         if menu_colors:
             for mc in menu_colors:
@@ -323,13 +314,20 @@ class HybridDetector:
 
         above = [s for s in window_scores if s["score"] >= self.intensity_threshold]
 
-        if not above:
-            # Much less aggressive fallback — only take genuinely notable moments
+        # Fallback: if we found very few clips, try to find more
+        min_expected = max(1, int(duration / 600))  # ~1 clip per 10 min
+        if len(above) < min_expected:
             sorted_scores = sorted(window_scores, key=lambda s: s["score"], reverse=True)
             fallback = self.intensity_threshold * self.profile.get("fallback_threshold_ratio", 0.15)
-            # Only top 5, and exclude idle/menu labels
-            above = [s for s in sorted_scores[:5]
-                     if s["score"] >= fallback and s["label"] not in ("Idle", "Menu/UI")]
+            max_fallback = max(5, min_expected * 2)
+            fallback_candidates = [s for s in sorted_scores[:max_fallback]
+                                   if s["score"] >= fallback and s["label"] not in ("Idle", "Menu/UI")]
+            existing_times = {s["timestamp"] for s in above}
+            merge_gap_val = self.profile.get("merge_gap", 8)
+            for fc in fallback_candidates:
+                if not any(abs(fc["timestamp"] - t) < merge_gap_val for t in existing_times):
+                    above.append(fc)
+                    existing_times.add(fc["timestamp"])
 
         if not above:
             return []

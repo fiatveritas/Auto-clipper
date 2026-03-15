@@ -182,8 +182,13 @@ class GameDetector:
             progress_callback(1.0)
 
         top_scores = sorted(scores, key=lambda s: s["score"], reverse=True)[:10]
+        menu_count = sum(1 for s in scores if s["label"] == "Menu/Lobby")
+        zero_count = sum(1 for s in scores if s["score"] == 0.0)
+        above_thresh = sum(1 for s in scores if s["score"] >= self.intensity_threshold)
         print(f"  [CV] Game: {self.profile['name']}")
         print(f"  [CV] Analyzed {analyzed} frames over {duration:.0f}s")
+        print(f"  [CV] Menu-suppressed: {menu_count}/{analyzed} frames ({100*menu_count/max(analyzed,1):.1f}%)")
+        print(f"  [CV] Zero-score: {zero_count}/{analyzed} | Above threshold: {above_thresh}/{analyzed}")
         if audio_levels:
             print(f"  [CV] Audio analysis: enabled (weight={audio_weight})")
         score_strs = [f'{s["score"]:.3f}@{int(s["timestamp"])}s' for s in top_scores]
@@ -200,18 +205,22 @@ class GameDetector:
         """
         Detect if the current frame is a menu/lobby/loading screen.
         Only catch the most obvious cases to avoid suppressing real gameplay.
+        Thresholds are intentionally strict — it's better to score a menu frame
+        than to suppress real gameplay.
         """
         h, w = frame.shape[:2]
 
-        # Almost black frame = loading screen
+        # Almost completely black frame = loading screen
         mean_brightness = np.mean(gray) / 255.0
-        if mean_brightness < 0.08:
+        if mean_brightness < 0.04:
             return True
 
-        # Very uniform center = solid menu background (not gameplay)
+        # Very uniform center with low brightness = solid menu background
+        # Require BOTH low variance AND low brightness to avoid catching
+        # outdoor/sky scenes which can have uniform areas but higher brightness
         center = gray[int(h * 0.2):int(h * 0.8), int(w * 0.2):int(w * 0.8)]
         std_dev = np.std(center)
-        if std_dev < 15:
+        if std_dev < 10 and mean_brightness < 0.25:
             return True
 
         return False
@@ -346,6 +355,11 @@ class GameDetector:
             window_end = min(i + window_frames, len(scores))
             window_slice = scores[i:window_end]
             avg_score = sum(s["score"] for s in window_slice) / len(window_slice)
+            peak_score = max(s["score"] for s in window_slice)
+            # Blend peak and average so a single strong spike isn't diluted away
+            # 60% peak + 40% average keeps spikes visible while still rewarding
+            # sustained action
+            blended_score = peak_score * 0.6 + avg_score * 0.4
 
             label_counts = {}
             for s in window_slice:
@@ -357,17 +371,26 @@ class GameDetector:
             window_scores.append({
                 "start_idx": i,
                 "timestamp": scores[i]["timestamp"],
-                "avg_score": avg_score,
+                "avg_score": blended_score,
                 "label": dominant_label,
             })
 
         peaks = [w for w in window_scores if w["avg_score"] >= self.intensity_threshold]
 
-        if not peaks:
+        # Fallback: if we found very few clips (not just zero), try to find more
+        min_expected = max(1, int(total_duration / 600))  # expect ~1 clip per 10 min
+        if len(peaks) < min_expected:
             sorted_windows = sorted(window_scores, key=lambda w: w["avg_score"], reverse=True)
             fallback_ratio = self.profile.get("fallback_threshold_ratio", 0.3)
             fallback_threshold = self.intensity_threshold * fallback_ratio
-            peaks = [w for w in sorted_windows[:5] if w["avg_score"] >= fallback_threshold]
+            max_fallback = max(5, min_expected * 2)
+            fallback_peaks = [w for w in sorted_windows[:max_fallback] if w["avg_score"] >= fallback_threshold]
+            # Merge original peaks with fallback (deduplicate by timestamp proximity)
+            existing_times = {p["timestamp"] for p in peaks}
+            for fp in fallback_peaks:
+                if not any(abs(fp["timestamp"] - t) < self.profile.get("merge_gap", 8) for t in existing_times):
+                    peaks.append(fp)
+                    existing_times.add(fp["timestamp"])
 
         if not peaks:
             return []
