@@ -1815,7 +1815,25 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
                 job["error"] = f"Roboflow model analysis failed: {error_msg}"
                 update("error", 0, f"Roboflow model error: {error_msg}")
                 return
-        elif detection_method in ("yolo_local", "arc_cv_pipeline"):
+        elif detection_method == "yolo_local":
+            # Standalone YOLO model — requires best.pt
+            update("analyzing", 42, "Loading YOLO model...")
+            try:
+                analyzer = YoloLocalAnalyzer(game_id=game_id)
+                highlights = analyzer.analyze_video(
+                    video_path,
+                    progress_callback=lambda p: update(
+                        "analyzing", 42 + int(p * 38),
+                        f"YOLO analyzing... {int(p * 100)}%"
+                    )
+                )
+            except RuntimeError as yolo_err:
+                error_msg = str(yolo_err)
+                print(f"  [YoloLocal] Error: {error_msg}")
+                job["error"] = error_msg
+                update("error", 0, error_msg)
+                return
+        elif detection_method == "arc_cv_pipeline":
             # Map sensitivity slider to scoring version:
             # 0-19: v1_strict (fewest clips, highest quality)
             # 20-39: v5_combat_only (only confirmed fights)

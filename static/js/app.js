@@ -1214,8 +1214,8 @@ function onDetectionMethodChange(method) {
         ai_vision: "AI analyzes screenshots of your gameplay. Most accurate but requires xAI API key and costs per use.",
         roboflow_workflow: "Roboflow AI workflow for Arc Raiders — streams video through a detect-and-classify pipeline. Requires Roboflow API key.",
         roboflow_model: "Sends frames directly to your Roboflow model for object detection. Simpler setup — just needs a Roboflow API key.",
-        yolo_local: "Runs a YOLO model locally on your machine. No API key needed — place your best.pt in the models/ folder.",
-        arc_cv_pipeline: "Pure OpenCV pipeline for Arc Raiders. Detects combat via HUD reading, VFX, muzzle flash, damage vignette, fire, and screen states. No API key or model weights needed. Optionally enhanced with YOLO if best.pt is in models/ folder.",
+        yolo_local: "Runs a trained YOLO model (best.pt) on each frame. You MUST have a trained model file in the models/ folder. Without it, this will fail. Train your own model on Roboflow or use CV Pipeline instead.",
+        arc_cv_pipeline: "Reads HUD elements (health bar, ammo, XP), detects VFX (muzzle flash, fire, explosions, damage vignette), and tracks frame-to-frame changes. No model file or API key needed — works offline out of the box. Best for Arc Raiders, decent for other shooters.",
     };
     document.getElementById("detection-hint").textContent = hints[method] || "";
     const apiSection = document.getElementById("api-key-section");
@@ -2347,7 +2347,7 @@ function triggerDownload(filename) {
 function onSensitivityChange(val) {
     val = parseInt(val);
     const method = document.getElementById("detection-method").value;
-    const isCv = method === "yolo_local" || method === "arc_cv_pipeline";
+    const isCv = method === "arc_cv_pipeline";
     let hint;
     if (isCv) {
         // Show CV scoring version names

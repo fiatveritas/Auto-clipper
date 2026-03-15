@@ -29,10 +29,12 @@ GAME_PROFILES = {
                 "weight": 0.25,
                 # Muzzle flash + explosions: orange-yellow bursts
                 # Third-person: flash appears on character model (lower-center)
-                "lower": np.array([10, 100, 150]),
+                # Raised sat floor 100->130 to reduce false positives from
+                # warm ambient lighting (campfires, sunsets, indoor lamps)
+                "lower": np.array([10, 130, 180]),
                 "upper": np.array([35, 255, 255]),
                 "region": "full",
-                "multiplier": 4,
+                "multiplier": 3,
             },
             "damage": {
                 "label": "Taking Damage",

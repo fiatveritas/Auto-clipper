@@ -150,10 +150,11 @@ class GameDetector:
                 audio_score = self._get_audio_score(timestamp, audio_levels)
                 if label == "Menu/Lobby":
                     # Menu frame — suppress completely regardless of audio
-                    # Game sounds during menu navigation are NOT exciting
                     score = 0.0
-                elif audio_weight > 0 and audio_score > 0:
-                    # Weighted blend: audio can carry the score even if CV is weak
+                elif audio_weight > 0 and audio_score > 0 and cv_score > 0.02:
+                    # Weighted blend — but only if CV found SOMETHING
+                    # Without this gate, audio alone (gunshot during idle camera)
+                    # can push boring frames past threshold over a sliding window
                     score = cv_score * (1.0 - audio_weight) + audio_score * audio_weight
                     if audio_score > 0.5 and label == "Highlight":
                         label = "Loud Combat"
