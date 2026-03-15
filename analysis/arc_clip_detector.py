@@ -243,7 +243,11 @@ class PixelAnalyzer:
     MENU_CENTER_MIN = 80
 
     # Flash threshold for muzzle flash / explosion center
-    FLASH_THRESH = 245
+    FLASH_THRESH = 235
+
+    # Crosshair area: tighter center region for gunfire detection
+    # Muzzle flash tends to bloom right around crosshair
+    CROSSHAIR = (0.400, 0.400, 0.600, 0.600)
 
     # Baseline brightness from dataset: mean=71.0, std=32.6
     BASELINE_BRIGHTNESS = 71.0
@@ -348,8 +352,19 @@ class PixelAnalyzer:
         # --- Muzzle flash (center, 4.1% of frames) ---
         center = self._region(frame, self.CENTER)
         flash_pct = self._bright_pct(center, self.FLASH_THRESH)
-        r["has_muzzle_flash"] = flash_pct > 0.02
-        r["flash_pct"] = round(flash_pct, 4)
+        # Also check tighter crosshair area with lower threshold
+        xhair = self._region(frame, self.CROSSHAIR)
+        xhair_flash = self._bright_pct(xhair, 220)
+        r["has_muzzle_flash"] = flash_pct > 0.01 or xhair_flash > 0.03
+        r["flash_pct"] = round(max(flash_pct, xhair_flash), 4)
+
+        # --- Shooting detection (ammo area brightness = weapon is firing) ---
+        ammo = self._region(frame, self.AMMO_COUNTER)
+        ammo_bright = self._bright_pct(ammo, 200)
+        weapon = self._region(frame, self.WEAPON_HUD)
+        weapon_bright = self._bright_pct(weapon, 200)
+        r["ammo_visible"] = ammo_bright > 0.05
+        r["weapon_hud_bright"] = round(weapon_bright, 4)
 
         # --- Red damage vignette (edges, 58.0% of frames!) ---
         edge_l = self._region(frame, self.EDGE_L)
@@ -391,7 +406,7 @@ class PixelAnalyzer:
         # --- Sharpness (motion blur detection via Laplacian) ---
         lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
         r["sharpness"] = round(lap_var, 1)
-        r["has_motion_blur"] = lap_var < 150
+        r["has_motion_blur"] = lap_var < 80
 
         # --- Color drama score ---
         hsv_full = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -402,40 +417,89 @@ class PixelAnalyzer:
         return r
 
     def score(self, px: dict) -> float:
-        """Convert pixel analysis into a score 0-100."""
+        """Convert pixel analysis into a score 0-100.
+
+        Tuned to avoid false positives from common ambient signals.
+        Only truly combat-specific signals should push past the clip threshold.
+
+        Signal frequency in dataset (762 frames):
+          - Damage vignette: 58% (AMBIENT — not clip-worthy alone)
+          - System message: 29% (AMBIENT)
+          - Entity label: 26% (AMBIENT — just means enemy name visible)
+          - Callout text: 24% (AMBIENT)
+          - Muzzle flash: 4.1% (COMBAT — clip-worthy)
+          - Fire/explosion: 1.0% (COMBAT — clip-worthy)
+          - XP notification: 0.4% (RARE — clip-worthy)
+          - Death screen: 0.1% (RARE — clip-worthy)
+        """
         s = 0.0
 
         # Screen state gates
         state = px.get("screen_state", "gameplay")
         if state in ("inventory", "death_screen"):
             if state == "death_screen":
-                return 25.0  # Deaths have some clip value
+                return 35.0  # Deaths are clip-worthy
             return 0.0  # Menus = never clip
 
-        # Health state
+        # ── STRONG SIGNALS (rare, combat-specific) ──
+        # These alone or combined should cross the clip threshold
+
+        # Fire/explosion (1% of frames — very distinctive)
+        if px.get("has_fire"):
+            s += 30 * min(1.0, px.get("fire_pct", 0) * 10)
+
+        # Muzzle flash / shooting (4.1% of frames)
+        if px.get("has_muzzle_flash"):
+            s += 25
+
+        # Screen flash (explosion whiteout)
+        if state == "screen_flash":
+            s += 30
+
+        # Critical health (real danger)
         h = px.get("health", "full")
-        if h == "critical":   s += 30
-        elif h == "low":      s += 15
-        elif h == "medium":   s += 5
+        if h == "critical":   s += 25
+        elif h == "low":      s += 10
 
-        # Combat VFX
-        if px.get("has_fire"):           s += 25 * min(1.0, px.get("fire_pct", 0) * 10)
-        if px.get("has_muzzle_flash"):   s += 15
-        if px.get("has_damage_vignette"): s += 12
-        if px.get("has_tracers"):        s += 8 + min(12, px.get("tracer_count", 0) * 0.5)
-        if state == "screen_flash":      s += 20
+        # XP notification (0.4% — kill confirmed / loot)
+        if px.get("xp_notification"):
+            s += 20
 
-        # HUD activity
-        if px.get("entity_label_visible"): s += 10
-        if px.get("xp_notification"):      s += 18
-        if px.get("callout_visible"):      s += 5
-        if px.get("system_message"):       s += 3
+        # ── MEDIUM SIGNALS (support signals, boost combat) ──
 
-        # Motion blur (screen shake from explosions)
-        if px.get("has_motion_blur"):    s += 8
+        # Tracers (bright particle streaks — active firefight)
+        if px.get("has_tracers"):
+            tc = px.get("tracer_count", 0)
+            if tc > 20:
+                s += 15  # Heavy firefight
+            elif tc > 10:
+                s += 8   # Light shooting
 
-        # Drama score
-        s += px.get("drama_score", 0) * 12
+        # ── WEAK SIGNALS (common/ambient — tiny contribution) ──
+        # These should NOT trigger clips on their own
+
+        # Damage vignette (58% of frames! — basically ambient)
+        if px.get("has_damage_vignette"):
+            s += 3
+
+        # Entity label (26% — just means enemy name is on screen)
+        if px.get("entity_label_visible"):
+            s += 2
+
+        # Callout text (24%)
+        if px.get("callout_visible"):
+            s += 1
+
+        # System message (29%)
+        if px.get("system_message"):
+            s += 1
+
+        # Motion blur (only real screen shake from explosions, threshold tightened)
+        if px.get("has_motion_blur"):
+            s += 5
+
+        # Drama score (color intensity — ambient, tiny bonus)
+        s += px.get("drama_score", 0) * 3
 
         return min(100, s)
 
@@ -738,8 +802,10 @@ class ArcClipDetectorAdapter:
 
         pixel = PixelAnalyzer(logger)
         scorer = ScoringEngine()
-        # Lower threshold for pixel-only since scores will be lower without YOLO
-        threshold = self.threshold if detector else max(25.0, self.threshold * 0.6)
+        # Pixel-only threshold: needs to be high enough to avoid false positives
+        # from ambient signals (vignette=3, label=2, drama=~1.5 = ~6.5 baseline)
+        # but low enough to catch real combat (muzzle flash=25, fire=30, etc.)
+        threshold = self.threshold if detector else max(35.0, self.threshold * 0.8)
         clusterer = Clusterer(logger, thresh=threshold)
 
         # Open video
