@@ -260,6 +260,10 @@ class PixelAnalyzer:
         self._prev_center_brightness = None
         self._prev_health_pct = None
         self._prev_flash_pct = None
+        self._prev_vignette_pct = None
+        self._prev_xp_pct = None
+        self._prev_ammo_gray = None   # Previous ammo region for frame diff
+        self._prev_edge_brightness = None
         self._brightness_history = []  # last N center brightness values
 
     def _region(self, frame, r):
@@ -471,11 +475,58 @@ class PixelAnalyzer:
             r["center_flicker"] = 0.0
             r["sustained_combat"] = False
 
+        # --- Localized flash: center delta >> edge delta = muzzle flash ---
+        # A muzzle flash blooms from center. A bright sky is uniform.
+        edge_l_b = self._avg_brightness(self._region(frame, self.EDGE_L))
+        edge_r_b = self._avg_brightness(self._region(frame, self.EDGE_R))
+        edge_avg_b = (edge_l_b + edge_r_b) / 2.0
+        if self._prev_edge_brightness is not None:
+            edge_delta = abs(edge_avg_b - self._prev_edge_brightness)
+            center_abs_delta = abs(r.get("center_delta", 0))
+            # Center changed a lot more than edges = localized flash (muzzle/explosion)
+            r["localized_flash"] = center_abs_delta > 15 and center_abs_delta > edge_delta * 2.5
+        else:
+            r["localized_flash"] = False
+
+        # --- Vignette onset: red APPEARED this frame (vs already present) ---
+        current_vignette = r.get("vignette_red_pct", 0.0)
+        if self._prev_vignette_pct is not None:
+            vignette_delta = current_vignette - self._prev_vignette_pct
+            r["vignette_onset"] = vignette_delta > 0.05  # Red just appeared
+        else:
+            r["vignette_onset"] = False
+
+        # --- XP appeared: XP notification just showed up this frame ---
+        current_xp = r.get("xp_yellow_pct", 0.0)
+        if self._prev_xp_pct is not None:
+            r["xp_appeared"] = current_xp > 0.01 and self._prev_xp_pct < 0.005
+        else:
+            r["xp_appeared"] = False
+
+        # --- Ammo counter changed: digits changed = player fired ---
+        ammo_region = self._region(frame, self.AMMO_COUNTER)
+        if ammo_region.size > 0:
+            ammo_gray = cv2.cvtColor(ammo_region, cv2.COLOR_BGR2GRAY)
+            if self._prev_ammo_gray is not None and self._prev_ammo_gray.shape == ammo_gray.shape:
+                ammo_diff = float(np.mean(cv2.absdiff(ammo_gray, self._prev_ammo_gray)))
+                r["ammo_changed"] = ammo_diff > 8.0  # Digits shifted
+                r["ammo_diff"] = round(ammo_diff, 1)
+            else:
+                r["ammo_changed"] = False
+                r["ammo_diff"] = 0.0
+            self._prev_ammo_gray = ammo_gray.copy()
+        else:
+            r["ammo_changed"] = False
+            r["ammo_diff"] = 0.0
+
         # Update previous frame state
         self._prev_brightness = avg_b
         self._prev_center_brightness = center_b
         self._prev_health_pct = current_health_pct
         self._prev_flash_pct = r.get("flash_pct", 0.0)
+        self._prev_vignette_pct = current_vignette
+        self._prev_xp_pct = current_xp
+        self._prev_edge_brightness = edge_avg_b
 
         return r
 
@@ -530,7 +581,7 @@ class PixelAnalyzer:
             strong_count += 1
 
         if px.get("big_health_drop"):
-            s += 25
+            s += 30
             strong_count += 1
 
         if px.get("sustained_combat"):
@@ -551,9 +602,23 @@ class PixelAnalyzer:
             strong_count += 1
 
         # Muzzle flash ONLY counts if there's also a temporal change
-        if px.get("has_muzzle_flash") and (px.get("sudden_flash") or px.get("sustained_combat")):
+        if px.get("has_muzzle_flash") and (px.get("localized_flash") or px.get("sustained_combat")):
             s += 20
             strong_count += 1
+
+        # Localized flash (center changed but edges didn't) = explosion/muzzle
+        if px.get("localized_flash") and not px.get("sudden_flash"):
+            s += 15
+            strong_count += 1
+
+        # Ammo counter changed = player is shooting
+        if px.get("ammo_changed"):
+            s += 15
+            strong_count += 1
+
+        # XP just appeared this frame = kill event
+        if px.get("xp_appeared"):
+            s += 10  # Bonus on top of xp_notification
 
         # Must have at least 1 strong signal to score above noise
         if strong_count == 0:
@@ -562,8 +627,8 @@ class PixelAnalyzer:
         # Small bonus for supporting signals
         if px.get("has_tracers") and px.get("tracer_count", 0) > 15:
             s += 5
-        if px.get("has_damage_vignette") and px.get("health_dropping"):
-            s += 5
+        if px.get("vignette_onset"):  # Red JUST appeared (not persistent)
+            s += 8
 
         return min(100, s)
 
@@ -646,6 +711,10 @@ class PixelAnalyzer:
         if px.get("sudden_flash"):
             s += 25
 
+        # Localized flash (center spiked but edges didn't) = muzzle flash / explosion
+        if px.get("localized_flash"):
+            s += 20
+
         # Health actively dropping = taking damage right now
         if px.get("big_health_drop"):
             s += 30
@@ -656,21 +725,34 @@ class PixelAnalyzer:
         if px.get("sustained_combat"):
             s += 22
 
+        # Ammo counter changed = player is shooting
+        if px.get("ammo_changed"):
+            s += 18
+
+        # Vignette just appeared = just took a hit (vs always-on ambient)
+        if px.get("vignette_onset"):
+            s += 12
+
+        # XP just appeared = kill event this frame
+        if px.get("xp_appeared"):
+            s += 10  # On top of xp_notification below
+
         # Post-explosion darkness
         if px.get("sudden_dark"):
             s += 10
 
         # === STATIC SIGNALS (secondary, boosted by temporal) ===
         has_action = (px.get("sudden_flash") or px.get("health_dropping")
-                      or px.get("sustained_combat"))
+                      or px.get("sustained_combat") or px.get("localized_flash")
+                      or px.get("ammo_changed"))
 
         # Fire — always worth something, more if temporal confirms
         if px.get("has_fire"):
-            s += 25 if has_action else 15
+            s += 25 if has_action else 12
 
         # Muzzle flash — only trust with temporal backup
         if px.get("has_muzzle_flash"):
-            s += 20 if has_action else 5
+            s += 18 if has_action else 3
 
         # Screen flash — need temporal to distinguish from bright scene
         if state == "screen_flash":
@@ -687,18 +769,18 @@ class PixelAnalyzer:
         if px.get("xp_notification"):
             s += 22
 
-        # Tracers
+        # Tracers — worth more with temporal support
         if px.get("has_tracers"):
             tc = px.get("tracer_count", 0)
-            if tc > 20: s += 12
-            elif tc > 10: s += 6
+            if tc > 20: s += 12 if has_action else 5
+            elif tc > 10: s += 6 if has_action else 2
 
         # Motion blur from screen shake
         if px.get("has_motion_blur"):
             s += 5
 
-        # Weak ambient signals (tiny contribution)
-        if px.get("has_damage_vignette") and has_action: s += 3
+        # Weak ambient signals (tiny contribution, only with action)
+        if px.get("has_damage_vignette") and has_action: s += 2
         if px.get("entity_label_visible"): s += 1
         s += px.get("drama_score", 0) * 2
 
@@ -777,9 +859,12 @@ class PixelAnalyzer:
         # Separate temporal vs static signals
         temporal_signals = 0
         if px.get("sudden_flash"): temporal_signals += 1
+        if px.get("localized_flash"): temporal_signals += 1
         if px.get("health_dropping"): temporal_signals += 1
         if px.get("sustained_combat"): temporal_signals += 1
         if px.get("big_health_drop"): temporal_signals += 1
+        if px.get("ammo_changed"): temporal_signals += 1
+        if px.get("vignette_onset"): temporal_signals += 1
         if px.get("sudden_dark"): temporal_signals += 1
 
         static_signals = 0
@@ -809,10 +894,14 @@ class PixelAnalyzer:
         # Bonus for strong specific combos (all require temporal)
         if px.get("has_fire") and px.get("sudden_flash"):
             s += 15  # Explosion confirmed
-        if px.get("health_dropping") and px.get("has_damage_vignette"):
-            s += 15  # Actively getting hurt
+        if px.get("health_dropping") and px.get("vignette_onset"):
+            s += 18  # Just got hit — vignette appeared + health dropped
+        elif px.get("health_dropping") and px.get("has_damage_vignette"):
+            s += 12  # Still getting hurt
         if px.get("has_muzzle_flash") and px.get("sustained_combat"):
             s += 15  # Sustained shooting confirmed
+        if px.get("ammo_changed") and px.get("localized_flash"):
+            s += 15  # Shooting + muzzle bloom confirmed
         if h == "critical" and px.get("big_health_drop"):
             s += 20  # Near death moment
 
