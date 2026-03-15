@@ -34,19 +34,20 @@ GAME_PROFILES = {
                 "lower": np.array([10, 130, 180]),
                 "upper": np.array([35, 255, 255]),
                 "region": "full",
-                "multiplier": 3,
+                "multiplier": 6,
             },
             "damage": {
                 "label": "Taking Damage",
                 "weight": 0.15,
                 # Red directional damage indicators + vignette at screen edges
-                "lower": np.array([0, 120, 100]),
+                # Lowered sat floor to catch desaturated reds too
+                "lower": np.array([0, 80, 80]),
                 "upper": np.array([10, 255, 255]),
-                "lower2": np.array([170, 120, 100]),
+                "lower2": np.array([170, 80, 80]),
                 "upper2": np.array([180, 255, 255]),
                 "region": "edges",
-                "edge_size": 0.10,
-                "multiplier": 4,
+                "edge_size": 0.12,
+                "multiplier": 8,
             },
             "health_bar": {
                 "label": "Health/Shield Drop",
@@ -56,71 +57,74 @@ GAME_PROFILES = {
                 "bar_region": [0.88, 0.95, 0.02, 0.22],
                 "bar_colors": [
                     # White health bar
-                    {"lower": np.array([0, 0, 180]), "upper": np.array([180, 40, 255])},
+                    {"lower": np.array([0, 0, 160]), "upper": np.array([180, 50, 255])},
                     # Blue shield segments
-                    {"lower": np.array([90, 60, 100]), "upper": np.array([130, 255, 255])},
+                    {"lower": np.array([85, 40, 80]), "upper": np.array([135, 255, 255])},
                 ],
-                "depletion_threshold": 0.10,
-                "multiplier": 6,
+                "depletion_threshold": 0.08,
+                "multiplier": 8,
             },
             "death_flare": {
                 "label": "Death / Kill",
                 "weight": 0.15,
                 # When a player dies, a bright RED FLARE shoots skyward
                 # Visible from across the map — the game's "kill notification"
-                "lower": np.array([0, 150, 180]),
-                "upper": np.array([10, 255, 255]),
-                "lower2": np.array([170, 150, 180]),
+                # Lowered sat/val floors to catch distant or partially occluded flares
+                "lower": np.array([0, 100, 140]),
+                "upper": np.array([12, 255, 255]),
+                "lower2": np.array([168, 100, 140]),
                 "upper2": np.array([180, 255, 255]),
                 # Upper portion of screen where flares appear
-                "region": [0.0, 0.50, 0.10, 0.90],
-                "multiplier": 6,
+                "region": [0.0, 0.55, 0.05, 0.95],
+                "multiplier": 10,
             },
             "red_scanner": {
                 "label": "ARC Enemy Aggro",
                 "weight": 0.15,
                 # ARC scanner beams turn RED when attacking
                 # Universal across all ARC types (Wasps, Bastions, Turrets, etc.)
-                "lower": np.array([0, 140, 150]),
-                "upper": np.array([8, 255, 255]),
-                "lower2": np.array([172, 140, 150]),
+                # Widened hue + lowered sat/val floors
+                "lower": np.array([0, 100, 120]),
+                "upper": np.array([10, 255, 255]),
+                "lower2": np.array([170, 100, 120]),
                 "upper2": np.array([180, 255, 255]),
-                "region": [0.10, 0.75, 0.10, 0.90],
-                "multiplier": 5,
+                "region": [0.05, 0.80, 0.05, 0.95],
+                "multiplier": 8,
             },
             "explosion": {
                 "label": "Explosion",
                 "weight": 0.15,
                 # Bright explosions, grenade blasts, ARC self-destruct
-                "lower": np.array([5, 150, 170]),
-                "upper": np.array([25, 255, 255]),
-                "region": [0.20, 0.90, 0.10, 0.90],
-                "multiplier": 5,
+                # Widened hue range and lowered sat floor
+                "lower": np.array([3, 100, 150]),
+                "upper": np.array([30, 255, 255]),
+                "region": [0.10, 0.90, 0.05, 0.95],
+                "multiplier": 8,
             },
         },
 
-        # Audio: helpful but don't let it dominate
-        "audio_weight": 0.30,
-        "audio_threshold_db": -15,
+        # Audio: stronger weight to compensate for uncertain CV
+        "audio_weight": 0.45,
+        "audio_threshold_db": -20,
         "audio_ceiling_db": -3,
 
         # Motion
-        "motion_weight": 0.10,
-        "motion_multiplier": 3,
+        "motion_weight": 0.12,
+        "motion_multiplier": 4,
 
         # Brightness spike
-        "brightness_weight": 0.05,
-        "brightness_threshold": 0.6,
-        "brightness_multiplier": 3,
+        "brightness_weight": 0.06,
+        "brightness_threshold": 0.55,
+        "brightness_multiplier": 4,
 
-        # Scoring — original v1 values
-        "intensity_threshold": 0.35,
-        "fallback_threshold_ratio": 0.5,
-        "merge_gap": 8,
-        "min_clip_duration": 20,
+        # Scoring — much more sensitive to catch more clips
+        "intensity_threshold": 0.15,
+        "fallback_threshold_ratio": 0.20,
+        "merge_gap": 10,
+        "min_clip_duration": 10,
         "max_clip_duration": 60,
-        "clip_extension": 10,
-        "pre_pad": 8,
+        "clip_extension": 12,
+        "pre_pad": 10,
 
         # AI prompt
         "ai_system_prompt": """You are an expert Arc Raiders gameplay analyst. You analyze screenshots from Arc Raiders streams to identify exciting moments worth clipping.
@@ -169,49 +173,49 @@ Score guide: 0.0 = menu/nothing happening, 0.3 = minor action, 0.6 = good combat
                 "weight": 0.22,
                 # THIRD-PERSON: muzzle flash on character model
                 # Widened hue range to catch energy weapons (bluer flash)
-                # Lowered sat floor to catch washed-out muzzle flashes in bright areas
-                "lower": np.array([8, 100, 170]),
-                "upper": np.array([35, 255, 255]),
+                # Lowered sat floor further to catch washed-out flashes
+                "lower": np.array([6, 80, 150]),
+                "upper": np.array([38, 255, 255]),
                 # White/blue energy weapon flash
-                "lower2": np.array([0, 0, 230]),
-                "upper2": np.array([180, 50, 255]),
-                # Wider region — character can be left/right depending on camera
-                "region": [0.35, 0.90, 0.25, 0.85],
-                "multiplier": 5,
+                "lower2": np.array([0, 0, 210]),
+                "upper2": np.array([180, 60, 255]),
+                # Wider region — character can be anywhere
+                "region": [0.30, 0.92, 0.15, 0.85],
+                "multiplier": 8,
             },
             "death_flare": {
                 "label": "Death / Kill",
-                "weight": 0.12,
+                "weight": 0.14,
                 # Bright RED FLARE skyward on player death
-                # Widened sat range — flares can be partially washed out at distance
-                "lower": np.array([0, 130, 160]),
-                "upper": np.array([12, 255, 255]),
-                "lower2": np.array([168, 130, 160]),
+                # Lowered sat/val floors to catch distant flares
+                "lower": np.array([0, 100, 130]),
+                "upper": np.array([14, 255, 255]),
+                "lower2": np.array([166, 100, 130]),
                 "upper2": np.array([180, 255, 255]),
-                "region": [0.0, 0.55, 0.05, 0.95],
-                "multiplier": 7,
+                "region": [0.0, 0.60, 0.02, 0.98],
+                "multiplier": 10,
             },
             "red_scanner": {
                 "label": "ARC Enemy Aggro",
                 "weight": 0.15,
                 # ARC scanner beams turn RED when attacking
-                # Slightly wider hue range to catch orange-red transition
-                "lower": np.array([0, 130, 140]),
-                "upper": np.array([10, 255, 255]),
-                "lower2": np.array([170, 130, 140]),
+                # Wider hue + lower sat/val floors
+                "lower": np.array([0, 90, 110]),
+                "upper": np.array([12, 255, 255]),
+                "lower2": np.array([168, 90, 110]),
                 "upper2": np.array([180, 255, 255]),
-                "region": [0.08, 0.80, 0.08, 0.92],
-                "multiplier": 5,
+                "region": [0.05, 0.82, 0.05, 0.95],
+                "multiplier": 8,
             },
             "explosion": {
                 "label": "Explosion",
                 "weight": 0.12,
                 # Large explosions, grenades, ARC self-destruct
-                # Added wider region and slightly lower sat floor
-                "lower": np.array([5, 130, 160]),
-                "upper": np.array([28, 255, 255]),
-                "region": [0.20, 0.92, 0.10, 0.90],
-                "multiplier": 5,
+                # Wider hue and lower sat floor
+                "lower": np.array([3, 90, 140]),
+                "upper": np.array([32, 255, 255]),
+                "region": [0.10, 0.92, 0.05, 0.95],
+                "multiplier": 8,
             },
             "health_bar": {
                 "label": "Health/Shield Drop",
@@ -220,67 +224,67 @@ Score guide: 0.0 = menu/nothing happening, 0.3 = minor action, 0.6 = good combat
                 "region": "health_bar",
                 "bar_region": [0.86, 0.96, 0.01, 0.24],
                 "bar_colors": [
-                    {"lower": np.array([0, 0, 170]), "upper": np.array([180, 45, 255])},
-                    {"lower": np.array([85, 50, 90]), "upper": np.array([135, 255, 255])},
+                    {"lower": np.array([0, 0, 150]), "upper": np.array([180, 55, 255])},
+                    {"lower": np.array([80, 35, 70]), "upper": np.array([140, 255, 255])},
                 ],
-                "depletion_threshold": 0.08,
-                "multiplier": 6,
+                "depletion_threshold": 0.06,
+                "multiplier": 8,
             },
             "damage_indicators": {
                 "label": "Taking Damage",
-                "weight": 0.11,
+                "weight": 0.12,
                 # Red directional indicators + vignette
-                # Wider edge region to catch more subtle indicators
-                "lower": np.array([0, 110, 90]),
-                "upper": np.array([12, 255, 255]),
-                "lower2": np.array([168, 110, 90]),
+                # Lower sat/val floors to catch subtle indicators
+                "lower": np.array([0, 80, 70]),
+                "upper": np.array([14, 255, 255]),
+                "lower2": np.array([166, 80, 70]),
                 "upper2": np.array([180, 255, 255]),
                 "region": "edges",
-                "edge_size": 0.12,
-                "multiplier": 4,
+                "edge_size": 0.14,
+                "multiplier": 7,
             },
             "weak_point_glow": {
                 "label": "Weak Point Hit",
                 "weight": 0.05,
                 # Yellow weak point glow on enemies
-                "lower": np.array([18, 90, 140]),
-                "upper": np.array([42, 255, 255]),
-                "region": [0.15, 0.85, 0.15, 0.85],
-                "multiplier": 3,
+                "lower": np.array([15, 70, 120]),
+                "upper": np.array([45, 255, 255]),
+                "region": [0.10, 0.85, 0.10, 0.90],
+                "multiplier": 5,
             },
             "crosshair_activity": {
                 "label": "Combat (Crosshair)",
-                "weight": 0.10,
+                "weight": 0.07,
                 # Dynamic crosshair center screen — bright white
-                "lower": np.array([0, 0, 235]),
-                "upper": np.array([180, 30, 255]),
-                "region": [0.42, 0.58, 0.42, 0.58],
-                "multiplier": 5,
+                "lower": np.array([0, 0, 220]),
+                "upper": np.array([180, 40, 255]),
+                "region": [0.40, 0.60, 0.40, 0.60],
+                "multiplier": 6,
             },
         },
 
-        # Audio: important signal but don't let it overwhelm
-        "audio_weight": 0.35,
-        "audio_threshold_db": -18,
+        # Audio: boosted to compensate for uncertain CV
+        "audio_weight": 0.45,
+        "audio_threshold_db": -22,
         "audio_ceiling_db": -3,
 
-        # Motion: slight boost — combat has more movement
-        "motion_weight": 0.08,
-        "motion_multiplier": 2.5,
+        # Motion: boosted — combat has more movement
+        "motion_weight": 0.12,
+        "motion_multiplier": 4,
 
         # Brightness: catch explosion whiteouts
-        "brightness_weight": 0.04,
-        "brightness_threshold": 0.70,
-        "brightness_multiplier": 2.5,
+        "brightness_weight": 0.06,
+        "brightness_threshold": 0.55,
+        "brightness_multiplier": 4,
 
-        # Scoring — slightly lower threshold to catch more action
-        "intensity_threshold": 0.30,
-        "fallback_threshold_ratio": 0.35,
-        "merge_gap": 6,
-        "min_clip_duration": 15,
-        "max_clip_duration": 60,
-        "clip_extension": 10,
-        "pre_pad": 8,
+        # Scoring — much lower threshold, aggressive fallback
+        "intensity_threshold": 0.15,
+        "fallback_threshold_ratio": 0.20,
+        "merge_gap": 10,
+        "min_clip_duration": 10,
+        "max_clip_duration": 65,
+        "clip_extension": 12,
+        "pre_pad": 10,
 
         "ai_system_prompt": """You are an expert Arc Raiders gameplay analyst. Arc Raiders is a PvE co-op extraction shooter by Embark Studios where players fight robot enemies called ARCs.
 
@@ -326,117 +330,118 @@ Score guide: 0.0 = menu/nothing, 0.3 = minor action, 0.6 = good combat, 0.8 = ki
                 "label": "Combat / Muzzle Flash",
                 "weight": 0.20,
                 # Very wide orange-yellow range to catch any flash-like event
-                # Includes warm whites from energy weapons
-                "lower": np.array([5, 80, 150]),
-                "upper": np.array([40, 255, 255]),
+                # Lower sat/val floors — maximum sensitivity
+                "lower": np.array([3, 60, 120]),
+                "upper": np.array([42, 255, 255]),
                 "region": "full",
-                "multiplier": 4,
+                "multiplier": 8,
             },
             "death_flare": {
                 "label": "Death / Kill",
                 "weight": 0.15,
                 # Wider red range — catches flares, blood, damage indicators all at once
-                "lower": np.array([0, 100, 130]),
-                "upper": np.array([15, 255, 255]),
-                "lower2": np.array([165, 100, 130]),
+                # Even lower sat/val for distant/faint flares
+                "lower": np.array([0, 80, 100]),
+                "upper": np.array([18, 255, 255]),
+                "lower2": np.array([162, 80, 100]),
                 "upper2": np.array([180, 255, 255]),
                 "region": "full",
-                "multiplier": 5,
+                "multiplier": 10,
             },
             "red_scanner": {
                 "label": "ARC Enemy Aggro",
                 "weight": 0.12,
-                # Scanner beam — broader range
-                "lower": np.array([0, 120, 120]),
-                "upper": np.array([12, 255, 255]),
-                "lower2": np.array([168, 120, 120]),
+                # Scanner beam — maximum range
+                "lower": np.array([0, 80, 100]),
+                "upper": np.array([14, 255, 255]),
+                "lower2": np.array([166, 80, 100]),
                 "upper2": np.array([180, 255, 255]),
-                "region": [0.05, 0.80, 0.05, 0.95],
-                "multiplier": 4,
+                "region": [0.02, 0.85, 0.02, 0.98],
+                "multiplier": 8,
             },
             "explosion": {
                 "label": "Explosion",
                 "weight": 0.12,
                 # Bright explosions across most of screen
-                "lower": np.array([3, 120, 150]),
-                "upper": np.array([30, 255, 255]),
-                "region": [0.15, 0.95, 0.05, 0.95],
-                "multiplier": 4,
+                "lower": np.array([2, 80, 120]),
+                "upper": np.array([35, 255, 255]),
+                "region": [0.05, 0.95, 0.02, 0.98],
+                "multiplier": 8,
             },
             "health_bar": {
                 "label": "Health/Shield Drop",
                 "weight": 0.10,
                 "region": "health_bar",
-                "bar_region": [0.85, 0.97, 0.01, 0.25],
+                "bar_region": [0.84, 0.97, 0.01, 0.26],
                 "bar_colors": [
-                    {"lower": np.array([0, 0, 160]), "upper": np.array([180, 50, 255])},
-                    {"lower": np.array([80, 40, 80]), "upper": np.array([140, 255, 255])},
+                    {"lower": np.array([0, 0, 140]), "upper": np.array([180, 60, 255])},
+                    {"lower": np.array([75, 30, 60]), "upper": np.array([145, 255, 255])},
                 ],
-                "depletion_threshold": 0.06,
-                "multiplier": 5,
+                "depletion_threshold": 0.05,
+                "multiplier": 8,
             },
             "damage": {
                 "label": "Taking Damage",
                 "weight": 0.10,
-                "lower": np.array([0, 100, 80]),
-                "upper": np.array([12, 255, 255]),
-                "lower2": np.array([168, 100, 80]),
+                "lower": np.array([0, 70, 60]),
+                "upper": np.array([14, 255, 255]),
+                "lower2": np.array([166, 70, 60]),
                 "upper2": np.array([180, 255, 255]),
                 "region": "edges",
-                "edge_size": 0.15,
-                "multiplier": 3,
+                "edge_size": 0.16,
+                "multiplier": 7,
             },
             "yellow_glow": {
                 "label": "Weak Point / Alert",
                 "weight": 0.08,
                 # Yellow glow — weak points + yellow scanner state (alert)
-                "lower": np.array([15, 80, 130]),
-                "upper": np.array([45, 255, 255]),
+                "lower": np.array([12, 60, 100]),
+                "upper": np.array([48, 255, 255]),
                 "region": "full",
-                "multiplier": 3,
+                "multiplier": 6,
             },
             "blue_energy": {
                 "label": "Energy / Shield VFX",
                 "weight": 0.08,
                 # Blue energy effects — shield recharge, scanner curious state,
                 # energy weapon trails
-                "lower": np.array([95, 80, 130]),
-                "upper": np.array([125, 255, 255]),
-                "region": [0.10, 0.90, 0.10, 0.90],
-                "multiplier": 3,
+                "lower": np.array([90, 60, 100]),
+                "upper": np.array([130, 255, 255]),
+                "region": [0.05, 0.95, 0.05, 0.95],
+                "multiplier": 5,
             },
             "crosshair": {
                 "label": "Combat (Crosshair)",
                 "weight": 0.05,
-                "lower": np.array([0, 0, 230]),
-                "upper": np.array([180, 35, 255]),
-                "region": [0.40, 0.60, 0.40, 0.60],
-                "multiplier": 4,
+                "lower": np.array([0, 0, 215]),
+                "upper": np.array([180, 45, 255]),
+                "region": [0.38, 0.62, 0.38, 0.62],
+                "multiplier": 5,
             },
         },
 
-        # Audio: strong weight — explosions/gunfire are very reliable
-        "audio_weight": 0.40,
-        "audio_threshold_db": -20,
+        # Audio: very strong — let sound drive detection
+        "audio_weight": 0.50,
+        "audio_threshold_db": -24,
         "audio_ceiling_db": -3,
 
-        # Motion: decent weight — action = camera shake
-        "motion_weight": 0.12,
-        "motion_multiplier": 3,
+        # Motion: boosted — action = camera shake
+        "motion_weight": 0.15,
+        "motion_multiplier": 4,
 
         # Brightness: moderate
-        "brightness_weight": 0.06,
-        "brightness_threshold": 0.60,
-        "brightness_multiplier": 3,
+        "brightness_weight": 0.08,
+        "brightness_threshold": 0.50,
+        "brightness_multiplier": 4,
 
-        # Scoring — LOWER threshold catches more moments
-        "intensity_threshold": 0.22,
-        "fallback_threshold_ratio": 0.30,
-        "merge_gap": 5,
-        "min_clip_duration": 12,
+        # Scoring — very low threshold, aggressive fallback
+        "intensity_threshold": 0.12,
+        "fallback_threshold_ratio": 0.20,
+        "merge_gap": 10,
+        "min_clip_duration": 8,
         "max_clip_duration": 75,
-        "clip_extension": 12,
-        "pre_pad": 10,
+        "clip_extension": 14,
+        "pre_pad": 12,
 
         "ai_system_prompt": """You are an expert Arc Raiders gameplay analyst. Arc Raiders is a PvE co-op extraction shooter. THIRD-PERSON, NO kill feed (red flare = death), NO hit markers.
 
@@ -463,87 +468,88 @@ For each frame, respond with ONLY a JSON object (no markdown):
             "combat_flash": {
                 "label": "Combat Flash",
                 "weight": 0.15,
-                # Standard muzzle flash — kept tight since audio does the heavy work
-                "lower": np.array([10, 130, 180]),
-                "upper": np.array([35, 255, 255]),
-                "region": [0.30, 0.90, 0.20, 0.80],
-                "multiplier": 3,
+                # Muzzle flash — widened since audio is primary, CV just confirms
+                "lower": np.array([6, 80, 140]),
+                "upper": np.array([38, 255, 255]),
+                "region": [0.25, 0.92, 0.15, 0.85],
+                "multiplier": 6,
             },
             "death_flare": {
                 "label": "Death / Kill",
-                "weight": 0.08,
-                "lower": np.array([0, 150, 180]),
-                "upper": np.array([10, 255, 255]),
-                "lower2": np.array([170, 150, 180]),
+                "weight": 0.10,
+                # Lowered sat/val floors for distant flares
+                "lower": np.array([0, 100, 130]),
+                "upper": np.array([12, 255, 255]),
+                "lower2": np.array([168, 100, 130]),
                 "upper2": np.array([180, 255, 255]),
-                "region": [0.0, 0.50, 0.10, 0.90],
-                "multiplier": 5,
+                "region": [0.0, 0.55, 0.05, 0.95],
+                "multiplier": 8,
             },
             "red_aggro": {
                 "label": "ARC Aggro",
                 "weight": 0.10,
-                "lower": np.array([0, 140, 150]),
-                "upper": np.array([8, 255, 255]),
-                "lower2": np.array([172, 140, 150]),
+                "lower": np.array([0, 90, 110]),
+                "upper": np.array([10, 255, 255]),
+                "lower2": np.array([170, 90, 110]),
                 "upper2": np.array([180, 255, 255]),
-                "region": [0.10, 0.75, 0.10, 0.90],
-                "multiplier": 4,
+                "region": [0.05, 0.80, 0.05, 0.95],
+                "multiplier": 6,
             },
             "explosion": {
                 "label": "Explosion",
-                "weight": 0.07,
-                "lower": np.array([5, 150, 170]),
-                "upper": np.array([25, 255, 255]),
-                "region": [0.20, 0.90, 0.10, 0.90],
-                "multiplier": 4,
+                "weight": 0.08,
+                "lower": np.array([3, 90, 140]),
+                "upper": np.array([30, 255, 255]),
+                "region": [0.10, 0.92, 0.05, 0.95],
+                "multiplier": 6,
             },
             "health_bar": {
                 "label": "Health/Shield Drop",
                 "weight": 0.08,
                 "region": "health_bar",
-                "bar_region": [0.88, 0.95, 0.02, 0.22],
+                "bar_region": [0.86, 0.96, 0.01, 0.24],
                 "bar_colors": [
-                    {"lower": np.array([0, 0, 180]), "upper": np.array([180, 40, 255])},
-                    {"lower": np.array([90, 60, 100]), "upper": np.array([130, 255, 255])},
+                    {"lower": np.array([0, 0, 150]), "upper": np.array([180, 55, 255])},
+                    {"lower": np.array([80, 35, 70]), "upper": np.array([140, 255, 255])},
                 ],
-                "depletion_threshold": 0.10,
-                "multiplier": 5,
+                "depletion_threshold": 0.06,
+                "multiplier": 7,
             },
             "damage": {
                 "label": "Taking Damage",
-                "weight": 0.07,
-                "lower": np.array([0, 120, 100]),
-                "upper": np.array([10, 255, 255]),
-                "lower2": np.array([170, 120, 100]),
+                "weight": 0.08,
+                "lower": np.array([0, 80, 70]),
+                "upper": np.array([12, 255, 255]),
+                "lower2": np.array([168, 80, 70]),
                 "upper2": np.array([180, 255, 255]),
                 "region": "edges",
-                "edge_size": 0.10,
-                "multiplier": 3,
+                "edge_size": 0.14,
+                "multiplier": 6,
             },
         },
 
         # Audio: DOMINANT — this is the core signal
-        "audio_weight": 0.60,
-        "audio_threshold_db": -22,
+        "audio_weight": 0.70,
+        "audio_threshold_db": -25,
         "audio_ceiling_db": -3,
 
-        # Motion: minor
-        "motion_weight": 0.03,
-        "motion_multiplier": 2,
+        # Motion: minor but boosted
+        "motion_weight": 0.05,
+        "motion_multiplier": 3,
 
-        # Brightness: minor
-        "brightness_weight": 0.02,
-        "brightness_threshold": 0.70,
-        "brightness_multiplier": 2,
+        # Brightness: minor but boosted
+        "brightness_weight": 0.04,
+        "brightness_threshold": 0.55,
+        "brightness_multiplier": 3,
 
-        # Scoring
-        "intensity_threshold": 0.28,
-        "fallback_threshold_ratio": 0.35,
-        "merge_gap": 6,
-        "min_clip_duration": 15,
-        "max_clip_duration": 60,
-        "clip_extension": 10,
-        "pre_pad": 8,
+        # Scoring — lower threshold, audio carries
+        "intensity_threshold": 0.13,
+        "fallback_threshold_ratio": 0.20,
+        "merge_gap": 10,
+        "min_clip_duration": 10,
+        "max_clip_duration": 65,
+        "clip_extension": 12,
+        "pre_pad": 10,
 
         "ai_system_prompt": """You are an expert Arc Raiders gameplay analyst. Focus on AUDIO cues — this profile relies heavily on sound.
 
