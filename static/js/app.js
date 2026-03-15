@@ -188,6 +188,7 @@ function startUploadAnalysis() {
     formData.append("sensitivity", document.getElementById("sensitivity").value);
 
     const xhr = new XMLHttpRequest();
+    xhr.timeout = 0;  // No timeout for large file uploads
     xhr.open("POST", "/api/upload");
     xhr.upload.addEventListener("progress", (e) => {
         if (e.lengthComputable) {
@@ -202,8 +203,8 @@ function startUploadAnalysis() {
             currentJobId = data.job_id;
             startPolling();
         } else {
-            try { showError(JSON.parse(xhr.responseText).error || "Upload failed"); }
-            catch { showError("Upload failed. File may be too large."); }
+            try { showError(JSON.parse(xhr.responseText).error || "Upload failed (status " + xhr.status + ")"); }
+            catch { showError("Upload failed (status " + xhr.status + "). Check that the server is running and the file is a valid video."); }
             resetUI();
         }
     });

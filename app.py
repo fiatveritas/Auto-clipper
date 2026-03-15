@@ -263,7 +263,11 @@ def delete_session(job_id):
 
 @app.route("/api/upload", methods=["POST"])
 def upload_vod():
-    """Accept a VOD file upload and start analysis."""
+    """Accept a VOD file upload and start analysis.
+
+    Uses streaming write to handle large files (1GB+) without loading
+    the entire file into memory.
+    """
     if "file" not in request.files:
         return jsonify({"error": "No file provided"}), 400
 
@@ -285,10 +289,25 @@ def upload_vod():
 
     job_id = str(uuid.uuid4())[:8]
 
-    # Save to library directly with original filename
+    # Save to library using streaming chunks to avoid loading entire file into RAM
     safe_name = re.sub(r'[^\w\-. ]', '_', file.filename)
     lib_path = os.path.join(LIBRARY_DIR, safe_name)
-    file.save(lib_path)
+    try:
+        with open(lib_path, "wb") as out:
+            chunk_size = 16 * 1024 * 1024  # 16 MB chunks
+            while True:
+                chunk = file.stream.read(chunk_size)
+                if not chunk:
+                    break
+                out.write(chunk)
+    except Exception as e:
+        # Clean up partial file
+        if os.path.exists(lib_path):
+            os.remove(lib_path)
+        return jsonify({"error": f"Upload failed: {str(e)}"}), 500
+
+    file_size_mb = os.path.getsize(lib_path) / (1024 * 1024)
+    print(f"  [Upload] Saved {safe_name} ({file_size_mb:.1f} MB)")
 
     jobs[job_id] = {
         "status": "analyzing",
