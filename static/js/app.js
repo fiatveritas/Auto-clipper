@@ -231,6 +231,7 @@ let currentClips = [];
 let previewClipData = null;
 let previewClipIndex = -1;
 let pollTimer = null;
+let pollFailures = 0;
 let vodDuration = 0;
 
 // ===== Init =====
@@ -472,6 +473,7 @@ document.getElementById("vod-url").addEventListener("keydown", (e) => {
 // Polling
 function startPolling() {
     if (pollTimer) clearInterval(pollTimer);
+    pollFailures = 0;
     pollTimer = setInterval(pollJob, 1500);
 }
 
@@ -483,8 +485,15 @@ function pollJob() {
     if (!currentJobId) return;
 
     fetch(`/api/jobs/${currentJobId}`)
-        .then((res) => res.json())
+        .then((res) => {
+            if (!res.ok) {
+                throw new Error(`Job not found (${res.status})`);
+            }
+            return res.json();
+        })
         .then((data) => {
+            pollFailures = 0;
+
             if (data.error && !data.status) {
                 showError(data.error);
                 resetUI();
@@ -504,7 +513,14 @@ function pollJob() {
                 resetUI();
             }
         })
-        .catch(() => {});
+        .catch((err) => {
+            pollFailures = (pollFailures || 0) + 1;
+            if (pollFailures >= 5) {
+                stopPolling();
+                showError("Lost connection to the analysis job. Please try again.");
+                resetUI();
+            }
+        });
 }
 
 // Progress

@@ -452,7 +452,7 @@ class GameDetector:
             "duration": duration,
             "pre_pad": self.profile.get("pre_pad", 8),
             "label": highlight["label"],
-            "confidence": round(min(highlight["confidence"] * 1.5, 1.0), 2),
+            "confidence": round(min(highlight["confidence"], 1.0), 2),
         }
 
 

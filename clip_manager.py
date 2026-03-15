@@ -91,7 +91,9 @@ class ClipManager:
             "progress_hooks": [progress_hook],
             "quiet": True,
             "no_warnings": True,
-            "socket_timeout": 30,
+            "socket_timeout": 120,
+            "retries": 5,
+            "fragment_retries": 5,
         }
 
         # Time range for partial downloads
@@ -100,13 +102,36 @@ class ClipManager:
             end_sec = _parse_time_to_seconds(time_end) if time_end else float("inf")
             if end_sec is None:
                 end_sec = float("inf")
+            if end_sec != float("inf") and start_sec >= end_sec:
+                raise ValueError(f"Invalid time range: start ({time_start}) >= end ({time_end})")
             ydl_opts["download_ranges"] = yt_dlp.utils.download_range_func(
                 None, [(start_sec, end_sec)]
             )
             ydl_opts["force_keyframes_at_cuts"] = True
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+        # Retry with exponential backoff on network errors
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+                break
+            except Exception as e:
+                err_str = str(e).lower()
+                is_network = any(k in err_str for k in ("timeout", "connection", "network", "socket", "reset", "eof"))
+                if is_network and attempt < max_attempts:
+                    wait = 2 ** attempt
+                    print(f"  [Download] Attempt {attempt} failed ({e}), retrying in {wait}s...")
+                    time.sleep(wait)
+                    continue
+                # Not a network error or last attempt — clean up and raise
+                if os.path.exists(output_path):
+                    try:
+                        os.remove(output_path)
+                        print(f"  [Download] Cleaned up incomplete file: {output_path}")
+                    except OSError:
+                        pass
+                raise
 
         if os.path.exists(output_path):
             return output_path
@@ -146,11 +171,14 @@ class ClipManager:
             duration = highlight.get("duration", 25)
 
             # Extract clip with ffmpeg
+            # -ss after -i = frame-accurate (decode from nearest keyframe)
+            # -ss before -i = fast but can be off by 1-5 seconds
+            end_time = start_time + duration
             cmd = [
                 "ffmpeg", "-y",
-                "-ss", str(start_time),
                 "-i", video_path,
-                "-t", str(duration),
+                "-ss", str(start_time),
+                "-to", str(end_time),
                 "-c:v", "libx264",
                 "-preset", "fast",
                 "-crf", "23",
@@ -160,22 +188,32 @@ class ClipManager:
                 clip_path,
             ]
 
-            result = subprocess.run(cmd, capture_output=True, timeout=180)
+            result = subprocess.run(cmd, capture_output=True, timeout=300)
 
             if result.returncode != 0 or not os.path.exists(clip_path):
+                stderr_msg = result.stderr.decode("utf-8", errors="replace")[-200:] if result.stderr else ""
+                print(f"  [ClipManager] ffmpeg clip failed: {stderr_msg}")
                 continue
 
             # Generate thumbnail at the midpoint of the clip
             thumb_time = start_time + duration / 2
             thumb_cmd = [
                 "ffmpeg", "-y",
-                "-ss", str(thumb_time),
                 "-i", video_path,
+                "-ss", str(thumb_time),
                 "-frames:v", "1",
                 "-q:v", "5",
                 thumb_path,
             ]
-            subprocess.run(thumb_cmd, capture_output=True, timeout=30)
+            thumb_result = subprocess.run(thumb_cmd, capture_output=True, timeout=30)
+            if thumb_result.returncode != 0:
+                print(f"  [ClipManager] Thumbnail failed for clip {clip_id}, using first frame")
+                # Fallback: grab first frame of the clip itself
+                fallback_cmd = [
+                    "ffmpeg", "-y", "-i", clip_path,
+                    "-frames:v", "1", "-q:v", "5", thumb_path,
+                ]
+                subprocess.run(fallback_cmd, capture_output=True, timeout=15)
 
             clip_info = {
                 "id": clip_id,
@@ -206,11 +244,15 @@ class ClipManager:
         thumb_filename = f"{job_id}_{clip_id}_trim.jpg"
         thumb_path = os.path.join(self.thumbnails_dir, thumb_filename)
 
+        # Validate bounds
+        if new_start < 0:
+            new_start = 0
+
         cmd = [
             "ffmpeg", "-y",
-            "-ss", str(new_start),
             "-i", video_path,
-            "-t", str(duration),
+            "-ss", str(new_start),
+            "-to", str(new_end),
             "-c:v", "libx264",
             "-preset", "fast",
             "-crf", "23",
@@ -220,20 +262,26 @@ class ClipManager:
             clip_path,
         ]
 
-        result = subprocess.run(cmd, capture_output=True, timeout=180)
+        result = subprocess.run(cmd, capture_output=True, timeout=300)
         if result.returncode != 0 or not os.path.exists(clip_path):
             return None
 
         # Thumbnail
         thumb_cmd = [
             "ffmpeg", "-y",
-            "-ss", str(new_start + duration / 2),
             "-i", video_path,
+            "-ss", str(new_start + duration / 2),
             "-frames:v", "1",
             "-q:v", "5",
             thumb_path,
         ]
-        subprocess.run(thumb_cmd, capture_output=True, timeout=30)
+        thumb_result = subprocess.run(thumb_cmd, capture_output=True, timeout=30)
+        if thumb_result.returncode != 0:
+            fallback_cmd = [
+                "ffmpeg", "-y", "-i", clip_path,
+                "-frames:v", "1", "-q:v", "5", thumb_path,
+            ]
+            subprocess.run(fallback_cmd, capture_output=True, timeout=15)
 
         return {
             "filename": filename,

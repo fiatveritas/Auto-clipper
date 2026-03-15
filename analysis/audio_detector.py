@@ -154,10 +154,10 @@ class AudioDetector:
             # Fallback: take the loudest moments, but be selective
             # Only fall back if the top moments are genuinely above-average loud
             sorted_scores = sorted(scores, key=lambda s: s["score"], reverse=True)
-            fallback_ratio = self.profile.get("fallback_threshold_ratio", 0.15)
+            fallback_ratio = self.profile.get("fallback_threshold_ratio", 0.50)
             fallback_threshold = intensity_threshold * fallback_ratio
-            # Only take top 5 (not 10) and require at least some audio activity
-            loud_seconds = [s for s in sorted_scores[:5] if s["score"] >= fallback_threshold
+            # Only take top 3 and require genuine audio activity above the fallback
+            loud_seconds = [s for s in sorted_scores[:3] if s["score"] >= fallback_threshold
                            and s["label"] not in ("Ambient", "Ambient Activity")]
 
         if not loud_seconds:
