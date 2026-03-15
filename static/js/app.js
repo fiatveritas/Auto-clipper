@@ -22,6 +22,7 @@ function saveState() {
         sensitivity: document.getElementById("sensitivity").value,
         source: currentSource,
         currentJobId: currentJobId,
+        detectionSettings: saveDetectionSettings(),
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
@@ -70,6 +71,9 @@ function restoreState() {
     }
     if (state.source) {
         setSource(state.source);
+    }
+    if (state.detectionSettings) {
+        restoreDetectionSettings(state.detectionSettings);
     }
     if (state.currentJobId) {
         currentJobId = state.currentJobId;
@@ -186,6 +190,7 @@ function startUploadAnalysis() {
     formData.append("game", selectedGame);
     formData.append("detection_method", document.getElementById("detection-method").value);
     formData.append("sensitivity", document.getElementById("sensitivity").value);
+    formData.append("detection_overrides", JSON.stringify(getDetectionOverrides()));
 
     const xhr = new XMLHttpRequest();
     xhr.timeout = 0;  // No timeout for large file uploads
@@ -434,6 +439,7 @@ function startAnalysis() {
             game: selectedGame,
             detection_method: detectionMethod,
             sensitivity: sensitivity,
+            detection_overrides: getDetectionOverrides(),
         }),
     })
     .then((res) => res.json())
@@ -2407,6 +2413,7 @@ function startBatchAnalysis() {
             game: selectedGame,
             detection_method: detectionMethod,
             sensitivity: sensitivity,
+            detection_overrides: getDetectionOverrides(),
         }),
     })
     .then(res => res.json())
@@ -2585,3 +2592,79 @@ document.addEventListener("DOMContentLoaded", () => {
         })
         .catch(() => {});
 });
+
+// ===== ADVANCED DETECTION SETTINGS =====
+const DET_DEFAULTS = {
+    "det-intensity": 0.35,
+    "det-audio-weight": 0.30,
+    "det-audio-thresh": -15,
+    "det-merge-gap": 8,
+    "det-min-clip": 20,
+    "det-max-clip": 60,
+    "det-sample-fps": 2,
+    "det-fallback-ratio": 0.30,
+    "det-window-sec": 3,
+    "det-peak-weight": 0.60,
+    "det-menu-suppress": "on",
+    "det-brightness-thresh": 0.60,
+};
+
+function toggleDetectionSettings() {
+    const panel = document.getElementById("detection-settings");
+    const arrow = document.getElementById("detection-settings-arrow");
+    panel.classList.toggle("hidden");
+    arrow.classList.toggle("open");
+}
+
+function getDetectionOverrides() {
+    const overrides = {};
+    for (const [id, defaultVal] of Object.entries(DET_DEFAULTS)) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        const val = (typeof defaultVal === "string") ? el.value : parseFloat(el.value);
+        if (val !== defaultVal) {
+            // Convert element id to backend key: "det-intensity" -> "intensity_threshold" etc.
+            overrides[id] = val;
+        }
+    }
+    // Always send all values so backend knows what to apply
+    return {
+        intensity_threshold: parseFloat(document.getElementById("det-intensity").value),
+        audio_weight: parseFloat(document.getElementById("det-audio-weight").value),
+        audio_threshold_db: parseFloat(document.getElementById("det-audio-thresh").value),
+        merge_gap: parseInt(document.getElementById("det-merge-gap").value),
+        min_clip_duration: parseInt(document.getElementById("det-min-clip").value),
+        max_clip_duration: parseInt(document.getElementById("det-max-clip").value),
+        sample_fps: parseInt(document.getElementById("det-sample-fps").value),
+        fallback_threshold_ratio: parseFloat(document.getElementById("det-fallback-ratio").value),
+        window_seconds: parseInt(document.getElementById("det-window-sec").value),
+        peak_weight: parseFloat(document.getElementById("det-peak-weight").value),
+        menu_suppress: document.getElementById("det-menu-suppress").value,
+        brightness_threshold: parseFloat(document.getElementById("det-brightness-thresh").value),
+    };
+}
+
+function resetDetectionSettings() {
+    for (const [id, val] of Object.entries(DET_DEFAULTS)) {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    }
+    saveState();
+}
+
+function saveDetectionSettings() {
+    const settings = {};
+    for (const id of Object.keys(DET_DEFAULTS)) {
+        const el = document.getElementById(id);
+        if (el) settings[id] = el.value;
+    }
+    return settings;
+}
+
+function restoreDetectionSettings(settings) {
+    if (!settings) return;
+    for (const [id, val] of Object.entries(settings)) {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    }
+}

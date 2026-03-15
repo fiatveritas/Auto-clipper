@@ -235,7 +235,7 @@ class GameDetector:
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         # Menu suppression: if this looks like a menu/lobby, return 0
-        if self._is_menu_frame(frame, hsv, gray):
+        if self.profile.get("menu_suppress", "on") != "off" and self._is_menu_frame(frame, hsv, gray):
             return 0.0, "Menu/Lobby", prev_bar_fill
 
         component_scores = {}
@@ -348,7 +348,8 @@ class GameDetector:
         if not scores:
             return []
 
-        window_frames = int(self.window_seconds * self.sample_fps)
+        ws = self.profile.get("window_seconds", self.window_seconds)
+        window_frames = int(ws * self.sample_fps)
         window_scores = []
 
         for i in range(len(scores)):
@@ -357,9 +358,8 @@ class GameDetector:
             avg_score = sum(s["score"] for s in window_slice) / len(window_slice)
             peak_score = max(s["score"] for s in window_slice)
             # Blend peak and average so a single strong spike isn't diluted away
-            # 60% peak + 40% average keeps spikes visible while still rewarding
-            # sustained action
-            blended_score = peak_score * 0.6 + avg_score * 0.4
+            pw = self.profile.get("peak_weight", 0.6)
+            blended_score = peak_score * pw + avg_score * (1.0 - pw)
 
             label_counts = {}
             for s in window_slice:
@@ -406,13 +406,14 @@ class GameDetector:
 
         if merge_gap is None:
             merge_gap = self.profile.get("merge_gap", 8)
+        ws = self.profile.get("window_seconds", self.window_seconds)
 
         peaks.sort(key=lambda p: p["timestamp"])
 
         merged = []
         current = {
             "timestamp": peaks[0]["timestamp"],
-            "end_time": peaks[0]["timestamp"] + self.window_seconds,
+            "end_time": peaks[0]["timestamp"] + ws,
             "label": peaks[0]["label"],
             "confidence": peaks[0]["avg_score"],
             "peak_score": peaks[0]["avg_score"],
@@ -420,7 +421,7 @@ class GameDetector:
 
         for peak in peaks[1:]:
             if peak["timestamp"] <= current["end_time"] + merge_gap:
-                current["end_time"] = peak["timestamp"] + self.window_seconds
+                current["end_time"] = peak["timestamp"] + ws
                 current["peak_score"] = max(current["peak_score"], peak["avg_score"])
                 current["confidence"] = (current["confidence"] + peak["avg_score"]) / 2
                 if peak["avg_score"] > current["peak_score"] * 0.9:
@@ -429,7 +430,7 @@ class GameDetector:
                 merged.append(self._finalize_highlight(current))
                 current = {
                     "timestamp": peak["timestamp"],
-                    "end_time": peak["timestamp"] + self.window_seconds,
+                    "end_time": peak["timestamp"] + ws,
                     "label": peak["label"],
                     "confidence": peak["avg_score"],
                     "peak_score": peak["avg_score"],

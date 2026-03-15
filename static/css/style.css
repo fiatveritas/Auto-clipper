@@ -2093,6 +2093,110 @@ kbd {
     color: #f5a623;
 }
 
+/* ===== DETECTION SETTINGS (debug panel) ===== */
+.detection-settings-toggle {
+    margin-top: 8px;
+}
+
+.detection-settings-btn {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 4px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: color 0.15s;
+}
+
+.detection-settings-btn:hover {
+    color: var(--text);
+}
+
+#detection-settings-arrow {
+    font-size: 0.7rem;
+    transition: transform 0.2s;
+    display: inline-block;
+}
+
+#detection-settings-arrow.open {
+    transform: rotate(90deg);
+}
+
+.detection-settings {
+    margin-top: 8px;
+    padding: 12px;
+    background: var(--surface-hover);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.detection-settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 10px;
+}
+
+.det-setting {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.det-setting label {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    font-weight: 500;
+}
+
+.det-setting input[type="number"],
+.det-setting select {
+    padding: 6px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 0.82rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.det-setting input[type="number"]:focus,
+.det-setting select:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+.det-hint {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    opacity: 0.7;
+}
+
+.det-setting-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+}
+
+.det-reset-btn {
+    padding: 5px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-dim);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.det-reset-btn:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
+}
+
 /* ===== EXPORT SETTINGS ===== */
 .export-settings-grid {
     display: grid;

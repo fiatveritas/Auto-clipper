@@ -176,7 +176,7 @@ class HybridDetector:
                 brightness = np.mean(gray) / 255.0
 
                 # Menu/inventory suppression — skip UI frames entirely
-                if self._is_menu_frame(frame, gray):
+                if self.profile.get("menu_suppress", "on") != "off" and self._is_menu_frame(frame, gray):
                     scores.append({
                         "score": 0.0,
                         "label": "Menu/UI",
