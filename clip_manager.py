@@ -199,8 +199,8 @@ class ClipManager:
             thumb_time = start_time + duration / 2
             thumb_cmd = [
                 "ffmpeg", "-y",
-                "-i", video_path,
                 "-ss", str(thumb_time),
+                "-i", video_path,
                 "-frames:v", "1",
                 "-q:v", "5",
                 thumb_path,
@@ -269,8 +269,8 @@ class ClipManager:
         # Thumbnail
         thumb_cmd = [
             "ffmpeg", "-y",
-            "-i", video_path,
             "-ss", str(new_start + duration / 2),
+            "-i", video_path,
             "-frames:v", "1",
             "-q:v", "5",
             thumb_path,
