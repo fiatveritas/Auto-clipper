@@ -255,6 +255,12 @@ class PixelAnalyzer:
 
     def __init__(self, logger):
         self.logger = logger
+        # Temporal tracking: store previous frame data for change detection
+        self._prev_brightness = None
+        self._prev_center_brightness = None
+        self._prev_health_pct = None
+        self._prev_flash_pct = None
+        self._brightness_history = []  # last N center brightness values
 
     def _region(self, frame, r):
         h, w = frame.shape[:2]
@@ -414,92 +420,401 @@ class PixelAnalyzer:
         drama = min(1.0, (avg_s / 255.0) * 0.4 + (val_std / 128.0) * 0.6)
         r["drama_score"] = round(drama, 3)
 
+        # === TEMPORAL ANALYSIS (frame-to-frame changes) ===
+        # These detect CHANGES which are far more reliable than static thresholds
+
+        center_b = self._avg_brightness(self._region(frame, self.CENTER))
+        r["center_brightness"] = round(center_b, 1)
+
+        # --- Brightness delta: sudden brightness spike = combat VFX ---
+        # A bright outdoor scene has STABLE brightness. An explosion/flash has a SPIKE.
+        if self._prev_brightness is not None:
+            brightness_delta = avg_b - self._prev_brightness
+            center_delta = center_b - (self._prev_center_brightness or center_b)
+            r["brightness_delta"] = round(brightness_delta, 1)
+            r["center_delta"] = round(center_delta, 1)
+            # Sudden brightness increase > 15 = likely VFX (flash, explosion)
+            r["sudden_flash"] = brightness_delta > 15 or center_delta > 25
+            # Sudden brightness drop > 20 = likely post-flash or getting hit
+            r["sudden_dark"] = brightness_delta < -20
+        else:
+            r["brightness_delta"] = 0.0
+            r["center_delta"] = 0.0
+            r["sudden_flash"] = False
+            r["sudden_dark"] = False
+
+        # --- Health change: health dropping = taking damage ---
+        current_health_pct = r.get("health_white_pct", 0.0)
+        if self._prev_health_pct is not None:
+            health_delta = current_health_pct - self._prev_health_pct
+            r["health_delta"] = round(health_delta, 4)
+            # Health dropped significantly = actively taking damage
+            r["health_dropping"] = health_delta < -0.02
+            # Health dropped a lot = big hit
+            r["big_health_drop"] = health_delta < -0.05
+        else:
+            r["health_delta"] = 0.0
+            r["health_dropping"] = False
+            r["big_health_drop"] = False
+
+        # --- Center brightness variance: flickering = sustained gunfire ---
+        self._brightness_history.append(center_b)
+        if len(self._brightness_history) > 5:
+            self._brightness_history.pop(0)
+        if len(self._brightness_history) >= 3:
+            hist = self._brightness_history
+            flicker_var = float(np.std(hist))
+            r["center_flicker"] = round(flicker_var, 1)
+            # High variance in center brightness over recent frames = sustained combat
+            r["sustained_combat"] = flicker_var > 12
+        else:
+            r["center_flicker"] = 0.0
+            r["sustained_combat"] = False
+
+        # Update previous frame state
+        self._prev_brightness = avg_b
+        self._prev_center_brightness = center_b
+        self._prev_health_pct = current_health_pct
+        self._prev_flash_pct = r.get("flash_pct", 0.0)
+
         return r
 
-    def score(self, px: dict) -> float:
-        """Convert pixel analysis into a score 0-100.
+    def score(self, px: dict, version: str = "v3_temporal") -> float:
+        """Score a frame using the selected scoring version.
 
-        Tuned to avoid false positives from common ambient signals.
-        Only truly combat-specific signals should push past the clip threshold.
+        Available versions:
+          v1_strict     — Very strict, requires strong combat signals + temporal change.
+                          Fewest clips, highest quality. May miss some action.
+          v2_balanced   — Balanced between false positives and missed clips.
+                          Requires at least one strong signal OR two medium signals.
+          v3_temporal   — (DEFAULT) Heavily weights temporal changes (frame-to-frame).
+                          A bright scene that stays bright = boring. A sudden spike = combat.
+          v4_aggressive — More clips, lower quality. Good for long VODs where you
+                          don't want to miss anything.
+          v5_combat_only — Only clips actual fighting: muzzle flash + health drop,
+                           fire + tracers, etc. Ignores everything else.
+        """
+        versions = {
+            "v1_strict": self._score_v1_strict,
+            "v2_balanced": self._score_v2_balanced,
+            "v3_temporal": self._score_v3_temporal,
+            "v4_aggressive": self._score_v4_aggressive,
+            "v5_combat_only": self._score_v5_combat_only,
+        }
+        fn = versions.get(version, self._score_v3_temporal)
+        return fn(px)
 
-        Signal frequency in dataset (762 frames):
-          - Damage vignette: 58% (AMBIENT — not clip-worthy alone)
-          - System message: 29% (AMBIENT)
-          - Entity label: 26% (AMBIENT — just means enemy name visible)
-          - Callout text: 24% (AMBIENT)
-          - Muzzle flash: 4.1% (COMBAT — clip-worthy)
-          - Fire/explosion: 1.0% (COMBAT — clip-worthy)
-          - XP notification: 0.4% (RARE — clip-worthy)
-          - Death screen: 0.1% (RARE — clip-worthy)
+    def _score_v1_strict(self, px: dict) -> float:
+        """V1 STRICT: Very few clips, very high quality.
+
+        Philosophy: Only clip when there's UNDENIABLE combat evidence.
+        Requires temporal change + at least one strong static signal.
+        Threshold: 45+ to clip.
         """
         s = 0.0
-
-        # Screen state gates
         state = px.get("screen_state", "gameplay")
-        if state in ("inventory", "death_screen"):
-            if state == "death_screen":
-                return 35.0  # Deaths are clip-worthy
-            return 0.0  # Menus = never clip
+        if state in ("inventory",):
+            return 0.0
+        if state == "death_screen":
+            return 40.0
 
-        # ── STRONG SIGNALS (rare, combat-specific) ──
-        # These alone or combined should cross the clip threshold
+        # Count how many STRONG signals are present
+        strong_count = 0
 
-        # Fire/explosion (1% of frames — very distinctive)
-        if px.get("has_fire"):
-            s += 30 * min(1.0, px.get("fire_pct", 0) * 10)
-
-        # Muzzle flash / shooting (4.1% of frames)
-        if px.get("has_muzzle_flash"):
+        if px.get("has_fire") and px.get("fire_pct", 0) > 0.03:
             s += 25
+            strong_count += 1
 
-        # Screen flash (explosion whiteout)
-        if state == "screen_flash":
+        if px.get("sudden_flash"):
+            s += 20
+            strong_count += 1
+
+        if px.get("big_health_drop"):
+            s += 25
+            strong_count += 1
+
+        if px.get("sustained_combat"):
+            s += 20
+            strong_count += 1
+
+        if state == "screen_flash" and px.get("sudden_flash"):
             s += 30
+            strong_count += 1
 
-        # Critical health (real danger)
         h = px.get("health", "full")
-        if h == "critical":   s += 25
-        elif h == "low":      s += 10
+        if h == "critical" and px.get("health_dropping"):
+            s += 30
+            strong_count += 1
 
-        # XP notification (0.4% — kill confirmed / loot)
+        if px.get("xp_notification"):
+            s += 25
+            strong_count += 1
+
+        # Muzzle flash ONLY counts if there's also a temporal change
+        if px.get("has_muzzle_flash") and (px.get("sudden_flash") or px.get("sustained_combat")):
+            s += 20
+            strong_count += 1
+
+        # Must have at least 1 strong signal to score above noise
+        if strong_count == 0:
+            return min(5.0, s)
+
+        # Small bonus for supporting signals
+        if px.get("has_tracers") and px.get("tracer_count", 0) > 15:
+            s += 5
+        if px.get("has_damage_vignette") and px.get("health_dropping"):
+            s += 5
+
+        return min(100, s)
+
+    def _score_v2_balanced(self, px: dict) -> float:
+        """V2 BALANCED: Good balance between clip count and quality.
+
+        Philosophy: Require at least one strong signal OR two medium signals.
+        Static-only signals (no temporal change) are heavily discounted.
+        Threshold: 40+ to clip.
+        """
+        s = 0.0
+        state = px.get("screen_state", "gameplay")
+        if state in ("inventory",):
+            return 0.0
+        if state == "death_screen":
+            return 38.0
+
+        # TEMPORAL SIGNALS (worth more because they indicate CHANGE)
+        if px.get("sudden_flash"):      s += 22
+        if px.get("big_health_drop"):   s += 25
+        if px.get("health_dropping"):   s += 12
+        if px.get("sustained_combat"):  s += 18
+        if px.get("sudden_dark"):       s += 8   # Post-explosion
+
+        # STATIC COMBAT SIGNALS (discounted without temporal support)
+        has_temporal = (px.get("sudden_flash") or px.get("health_dropping")
+                        or px.get("sustained_combat"))
+
+        if px.get("has_fire"):
+            s += 28 if has_temporal else 12
+
+        if px.get("has_muzzle_flash"):
+            s += 22 if has_temporal else 8
+
+        if state == "screen_flash":
+            s += 25 if px.get("sudden_flash") else 10
+
+        h = px.get("health", "full")
+        if h == "critical":
+            s += 22 if px.get("health_dropping") else 10
+        elif h == "low":
+            s += 8
+
         if px.get("xp_notification"):
             s += 20
 
-        # ── MEDIUM SIGNALS (support signals, boost combat) ──
-
-        # Tracers (bright particle streaks — active firefight)
+        # MEDIUM SIGNALS
         if px.get("has_tracers"):
             tc = px.get("tracer_count", 0)
-            if tc > 20:
-                s += 15  # Heavy firefight
-            elif tc > 10:
-                s += 8   # Light shooting
+            if tc > 20: s += 10
+            elif tc > 10: s += 5
 
-        # ── WEAK SIGNALS (common/ambient — tiny contribution) ──
-        # These should NOT trigger clips on their own
+        if px.get("has_motion_blur"):
+            s += 4
 
-        # Damage vignette (58% of frames! — basically ambient)
-        if px.get("has_damage_vignette"):
-            s += 3
+        # WEAK SIGNALS (barely contribute)
+        if px.get("has_damage_vignette"): s += 2
+        if px.get("entity_label_visible"): s += 1
+        s += px.get("drama_score", 0) * 2
 
-        # Entity label (26% — just means enemy name is on screen)
-        if px.get("entity_label_visible"):
-            s += 2
+        return min(100, s)
 
-        # Callout text (24%)
-        if px.get("callout_visible"):
-            s += 1
+    def _score_v3_temporal(self, px: dict) -> float:
+        """V3 TEMPORAL (DEFAULT): Heavily weights frame-to-frame changes.
 
-        # System message (29%)
-        if px.get("system_message"):
-            s += 1
+        Philosophy: A bright outdoor scene is STABLE brightness.
+        Combat produces SPIKES and FLICKER. Detect the delta, not the absolute.
+        Threshold: 35+ to clip.
+        """
+        s = 0.0
+        state = px.get("screen_state", "gameplay")
+        if state in ("inventory",):
+            return 0.0
+        if state == "death_screen":
+            return 35.0
 
-        # Motion blur (only real screen shake from explosions, threshold tightened)
+        # === TEMPORAL SIGNALS (primary scoring) ===
+
+        # Sudden brightness spike = explosion, flash, muzzle flash
+        if px.get("sudden_flash"):
+            s += 25
+
+        # Health actively dropping = taking damage right now
+        if px.get("big_health_drop"):
+            s += 30
+        elif px.get("health_dropping"):
+            s += 15
+
+        # Center brightness flickering = sustained gunfire (flash-dark-flash pattern)
+        if px.get("sustained_combat"):
+            s += 22
+
+        # Post-explosion darkness
+        if px.get("sudden_dark"):
+            s += 10
+
+        # === STATIC SIGNALS (secondary, boosted by temporal) ===
+        has_action = (px.get("sudden_flash") or px.get("health_dropping")
+                      or px.get("sustained_combat"))
+
+        # Fire — always worth something, more if temporal confirms
+        if px.get("has_fire"):
+            s += 25 if has_action else 15
+
+        # Muzzle flash — only trust with temporal backup
+        if px.get("has_muzzle_flash"):
+            s += 20 if has_action else 5
+
+        # Screen flash — need temporal to distinguish from bright scene
+        if state == "screen_flash":
+            s += 28 if px.get("sudden_flash") else 5
+
+        # Health state
+        h = px.get("health", "full")
+        if h == "critical":
+            s += 20 if px.get("health_dropping") else 8
+        elif h == "low":
+            s += 6
+
+        # XP = kill confirmed, always clip-worthy
+        if px.get("xp_notification"):
+            s += 22
+
+        # Tracers
+        if px.get("has_tracers"):
+            tc = px.get("tracer_count", 0)
+            if tc > 20: s += 12
+            elif tc > 10: s += 6
+
+        # Motion blur from screen shake
         if px.get("has_motion_blur"):
             s += 5
 
-        # Drama score (color intensity — ambient, tiny bonus)
-        s += px.get("drama_score", 0) * 3
+        # Weak ambient signals (tiny contribution)
+        if px.get("has_damage_vignette") and has_action: s += 3
+        if px.get("entity_label_visible"): s += 1
+        s += px.get("drama_score", 0) * 2
+
+        return min(100, s)
+
+    def _score_v4_aggressive(self, px: dict) -> float:
+        """V4 AGGRESSIVE: More clips, catch everything.
+
+        Philosophy: Better to clip something boring than miss real action.
+        Good for long VODs. Will produce more clips than other versions.
+        Threshold: 30+ to clip.
+        """
+        s = 0.0
+        state = px.get("screen_state", "gameplay")
+        if state in ("inventory",):
+            return 0.0
+        if state == "death_screen":
+            return 32.0
+
+        # Temporal
+        if px.get("sudden_flash"):      s += 25
+        if px.get("big_health_drop"):   s += 25
+        if px.get("health_dropping"):   s += 15
+        if px.get("sustained_combat"):  s += 20
+        if px.get("sudden_dark"):       s += 10
+
+        # Static combat (still worth points even without temporal)
+        if px.get("has_fire"):
+            s += 25 * min(1.0, px.get("fire_pct", 0) * 10)
+        if px.get("has_muzzle_flash"):
+            s += 18
+        if state == "screen_flash":
+            s += 22
+
+        h = px.get("health", "full")
+        if h == "critical":   s += 22
+        elif h == "low":      s += 10
+        elif h == "medium":   s += 3
+
+        if px.get("xp_notification"):   s += 20
+
+        # Medium signals worth more
+        if px.get("has_tracers"):
+            tc = px.get("tracer_count", 0)
+            if tc > 15: s += 12
+            elif tc > 8:  s += 8
+
+        if px.get("has_damage_vignette"): s += 5
+        if px.get("entity_label_visible"): s += 3
+        if px.get("callout_visible"):     s += 2
+        if px.get("has_motion_blur"):     s += 6
+        s += px.get("drama_score", 0) * 4
+
+        return min(100, s)
+
+    def _score_v5_combat_only(self, px: dict) -> float:
+        """V5 COMBAT ONLY: Only clips confirmed fighting.
+
+        Philosophy: Requires MULTIPLE combat signals simultaneously, and
+        at least ONE must be temporal (proving something CHANGED).
+        Static-only signals (muzzle flash + tracers without temporal change)
+        are rejected because bright outdoor scenes produce the same static signals.
+        Threshold: 40+ to clip.
+        """
+        s = 0.0
+        state = px.get("screen_state", "gameplay")
+        if state in ("inventory",):
+            return 0.0
+        if state == "death_screen":
+            return 42.0
+
+        # XP is always clip-worthy (kill confirmed)
+        if px.get("xp_notification"):
+            return 45.0
+
+        # Separate temporal vs static signals
+        temporal_signals = 0
+        if px.get("sudden_flash"): temporal_signals += 1
+        if px.get("health_dropping"): temporal_signals += 1
+        if px.get("sustained_combat"): temporal_signals += 1
+        if px.get("big_health_drop"): temporal_signals += 1
+        if px.get("sudden_dark"): temporal_signals += 1
+
+        static_signals = 0
+        if px.get("has_fire"): static_signals += 1
+        if px.get("has_muzzle_flash"): static_signals += 1
+        if px.get("has_tracers") and px.get("tracer_count", 0) > 10: static_signals += 1
+        if px.get("has_motion_blur"): static_signals += 1
+        if state == "screen_flash": static_signals += 1
+        h = px.get("health", "full")
+        if h in ("critical", "low"): static_signals += 1
+        if px.get("has_damage_vignette"): static_signals += 1
+
+        total = temporal_signals + static_signals
+
+        # MUST have at least 1 temporal signal (something CHANGED)
+        # Pure static signals = could just be a bright scene
+        if temporal_signals == 0:
+            return min(5.0, total * 2.0)
+
+        # Must have at least 2 total signals
+        if total < 2:
+            return min(8.0, total * 4.0)
+
+        # Base score from signal count (2 signals = 20, 5+ signals = 50)
+        s = min(50, total * 10)
+
+        # Bonus for strong specific combos (all require temporal)
+        if px.get("has_fire") and px.get("sudden_flash"):
+            s += 15  # Explosion confirmed
+        if px.get("health_dropping") and px.get("has_damage_vignette"):
+            s += 15  # Actively getting hurt
+        if px.get("has_muzzle_flash") and px.get("sustained_combat"):
+            s += 15  # Sustained shooting confirmed
+        if h == "critical" and px.get("big_health_drop"):
+            s += 20  # Near death moment
 
         return min(100, s)
 
@@ -743,13 +1058,25 @@ class ArcClipDetectorAdapter:
 
     SAMPLE_INTERVAL = 1.0
 
+    # Recommended thresholds per scoring version
+    VERSION_THRESHOLDS = {
+        "v1_strict": 45.0,
+        "v2_balanced": 40.0,
+        "v3_temporal": 35.0,
+        "v4_aggressive": 30.0,
+        "v5_combat_only": 40.0,
+    }
+
     def __init__(self, game_id="arc_raiders", weights_path=None,
-                 confidence=0.25, device="", threshold=40.0):
+                 confidence=0.25, device="", threshold=None,
+                 scoring_version="v3_temporal"):
         self.game_id = game_id
         self.weights_path = weights_path
         self.confidence = confidence
         self.device = device
-        self.threshold = threshold
+        self.scoring_version = scoring_version
+        # Use version-specific threshold if not explicitly set
+        self.threshold = threshold if threshold is not None else self.VERSION_THRESHOLDS.get(scoring_version, 40.0)
         self.has_yolo = False
 
         # Try to find weights — if not found, pixel-only mode
@@ -802,10 +1129,10 @@ class ArcClipDetectorAdapter:
 
         pixel = PixelAnalyzer(logger)
         scorer = ScoringEngine()
-        # Pixel-only threshold: needs to be high enough to avoid false positives
-        # from ambient signals (vignette=3, label=2, drama=~1.5 = ~6.5 baseline)
-        # but low enough to catch real combat (muzzle flash=25, fire=30, etc.)
-        threshold = self.threshold if detector else max(35.0, self.threshold * 0.8)
+        version = self.scoring_version
+        print(f"  [ArcClipDetector] Scoring version: {version} (threshold: {self.threshold})")
+        # Pixel-only mode: use the version's recommended threshold
+        threshold = self.threshold if detector else self.VERSION_THRESHOLDS.get(version, 35.0)
         clusterer = Clusterer(logger, thresh=threshold)
 
         # Open video
@@ -852,7 +1179,7 @@ class ArcClipDetectorAdapter:
 
                     # Pixel analysis (always runs)
                     px = pixel.analyze(frame)
-                    px_score = pixel.score(px)
+                    px_score = pixel.score(px, version=version)
 
                     # Category
                     cat = "routine"

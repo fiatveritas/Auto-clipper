@@ -1201,6 +1201,8 @@ function onDetectionMethodChange(method) {
     } else {
         apiSection.classList.add("hidden");
     }
+    // Refresh sensitivity hint to show CV version names when applicable
+    onSensitivityChange(document.getElementById("sensitivity").value);
     saveState();
 }
 
@@ -2321,12 +2323,23 @@ function triggerDownload(filename) {
 // ===== SENSITIVITY SLIDER =====
 function onSensitivityChange(val) {
     val = parseInt(val);
+    const method = document.getElementById("detection-method").value;
+    const isCv = method === "yolo_local" || method === "arc_cv_pipeline";
     let hint;
-    if (val <= 20) hint = `${val}% — Very selective: only the most intense moments.`;
-    else if (val <= 40) hint = `${val}% — Conservative: fewer clips, higher quality.`;
-    else if (val <= 60) hint = `${val}% — Balanced: catches most action without too many false positives.`;
-    else if (val <= 80) hint = `${val}% — Sensitive: catches more subtle moments.`;
-    else hint = `${val}% — Maximum: captures everything, may include quiet moments.`;
+    if (isCv) {
+        // Show CV scoring version names
+        if (val < 20) hint = `${val}% — v1_strict: Fewest clips, highest quality. Requires strong combat evidence + temporal change.`;
+        else if (val < 40) hint = `${val}% — v5_combat_only: Only clips confirmed fighting (needs 2+ combat signals at once).`;
+        else if (val < 60) hint = `${val}% — v3_temporal (DEFAULT): Detects frame-to-frame changes. Stable brightness = boring, sudden spike = combat.`;
+        else if (val < 80) hint = `${val}% — v2_balanced: Good balance. Static signals discounted without temporal support.`;
+        else hint = `${val}% — v4_aggressive: Most clips. Better to clip something boring than miss real action.`;
+    } else {
+        if (val <= 20) hint = `${val}% — Very selective: only the most intense moments.`;
+        else if (val <= 40) hint = `${val}% — Conservative: fewer clips, higher quality.`;
+        else if (val <= 60) hint = `${val}% — Balanced: catches most action without too many false positives.`;
+        else if (val <= 80) hint = `${val}% — Sensitive: catches more subtle moments.`;
+        else hint = `${val}% — Maximum: captures everything, may include quiet moments.`;
+    }
     document.getElementById("sensitivity-hint").textContent = hint;
     saveState();
 }

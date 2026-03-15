@@ -1761,14 +1761,34 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
                 update("error", 0, f"Roboflow model error: {error_msg}")
                 return
         elif detection_method in ("yolo_local", "arc_cv_pipeline"):
-            update("analyzing", 42, "Running CV pipeline...")
+            # Map sensitivity slider to scoring version:
+            # 0-19: v1_strict (fewest clips, highest quality)
+            # 20-39: v5_combat_only (only confirmed fights)
+            # 40-59: v3_temporal (DEFAULT — detects changes between frames)
+            # 60-79: v2_balanced (good balance)
+            # 80-100: v4_aggressive (most clips, catches everything)
+            if sensitivity < 20:
+                cv_version = "v1_strict"
+            elif sensitivity < 40:
+                cv_version = "v5_combat_only"
+            elif sensitivity < 60:
+                cv_version = "v3_temporal"
+            elif sensitivity < 80:
+                cv_version = "v2_balanced"
+            else:
+                cv_version = "v4_aggressive"
+
+            update("analyzing", 42, f"Running CV pipeline ({cv_version})...")
             try:
-                analyzer = ArcClipDetectorAdapter(game_id=game_id)
+                analyzer = ArcClipDetectorAdapter(
+                    game_id=game_id,
+                    scoring_version=cv_version,
+                )
                 highlights = analyzer.analyze_video(
                     video_path,
                     progress_callback=lambda p: update(
                         "analyzing", 42 + int(p * 38),
-                        f"CV analyzing... {int(p * 100)}%"
+                        f"CV analyzing ({cv_version})... {int(p * 100)}%"
                     )
                 )
             except Exception as cv_err:
