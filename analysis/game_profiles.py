@@ -2023,6 +2023,1263 @@ For each frame, respond with ONLY a JSON object (no markdown):
 {"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
         "ai_user_prompt": "Analyze this Rainbow Six Siege gameplay frame. Is this an exciting moment?",
     },
+
+    # ===== NEW GAMES =====
+
+    "dota_2": {
+        "name": "Dota 2",
+        "description": "MOBA — detects kills, teamfights, Roshan, buybacks, rampages",
+        "detectors": {
+            "kill_feed": {
+                "label": "Kill / Rampage",
+                "weight": 0.30,
+                # Kill notifications: top area, shows hero icons killer→victim
+                # Multikill banners: "DOUBLE KILL", "TRIPLE KILL", "ULTRA KILL", "RAMPAGE"
+                # These appear large center-top with gold/red text
+                "lower": np.array([0, 120, 170]),
+                "upper": np.array([10, 255, 255]),
+                "lower2": np.array([0, 0, 220]),
+                "upper2": np.array([180, 40, 255]),
+                "region": [0.02, 0.25, 0.30, 0.70],
+                "multiplier": 8,
+            },
+            "damage": {
+                "label": "Low HP / Death",
+                "weight": 0.20,
+                # Health bar above hero: green bar depleting
+                # Death: gray screen, respawn timer
+                # Bloodseeker Rupture: red screen edges
+                "region": "health_bar",
+                "bar_region": [0.88, 0.95, 0.40, 0.60],
+                "bar_colors": [
+                    {"lower": np.array([35, 80, 120]), "upper": np.array([85, 255, 255])},
+                ],
+                "depletion_threshold": 0.2,
+                "multiplier": 5,
+            },
+            "hit_marker": {
+                "label": "Spell / Ability VFX",
+                "weight": 0.15,
+                # Abilities create massive VFX: Invoker Sun Strike, Enigma Black Hole
+                # Spell impacts produce bright colored flashes
+                "lower": np.array([0, 0, 230]),
+                "upper": np.array([180, 30, 255]),
+                "region": [0.15, 0.85, 0.15, 0.85],
+                "multiplier": 4,
+            },
+            "explosion": {
+                "label": "Teamfight VFX",
+                "weight": 0.25,
+                # Teamfights: screen full of spell VFX from multiple heroes
+                # Earthshaker Echo Slam, Tidehunter Ravage, Enigma Black Hole
+                # Crystal Maiden ult: blue blizzard
+                "lower": np.array([10, 100, 150]),
+                "upper": np.array([35, 255, 255]),
+                "region": "full",
+                "multiplier": 5,
+            },
+            "special": {
+                "label": "Roshan / Aegis",
+                "weight": 0.07,
+                # Roshan pit: dark area, boss fight
+                # Aegis pickup: golden glow
+                # Buyback: gold cost, respawn flash
+                "lower": np.array([20, 100, 200]),
+                "upper": np.array([35, 255, 255]),
+                "region": "full",
+                "multiplier": 5,
+            },
+        },
+        "motion_weight": 0.03, "motion_multiplier": 2,
+        "brightness_weight": 0.02, "brightness_threshold": 0.65, "brightness_multiplier": 2,
+        "intensity_threshold": 0.30, "fallback_threshold_ratio": 0.4,
+        "merge_gap": 8, "min_clip_duration": 15, "max_clip_duration": 50, "clip_extension": 8, "pre_pad": 6,
+        "ai_system_prompt": """You are an expert Dota 2 gameplay analyst. Dota 2 is a 5v5 MOBA by Valve with deep strategy and hero abilities.
+
+Key visual cues:
+- **Kill feed**: Top area, hero portraits showing killer→victim with gold bounty
+- **Multikill banners**: "DOUBLE KILL" through "RAMPAGE" (5 kills) in gold/red text
+- **Teamfights**: Screen fills with colored spell VFX from 10 heroes fighting simultaneously
+- **Death**: Screen goes gray, respawn countdown timer
+- **Roshan**: Large boss in pit, drops Aegis of the Immortal (gold glow)
+- **Buyback**: Hero instantly respawns by spending gold, flash of light
+- **Aegis resurrection**: Hero dies then resurrects with golden particle effect
+- **Black Hole**: Enigma's iconic purple/black vortex that sucks enemies in
+- **Rampage**: All 5 enemies killed by one hero in short time, dramatic banner
+
+Look for: Rampages, teamfight wins, Black Hole combos, Roshan steals, 1v5 plays, fountain dives, courier snipes, Techies mines, million dollar Echo Slams, buyback plays, base race finishes.
+Score 0.0 for: farming jungle, laning phase (unless kills happening), shop, hero select, paused.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
+        "ai_user_prompt": "Analyze this Dota 2 gameplay frame. Is this an exciting moment?",
+    },
+
+    "rust": {
+        "name": "Rust",
+        "description": "Survival — detects raids, PvP fights, airdrops, helicopter, base defense",
+        "detectors": {
+            "kill_feed": {
+                "label": "Kill / Down",
+                "weight": 0.30,
+                # Kill notification: bottom-right chat area
+                # "PlayerName was killed by PlayerName"
+                # PvP kills show weapon used
+                "lower": np.array([0, 0, 220]),
+                "upper": np.array([180, 40, 255]),
+                "region": [0.75, 0.95, 0.50, 0.98],
+                "multiplier": 7,
+            },
+            "damage": {
+                "label": "Taking Damage / Bleeding",
+                "weight": 0.20,
+                # Red screen edges when hit, blood overlay
+                # Radiation: green tint at edges (rad zones)
+                # Cold: blue tint at edges
+                # Bleeding: red pulsing, HP decreasing
+                "lower": np.array([0, 100, 80]),
+                "upper": np.array([12, 255, 255]),
+                "lower2": np.array([168, 100, 80]),
+                "upper2": np.array([180, 255, 255]),
+                "region": "edges",
+                "edge_size": 0.12,
+                "multiplier": 5,
+            },
+            "hit_marker": {
+                "label": "Gunshot / Muzzle Flash",
+                "weight": 0.20,
+                # Red X hitmarker at crosshair on kill
+                # White hitmarker on hit
+                # Muzzle flash: bright yellow-white from weapon
+                "lower": np.array([0, 0, 235]),
+                "upper": np.array([180, 25, 255]),
+                "region": [0.35, 0.65, 0.35, 0.65],
+                "multiplier": 5,
+            },
+            "explosion": {
+                "label": "Raid / C4 / Rockets",
+                "weight": 0.25,
+                # C4 explosion: bright orange flash on base walls
+                # Rocket: orange trail + large explosion
+                # Satchel charge: smaller orange explosion
+                # MLRS rocket: massive orange explosion
+                "lower": np.array([8, 120, 160]),
+                "upper": np.array([30, 255, 255]),
+                "region": "full",
+                "multiplier": 6,
+            },
+            "special": {
+                "label": "Helicopter / Airdrop",
+                "weight": 0.07,
+                # Attack helicopter: red tracers, rockets
+                # Supply drop: red smoke, parachute
+                # Chinook: large helicopter event
+                # Patrol helicopter shoots at armed players
+                "lower": np.array([0, 100, 180]),
+                "upper": np.array([10, 255, 255]),
+                "region": "full",
+                "multiplier": 4,
+            },
+        },
+        "audio_weight": 0.30,
+        "audio_threshold_db": -15,
+        "audio_ceiling_db": -3,
+        "motion_weight": 0.03, "motion_multiplier": 2,
+        "brightness_weight": 0.02, "brightness_threshold": 0.7, "brightness_multiplier": 1.5,
+        "intensity_threshold": 0.30, "fallback_threshold_ratio": 0.3,
+        "merge_gap": 8, "min_clip_duration": 15, "max_clip_duration": 60, "clip_extension": 10, "pre_pad": 8,
+        "ai_system_prompt": """You are an expert Rust gameplay analyst. Rust is an open-world survival PvP game by Facepunch.
+
+Key visual cues:
+- **Kill feed**: Chat area bottom-right, death messages with weapon used
+- **Hitmarker**: White X on hit, red X on kill at crosshair
+- **Raid**: C4/rocket explosions on base walls, orange flash + debris
+- **Attack helicopter**: Red tracer fire from sky, rockets, explosion VFX
+- **Airdrop**: Red smoke beacon, parachute crate descending
+- **Radiation**: Green tint/icons in rad zones near monuments
+- **Bleeding**: Red pulsing screen edges, blood drops
+- **Base building**: Construction/upgrade VFX
+- **Recycling/crafting**: UI overlay screens
+
+Look for: Online raids, PvP fights (especially roof camps, compound fights), helicopter takedowns, airdrop contests, door camping kills, eoka plays, naked plays, compound bow flicks, counter raids, base defense.
+Score 0.0 for: farming nodes/trees, building alone, crafting, running naked, cooking.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
+        "ai_user_prompt": "Analyze this Rust gameplay frame. Is this an exciting moment?",
+    },
+
+    "the_finals": {
+        "name": "The Finals",
+        "description": "FPS — detects kills, cashouts, destruction, abilities, team wipes",
+        "detectors": {
+            "kill_feed": {
+                "label": "Elimination / Cashout",
+                "weight": 0.30,
+                # Kill feed: top-right corner with player names
+                # Cashout progress: center UI element
+                # Team wipe: all enemies eliminated
+                "lower": np.array([0, 0, 220]),
+                "upper": np.array([180, 40, 255]),
+                "lower2": np.array([0, 120, 170]),
+                "upper2": np.array([10, 255, 255]),
+                "region": [0.01, 0.20, 0.60, 0.99],
+                "multiplier": 8,
+            },
+            "damage": {
+                "label": "Taking Damage",
+                "weight": 0.15,
+                # Red directional damage indicator
+                # Low HP: red screen edges
+                "lower": np.array([0, 100, 80]),
+                "upper": np.array([12, 255, 255]),
+                "lower2": np.array([168, 100, 80]),
+                "upper2": np.array([180, 255, 255]),
+                "region": "edges",
+                "edge_size": 0.10,
+                "multiplier": 4,
+            },
+            "hit_marker": {
+                "label": "Hitting Shots",
+                "weight": 0.25,
+                # White hitmarker ticks at crosshair
+                # Red for kill confirmed
+                "lower": np.array([0, 0, 235]),
+                "upper": np.array([180, 25, 255]),
+                "region": [0.42, 0.58, 0.42, 0.58],
+                "multiplier": 6,
+            },
+            "explosion": {
+                "label": "Destruction / Ability",
+                "weight": 0.25,
+                # Building destruction: massive debris, dust clouds
+                # RPG/C4: orange explosions
+                # Abilities: various colored VFX
+                # Floor collapse: buildings crumbling
+                "lower": np.array([8, 100, 150]),
+                "upper": np.array([30, 255, 255]),
+                "region": "full",
+                "multiplier": 6,
+            },
+            "special": {
+                "label": "Cashout Station",
+                "weight": 0.05,
+                # Cashout: gold/yellow UI elements, progress bar
+                # Vault: gold glowing container
+                "lower": np.array([20, 100, 200]),
+                "upper": np.array([35, 255, 255]),
+                "region": [0.30, 0.70, 0.30, 0.70],
+                "multiplier": 4,
+            },
+        },
+        "audio_weight": 0.25,
+        "audio_threshold_db": -12,
+        "audio_ceiling_db": -2,
+        "motion_weight": 0.04, "motion_multiplier": 2,
+        "brightness_weight": 0.03, "brightness_threshold": 0.7, "brightness_multiplier": 1.5,
+        "intensity_threshold": 0.30, "fallback_threshold_ratio": 0.3,
+        "merge_gap": 6, "min_clip_duration": 10, "max_clip_duration": 40, "clip_extension": 6, "pre_pad": 4,
+        "ai_system_prompt": """You are an expert The Finals gameplay analyst. The Finals is a team-based FPS with destructible environments by Embark Studios.
+
+Key visual cues:
+- **Kill feed**: Top-right, shows eliminations with player names
+- **Destruction**: Buildings crumble, floors collapse, walls blown open — massive debris VFX
+- **Cashout**: Gold-colored station, progress bar, teams fighting over vault
+- **Hitmarker**: White ticks at crosshair, red for kill
+- **Abilities**: Class-specific VFX (Light grapple, Medium heal, Heavy shield)
+- **RPG/C4**: Large orange explosions destroying environment
+- **Revive**: Teammate resurrection with VFX
+- **Vault**: Gold glowing container carried by team
+
+Look for: Multi-kills during cashout fights, insane destruction plays (collapsing buildings on enemies), TPV kills, C4 ambushes, clutch cashout steals, squad wipes, goo plays, sniper flicks.
+Score 0.0 for: running between objectives, menu, character customization, waiting.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
+        "ai_user_prompt": "Analyze this The Finals gameplay frame. Is this an exciting moment?",
+    },
+
+    "marvel_rivals": {
+        "name": "Marvel Rivals",
+        "description": "Hero shooter — detects kills, abilities, ultimates, team plays",
+        "detectors": {
+            "kill_feed": {
+                "label": "Elimination / KO",
+                "weight": 0.30,
+                # Kill feed: top-right showing hero icons killer→victim
+                # Multi-kill notifications
+                "lower": np.array([0, 120, 170]),
+                "upper": np.array([10, 255, 255]),
+                "lower2": np.array([0, 0, 220]),
+                "upper2": np.array([180, 40, 255]),
+                "region": [0.01, 0.20, 0.55, 0.99],
+                "multiplier": 7,
+            },
+            "damage": {
+                "label": "Taking Damage",
+                "weight": 0.15,
+                # Red damage indicators at screen edges
+                # Low HP warning
+                "lower": np.array([0, 100, 80]),
+                "upper": np.array([10, 255, 255]),
+                "lower2": np.array([170, 100, 80]),
+                "upper2": np.array([180, 255, 255]),
+                "region": "edges",
+                "edge_size": 0.08,
+                "multiplier": 4,
+            },
+            "hit_marker": {
+                "label": "Hitting / Crit",
+                "weight": 0.20,
+                # Hitmarker at crosshair
+                # Critical hits show larger markers
+                "lower": np.array([0, 0, 230]),
+                "upper": np.array([180, 30, 255]),
+                "region": [0.40, 0.60, 0.40, 0.60],
+                "multiplier": 5,
+            },
+            "explosion": {
+                "label": "Ultimate / Super",
+                "weight": 0.25,
+                # Hero ultimates: bright screen-filling VFX
+                # Iron Man beams, Spider-Man web attacks, Thor lightning
+                # Team-up abilities: coordinated hero combos
+                "lower": np.array([10, 120, 180]),
+                "upper": np.array([35, 255, 255]),
+                "region": "full",
+                "multiplier": 6,
+            },
+            "special": {
+                "label": "Team-Up Ability",
+                "weight": 0.07,
+                # Team-up abilities: special combo between specific heroes
+                # Bright colored VFX unique to each combo
+                "lower": np.array([100, 80, 150]),
+                "upper": np.array([130, 255, 255]),
+                "region": "full",
+                "multiplier": 5,
+            },
+        },
+        "audio_weight": 0.25,
+        "audio_threshold_db": -12,
+        "audio_ceiling_db": -2,
+        "motion_weight": 0.03, "motion_multiplier": 2,
+        "brightness_weight": 0.03, "brightness_threshold": 0.65, "brightness_multiplier": 2,
+        "intensity_threshold": 0.30, "fallback_threshold_ratio": 0.3,
+        "merge_gap": 6, "min_clip_duration": 10, "max_clip_duration": 40, "clip_extension": 6, "pre_pad": 4,
+        "ai_system_prompt": """You are an expert Marvel Rivals gameplay analyst. Marvel Rivals is a 6v6 hero shooter featuring Marvel characters by NetEase.
+
+Key visual cues:
+- **Kill feed**: Top-right, hero portraits showing killer→victim
+- **Ultimates**: Hero-specific VFX — Iron Man repulsor blast, Spider-Man web attacks, Thor lightning, Hulk ground slam
+- **Team-up abilities**: Special combo VFX between specific hero pairs (unique to Marvel Rivals)
+- **Hitmarker**: Ticks at crosshair on hit, larger for crits
+- **Multi-kill**: "DOUBLE KILL", "TRIPLE KILL" etc. notifications
+- **Map objectives**: Capture point progress, payload movement
+- **Death**: Respawn timer, spectate view
+
+Look for: Multi-kills, big ultimates (especially team-wipes), team-up ability combos, clutch plays, impressive aim/tracking, environmental kills, funny moments with hero abilities.
+Score 0.0 for: hero select, lobby, walking to point, settings.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
+        "ai_user_prompt": "Analyze this Marvel Rivals gameplay frame. Is this an exciting moment?",
+    },
+
+    "diablo_4": {
+        "name": "Diablo IV",
+        "description": "ARPG — detects boss kills, legendary drops, PvP, dungeon clears, world bosses",
+        "detectors": {
+            "kill_feed": {
+                "label": "Kill / World Boss",
+                "weight": 0.25,
+                # Mass kills: enemies explode in blood/particles
+                # World boss: massive health bar at top
+                # Boss kill: "Boss Defeated" notification
+                "lower": np.array([0, 0, 220]),
+                "upper": np.array([180, 40, 255]),
+                "lower2": np.array([0, 120, 150]),
+                "upper2": np.array([10, 255, 255]),
+                "region": [0.20, 0.50, 0.25, 0.75],
+                "multiplier": 6,
+            },
+            "damage": {
+                "label": "Low HP / Death",
+                "weight": 0.15,
+                # Red vignette when low HP
+                # Health globe: red orb bottom center
+                # Death: screen darkens, respawn UI
+                "lower": np.array([0, 100, 80]),
+                "upper": np.array([12, 255, 255]),
+                "region": "edges",
+                "edge_size": 0.10,
+                "multiplier": 4,
+            },
+            "hit_marker": {
+                "label": "Skill Impact / Crit",
+                "weight": 0.15,
+                # Critical hits: large yellow/gold damage numbers
+                # Skill impacts: bright colored flashes per skill
+                # Overpower: blue damage numbers
+                "lower": np.array([20, 120, 200]),
+                "upper": np.array([35, 255, 255]),
+                "region": [0.20, 0.80, 0.20, 0.80],
+                "multiplier": 4,
+            },
+            "explosion": {
+                "label": "Ultimate / AoE Skill",
+                "weight": 0.30,
+                # Ultimate abilities: massive screen-filling VFX
+                # AoE skills: bright colored ground effects
+                # Barbarian: earth-shattering, Sorcerer: meteor, Necro: corpse explosion
+                "lower": np.array([10, 100, 150]),
+                "upper": np.array([35, 255, 255]),
+                "region": "full",
+                "multiplier": 5,
+            },
+            "special": {
+                "label": "Legendary / Unique Drop",
+                "weight": 0.10,
+                # Legendary drop: orange star beam shooting up from ground
+                # Unique drop: gold star beam
+                # Uber Unique: extremely bright gold beam
+                "lower": np.array([15, 120, 180]),
+                "upper": np.array([30, 255, 255]),
+                "region": "full",
+                "multiplier": 6,
+            },
+        },
+        "motion_weight": 0.03, "motion_multiplier": 2,
+        "brightness_weight": 0.03, "brightness_threshold": 0.65, "brightness_multiplier": 2,
+        "intensity_threshold": 0.30, "fallback_threshold_ratio": 0.3,
+        "merge_gap": 8, "min_clip_duration": 15, "max_clip_duration": 60, "clip_extension": 10, "pre_pad": 8,
+        "ai_system_prompt": """You are an expert Diablo IV gameplay analyst. D4 is an ARPG with dark gothic themes by Blizzard.
+
+Key visual cues:
+- **Monster kills**: Enemies explode in blood and bone, satisfying splatter VFX
+- **Legendary drop**: Orange star beam shooting up from ground — exciting loot moment
+- **Unique/Uber Unique**: Gold star beam — extremely rare and exciting
+- **World boss**: Massive creature with huge health bar at top of screen (Ashava, Wandering Death, Avarice)
+- **Ultimate**: Class-specific massive VFX (Barbarian earth slam, Sorcerer meteor, Druid wolf form, Necro army)
+- **Critical hits**: Large yellow/gold damage numbers
+- **Overpower**: Blue damage numbers
+- **PvP**: Fields of Hatred, player markers turn hostile red
+- **Dungeon completion**: Boss defeated, loot explosion
+
+Look for: World boss kills, Uber Unique drops, pit clears, PvP kills, massive AoE skill combos, Uber Lilith kills, dungeon speed clears, Torment difficulty first clears, hilarious deaths.
+Score 0.0 for: walking between zones, vendor/inventory, character customization, town hub.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
+        "ai_user_prompt": "Analyze this Diablo IV gameplay frame. Is this an exciting moment?",
+    },
+
+    "cyberpunk_2077": {
+        "name": "Cyberpunk 2077",
+        "description": "Action RPG — detects combat, hacking, boss fights, vehicle chases",
+        "detectors": {
+            "kill_feed": {
+                "label": "Kill / Neutralize",
+                "weight": 0.25,
+                # Enemy health bar above their head, depletes
+                # "Neutralized" notification on kill
+                # XP gain notification
+                "lower": np.array([0, 0, 220]),
+                "upper": np.array([180, 40, 255]),
+                "lower2": np.array([0, 120, 170]),
+                "upper2": np.array([10, 255, 255]),
+                "region": [0.20, 0.50, 0.60, 0.98],
+                "multiplier": 6,
+            },
+            "damage": {
+                "label": "Taking Damage / Low HP",
+                "weight": 0.20,
+                # Red edges when hit, directional indicator
+                # Low HP: heavy red overlay + warning sounds
+                # Cyberpsychosis effects at edges
+                "lower": np.array([0, 100, 80]),
+                "upper": np.array([12, 255, 255]),
+                "lower2": np.array([168, 100, 80]),
+                "upper2": np.array([180, 255, 255]),
+                "region": "edges",
+                "edge_size": 0.12,
+                "multiplier": 5,
+            },
+            "hit_marker": {
+                "label": "Crosshair / Headshot",
+                "weight": 0.20,
+                # Crosshair hit feedback on enemy
+                # Critical hits: larger damage numbers in yellow
+                # Headshot: distinct sound + large damage
+                "lower": np.array([0, 0, 235]),
+                "upper": np.array([180, 25, 255]),
+                "region": [0.35, 0.65, 0.35, 0.65],
+                "multiplier": 5,
+            },
+            "explosion": {
+                "label": "Grenade / Quickhack / Vehicle",
+                "weight": 0.25,
+                # Grenade: orange explosion
+                # Quickhack VFX: cyan/teal digital effects
+                # Vehicle explosion: large orange fireball
+                # Sandevistan (slow-mo): screen color shift
+                "lower": np.array([8, 100, 150]),
+                "upper": np.array([30, 255, 255]),
+                "region": "full",
+                "multiplier": 5,
+            },
+            "special": {
+                "label": "Quickhack / Cyberware",
+                "weight": 0.10,
+                # Breach Protocol: teal/cyan digital matrix
+                # Quickhack: teal digital lines on enemies
+                # Kerenzikov (slow-mo): time warp effect
+                # Mantis Blades: red swing VFX
+                "lower": np.array([80, 80, 150]),
+                "upper": np.array([100, 255, 255]),
+                "region": "full",
+                "multiplier": 4,
+            },
+        },
+        "motion_weight": 0.03, "motion_multiplier": 2,
+        "brightness_weight": 0.02, "brightness_threshold": 0.7, "brightness_multiplier": 1.5,
+        "intensity_threshold": 0.30, "fallback_threshold_ratio": 0.3,
+        "merge_gap": 8, "min_clip_duration": 15, "max_clip_duration": 60, "clip_extension": 10, "pre_pad": 8,
+        "ai_system_prompt": """You are an expert Cyberpunk 2077 gameplay analyst. CP2077 is an open-world action RPG in a futuristic dystopia by CD Projekt Red.
+
+Key visual cues:
+- **Combat**: First-person shooting, melee combat with Mantis Blades/Gorilla Arms
+- **Quickhacking**: Teal/cyan digital VFX on enemies, Breach Protocol matrix
+- **Sandevistan**: Slow-motion time dilation effect, enemies frozen, fast kills
+- **Kerenzikov**: Slow-mo while dodging, matrix-style bullet time
+- **Vehicle combat**: Car chases, motorcycle combat, vehicle explosions
+- **Boss fights**: Large HP bars, unique arena encounters
+- **Mantis Blades**: Red/orange swing VFX, impale animation
+- **Grenades**: Orange explosions, tech weapon charge shots
+- **Cyberpsychosis**: Screen glitch effects, distortion
+
+Look for: Sandevistan killstreaks (slow-mo multi-kills), quickhack combos, Mantis Blade executions, vehicle chases, boss fights, Kerenzikov dodges, stealth kills, funny glitches, dramatic story moments.
+Score 0.0 for: driving peacefully, shopping, inventory, phone calls, walking around Night City, crafting.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
+        "ai_user_prompt": "Analyze this Cyberpunk 2077 gameplay frame. Is this an exciting moment?",
+    },
+
+    "street_fighter_6": {
+        "name": "Street Fighter 6",
+        "description": "Fighting game — detects combos, supers, perfects, drive impacts, comebacks",
+        "detectors": {
+            "kill_feed": {
+                "label": "KO / Perfect / Round Win",
+                "weight": 0.35,
+                # "K.O." text: large centered text when round ends
+                # "PERFECT": gold text for flawless round
+                # "YOU WIN" / "YOU LOSE" at match end
+                "lower": np.array([0, 0, 230]),
+                "upper": np.array([180, 40, 255]),
+                "lower2": np.array([20, 100, 200]),
+                "upper2": np.array([35, 255, 255]),
+                "region": [0.30, 0.70, 0.20, 0.80],
+                "multiplier": 9,
+            },
+            "damage": {
+                "label": "Health Bar Depletion",
+                "weight": 0.20,
+                # Health bars at top of screen, left vs right
+                # Yellow damage shows before health depletes
+                # Critical health: bar flashing red
+                "region": "health_bar",
+                "bar_region": [0.02, 0.08, 0.10, 0.90],
+                "bar_colors": [
+                    {"lower": np.array([35, 80, 120]), "upper": np.array([85, 255, 255])},
+                    {"lower": np.array([0, 150, 150]), "upper": np.array([10, 255, 255])},
+                ],
+                "depletion_threshold": 0.15,
+                "multiplier": 5,
+            },
+            "hit_marker": {
+                "label": "Combo Hits / Drive Impact",
+                "weight": 0.15,
+                # Hit sparks: bright flash on impact
+                # Combo counter: number showing hits center screen
+                # Drive Impact: purple/blue flash, wall splat
+                "lower": np.array([0, 0, 235]),
+                "upper": np.array([180, 25, 255]),
+                "region": [0.20, 0.80, 0.20, 0.80],
+                "multiplier": 5,
+            },
+            "explosion": {
+                "label": "Super Art / Critical Art",
+                "weight": 0.25,
+                # Super Art: massive VFX, dramatic camera angle, screen freeze
+                # Critical Art (Level 3): cinematic attack, huge damage
+                # Drive Rush: blue dashing VFX
+                # Burnout: purple aura when Drive Gauge empty
+                "lower": np.array([10, 120, 180]),
+                "upper": np.array([35, 255, 255]),
+                "region": "full",
+                "multiplier": 7,
+            },
+            "special": {
+                "label": "Drive System VFX",
+                "weight": 0.05,
+                # Drive Impact: purple/blue circular impact
+                # Parry: green flash on successful parry
+                # Drive Gauge at bottom of screen
+                "lower": np.array([130, 60, 120]),
+                "upper": np.array([160, 255, 255]),
+                "region": "full",
+                "multiplier": 4,
+            },
+        },
+        "motion_weight": 0.05, "motion_multiplier": 2,
+        "brightness_weight": 0.03, "brightness_threshold": 0.7, "brightness_multiplier": 2,
+        "intensity_threshold": 0.30, "fallback_threshold_ratio": 0.3,
+        # Fighting game rounds are very short
+        "merge_gap": 3, "min_clip_duration": 8, "max_clip_duration": 30, "clip_extension": 3, "pre_pad": 2,
+        "ai_system_prompt": """You are an expert Street Fighter 6 gameplay analyst. SF6 is a competitive fighting game by Capcom with the Drive system.
+
+Key visual cues:
+- **K.O.**: Large centered text when a round is won, dramatic slow-motion
+- **PERFECT**: Gold text for flawless round (no damage taken)
+- **Super Art**: Cinematic attack VFX, screen freeze, dramatic camera angles
+- **Critical Art (Level 3)**: Extended cinematic super with massive damage
+- **Drive Impact**: Purple/blue circular flash, can wall splat opponent
+- **Drive Rush**: Blue dashing forward with cancel potential
+- **Parry**: Green flash on successful parry timing
+- **Burnout**: Purple aura when Drive Gauge is empty — vulnerable state
+- **Combo counter**: Hit number displayed during combos
+- **Health bars**: Top of screen, yellow damage before depletion
+
+Look for: Long combos, Super Art finishes, Perfects, Drive Impact wall splats, clutch comebacks from low HP, parry reads, chip damage KOs, tournament-level plays, disrespect moves.
+Score 0.0 for: character select, training mode (unless showcasing tech), menu, loading.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
+        "ai_user_prompt": "Analyze this Street Fighter 6 gameplay frame. Is this an exciting moment?",
+    },
+
+    "fall_guys": {
+        "name": "Fall Guys",
+        "description": "Party game — detects eliminations, wins, close finishes, funny fails",
+        "detectors": {
+            "kill_feed": {
+                "label": "Qualified / Eliminated",
+                "weight": 0.35,
+                # "QUALIFIED!" text: large green text center screen
+                # "ELIMINATED!" text: large red text center screen
+                # "WINNER!" text: gold crown animation at end
+                "lower": np.array([35, 100, 180]),
+                "upper": np.array([85, 255, 255]),
+                "lower2": np.array([0, 0, 230]),
+                "upper2": np.array([180, 40, 255]),
+                "region": [0.25, 0.60, 0.20, 0.80],
+                "multiplier": 8,
+            },
+            "damage": {
+                "label": "Falling / Obstacle",
+                "weight": 0.15,
+                # Falling: camera follows bean falling off course
+                # Slime: pink/magenta slime covering screen
+                # Bonk: impact stars on head hit
+                "lower": np.array([0, 100, 150]),
+                "upper": np.array([15, 255, 255]),
+                "region": "full",
+                "multiplier": 3,
+            },
+            "hit_marker": {
+                "label": "Grab / Push",
+                "weight": 0.15,
+                # Grabbing other players: arm extending
+                # Being pushed: camera shakes
+                # Diving: forward dive VFX
+                "lower": np.array([0, 0, 230]),
+                "upper": np.array([180, 30, 255]),
+                "region": [0.30, 0.70, 0.30, 0.70],
+                "multiplier": 3,
+            },
+            "explosion": {
+                "label": "Crown / Win VFX",
+                "weight": 0.25,
+                # Crown grab: golden particles, celebration
+                # Final round win: confetti, "WINNER" with crown
+                # Rewards: colorful VFX at end
+                "lower": np.array([20, 100, 180]),
+                "upper": np.array([35, 255, 255]),
+                "region": "full",
+                "multiplier": 7,
+            },
+            "special": {
+                "label": "Finish Line / Timer",
+                "weight": 0.10,
+                # Finish line: bright barrier that players dive through
+                # Timer running out: red countdown
+                # Elimination count reducing
+                "lower": np.array([100, 80, 150]),
+                "upper": np.array([130, 255, 255]),
+                "region": [0.02, 0.15, 0.30, 0.70],
+                "multiplier": 4,
+            },
+        },
+        "motion_weight": 0.05, "motion_multiplier": 2,
+        "brightness_weight": 0.02, "brightness_threshold": 0.7, "brightness_multiplier": 1.5,
+        "intensity_threshold": 0.30, "fallback_threshold_ratio": 0.4,
+        "merge_gap": 5, "min_clip_duration": 10, "max_clip_duration": 35, "clip_extension": 5, "pre_pad": 4,
+        "ai_system_prompt": """You are an expert Fall Guys gameplay analyst. Fall Guys is a battle royale party game with bean-shaped characters by Mediatonic.
+
+Key visual cues:
+- **QUALIFIED!**: Large green text when player passes round
+- **ELIMINATED!**: Large red text when player fails round
+- **WINNER!**: Gold crown animation, confetti, celebration VFX
+- **Obstacles**: Spinning hammers, swinging pendulums, moving platforms, slime
+- **Grabbing**: Players grabbing each other near edges
+- **Diving**: Forward dive to reach platforms/finish line
+- **Team games**: Color-coded teams competing
+- **Finish line**: Bright barrier that players dive through
+- **Crown grab**: Final round crown floating, players jumping for it
+
+Look for: Crown wins, close finishes (barely qualifying), funny eliminations, griefing grabs at edges, perfect obstacle runs, last-second qualifications, team game comebacks, Hex-A-Gone clutches.
+Score 0.0 for: queue, customization, spectating (unless something amazing), loading.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
+        "ai_user_prompt": "Analyze this Fall Guys gameplay frame. Is this an exciting moment?",
+    },
+
+    "lethal_company": {
+        "name": "Lethal Company",
+        "description": "Horror co-op — detects monster encounters, deaths, loot collecting, ship departures",
+        "detectors": {
+            "kill_feed": {
+                "label": "Player Death / Missing",
+                "weight": 0.25,
+                # Death: screen goes dark/red, spectate view
+                # "PlayerName has died" notification
+                # End of quota: score tally screen
+                "lower": np.array([0, 0, 220]),
+                "upper": np.array([180, 40, 255]),
+                "region": [0.30, 0.70, 0.20, 0.80],
+                "multiplier": 6,
+            },
+            "damage": {
+                "label": "Monster Attack / Injury",
+                "weight": 0.25,
+                # Screen shakes on hit
+                # Red flash when damaged
+                # Dark environments suddenly lit by flashlight
+                "lower": np.array([0, 100, 80]),
+                "upper": np.array([12, 255, 255]),
+                "lower2": np.array([168, 100, 80]),
+                "upper2": np.array([180, 255, 255]),
+                "region": "edges",
+                "edge_size": 0.15,
+                "multiplier": 6,
+            },
+            "hit_marker": {
+                "label": "Flashlight / Scanner",
+                "weight": 0.10,
+                # Flashlight beam: bright white cone in dark facility
+                # Scanner beep: walkie-talkie static
+                "lower": np.array([0, 0, 230]),
+                "upper": np.array([180, 30, 255]),
+                "region": [0.20, 0.80, 0.20, 0.80],
+                "multiplier": 3,
+            },
+            "explosion": {
+                "label": "Landmine / Lightning",
+                "weight": 0.20,
+                # Landmine: bright orange flash
+                # Lightning: bright white flash on moon surface
+                # Ship departure: engine glow
+                "lower": np.array([10, 80, 180]),
+                "upper": np.array([35, 255, 255]),
+                "region": "full",
+                "multiplier": 6,
+            },
+            "special": {
+                "label": "Monster Encounter",
+                "weight": 0.20,
+                # Monsters appear suddenly in dark hallways
+                # Screen often goes from dark to monster close-up
+                # Bracken: sudden grab, Coil-Head: freeze mechanic
+                "lower": np.array([0, 60, 60]),
+                "upper": np.array([15, 255, 200]),
+                "region": "full",
+                "multiplier": 5,
+            },
+        },
+        "audio_weight": 0.35,
+        "audio_threshold_db": -20,
+        "audio_ceiling_db": -5,
+        "motion_weight": 0.05, "motion_multiplier": 2,
+        "brightness_weight": 0.05, "brightness_threshold": 0.5, "brightness_multiplier": 3,
+        "intensity_threshold": 0.25, "fallback_threshold_ratio": 0.4,
+        "merge_gap": 8, "min_clip_duration": 15, "max_clip_duration": 45, "clip_extension": 8, "pre_pad": 6,
+        "ai_system_prompt": """You are an expert Lethal Company gameplay analyst. Lethal Company is a co-op horror game about collecting scrap on dangerous moons by Zeekerss.
+
+Key visual cues:
+- **Monster encounters**: Sudden appearance of creatures in dark facilities — extremely clip-worthy
+- **Deaths**: Screen goes dark/red, often with a jumpscare from monster
+- **Dark facilities**: Mostly dark with flashlight beams cutting through
+- **Landmine**: Bright orange explosion, usually kills player
+- **Lightning**: Bright white flash on outdoor moon surface during storms
+- **Bracken**: Tall black figure that grabs and kills, very scary
+- **Coil-Head**: Mannequin-like creature that moves when not looked at
+- **Ship departure**: Engine glow, door closing, leaving moon
+- **Scrap collection**: Picking up various items, quota goal
+- **Quota failure**: Being ejected into space, dramatic ending
+
+Look for: Monster jumpscares, player deaths (especially dramatic ones), last-second ship departures, landmine kills, Bracken grabs, Coil-Head encounters, funny teamkills, shovel bonks, quota failures, midnight sun escapes.
+Score 0.0 for: walking through empty hallways, ship interior, buying equipment, moon selection.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
+        "ai_user_prompt": "Analyze this Lethal Company gameplay frame. Is this an exciting moment?",
+    },
+
+    "among_us": {
+        "name": "Among Us",
+        "description": "Social deduction — detects kills, meetings, votes, ejections, sabotages",
+        "detectors": {
+            "kill_feed": {
+                "label": "Kill / Ejection",
+                "weight": 0.30,
+                # Kill animation: impostor kills crewmate, brief animation
+                # Ejection: "PlayerName was ejected" / "PlayerName was not An Impostor"
+                # Body found: alarm sound, report screen
+                "lower": np.array([0, 120, 150]),
+                "upper": np.array([10, 255, 255]),
+                "lower2": np.array([0, 0, 220]),
+                "upper2": np.array([180, 40, 255]),
+                "region": [0.25, 0.75, 0.15, 0.85],
+                "multiplier": 8,
+            },
+            "damage": {
+                "label": "Sabotage / Alert",
+                "weight": 0.20,
+                # Reactor meltdown: red flashing screen
+                # O2 depletion: red warning UI
+                # Lights sabotage: dark screen with small vision circle
+                "lower": np.array([0, 100, 80]),
+                "upper": np.array([12, 255, 255]),
+                "region": "full",
+                "multiplier": 5,
+            },
+            "hit_marker": {
+                "label": "Task Completion",
+                "weight": 0.10,
+                # Task bar progress: green bar at top
+                # Task completion: brief animation/mini-game
+                "lower": np.array([35, 80, 150]),
+                "upper": np.array([85, 255, 255]),
+                "region": [0.02, 0.05, 0.20, 0.80],
+                "multiplier": 2,
+            },
+            "explosion": {
+                "label": "Emergency Meeting",
+                "weight": 0.25,
+                # Emergency meeting: red button slam, screen flashes
+                # Body report: alarm, body icon
+                # Voting screen: colored characters, chat
+                "lower": np.array([0, 150, 180]),
+                "upper": np.array([10, 255, 255]),
+                "region": "full",
+                "multiplier": 6,
+            },
+            "special": {
+                "label": "Vent / Suspicious Activity",
+                "weight": 0.15,
+                # Vent animation: player entering/exiting vent
+                # Kill animation: brief murder animation
+                # Security cameras: green indicator light
+                "lower": np.array([35, 100, 120]),
+                "upper": np.array([85, 255, 255]),
+                "region": [0.20, 0.80, 0.20, 0.80],
+                "multiplier": 5,
+            },
+        },
+        "motion_weight": 0.03, "motion_multiplier": 2,
+        "brightness_weight": 0.02, "brightness_threshold": 0.6, "brightness_multiplier": 2,
+        "intensity_threshold": 0.25, "fallback_threshold_ratio": 0.4,
+        "merge_gap": 8, "min_clip_duration": 15, "max_clip_duration": 45, "clip_extension": 8, "pre_pad": 6,
+        "ai_system_prompt": """You are an expert Among Us gameplay analyst. Among Us is a social deduction game where impostors try to eliminate crewmates.
+
+Key visual cues:
+- **Kill animation**: Brief murder animation — impostor stabs/shoots crewmate
+- **Body report**: Alarm sound, body icon, triggers emergency meeting
+- **Emergency meeting**: Red button slam, screen flashes red
+- **Voting screen**: All players shown, chat messages, voting arrows
+- **Ejection**: "PlayerName was ejected" — flying into space animation
+- **"Was (not) An Impostor"**: Text revealing if ejected player was impostor
+- **Sabotage**: Reactor/O2/Lights — red flashing warnings, dark vision
+- **Vent**: Animation of player entering/exiting vents (impostor only)
+- **Task bar**: Green progress bar at top of screen
+
+Look for: Kill moments (especially bold kills in front of others), big brain plays, successful ejections, wrong ejections (crewmate ejected), vent catches, stack kills, lights kills, self-report accusations, clutch wins.
+Score 0.0 for: doing tasks alone, walking through empty rooms, lobby, settings.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
+        "ai_user_prompt": "Analyze this Among Us gameplay frame. Is this an exciting moment?",
+    },
+
+    "path_of_exile": {
+        "name": "Path of Exile",
+        "description": "ARPG — detects boss kills, massive pack clear, currency drops, deaths",
+        "detectors": {
+            "kill_feed": {
+                "label": "Boss Kill / Level Up",
+                "weight": 0.25,
+                # Boss death: health bar depletes, death VFX
+                # Level up: bright golden flash, text notification
+                # Act boss kills: dramatic transitions
+                "lower": np.array([0, 0, 220]),
+                "upper": np.array([180, 40, 255]),
+                "lower2": np.array([20, 100, 200]),
+                "upper2": np.array([35, 255, 255]),
+                "region": [0.25, 0.55, 0.25, 0.75],
+                "multiplier": 7,
+            },
+            "damage": {
+                "label": "Low HP / Death",
+                "weight": 0.15,
+                # Health/mana: red and blue globes bottom corners
+                # Low HP: globe nearly empty, red tint
+                # Death: "YOU HAVE DIED" text
+                "lower": np.array([0, 100, 80]),
+                "upper": np.array([12, 255, 255]),
+                "region": "edges",
+                "edge_size": 0.08,
+                "multiplier": 4,
+            },
+            "hit_marker": {
+                "label": "Skill Impact / Pack Clear",
+                "weight": 0.15,
+                # Skill VFX: bright colored explosions per skill
+                # Pack clear: multiple enemies dying simultaneously
+                # Shattering: frozen enemies exploding into pieces
+                "lower": np.array([0, 0, 230]),
+                "upper": np.array([180, 30, 255]),
+                "region": [0.15, 0.85, 0.15, 0.85],
+                "multiplier": 4,
+            },
+            "explosion": {
+                "label": "Skill / Herald VFX",
+                "weight": 0.30,
+                # Skills: massive screen-filling VFX during mapping
+                # Herald effects: colored aura/explosions on kill
+                # Righteous Fire: orange burning circle around character
+                # Cyclone: spinning VFX, Lightning Arrow: blue/white bolts
+                "lower": np.array([10, 100, 150]),
+                "upper": np.array([35, 255, 255]),
+                "region": "full",
+                "multiplier": 4,
+            },
+            "special": {
+                "label": "Currency / Unique Drop",
+                "weight": 0.10,
+                # Mirror of Kalandra: most valuable drop, beam of light
+                # Exalted Orb: golden glow on ground
+                # Unique items: brown text label
+                # Map boss portal: swirling portal VFX
+                "lower": np.array([15, 120, 180]),
+                "upper": np.array([30, 255, 255]),
+                "region": "full",
+                "multiplier": 6,
+            },
+        },
+        "motion_weight": 0.03, "motion_multiplier": 2,
+        "brightness_weight": 0.03, "brightness_threshold": 0.65, "brightness_multiplier": 2,
+        "intensity_threshold": 0.30, "fallback_threshold_ratio": 0.3,
+        "merge_gap": 8, "min_clip_duration": 15, "max_clip_duration": 45, "clip_extension": 8, "pre_pad": 6,
+        "ai_system_prompt": """You are an expert Path of Exile gameplay analyst. PoE is a complex ARPG with deep build customization by Grinding Gear Games.
+
+Key visual cues:
+- **Pack clear**: Screen fills with VFX as dozens of monsters die simultaneously
+- **Boss phases**: Health bar at top, phase transitions with special mechanics
+- **Currency drops**: Exalted Orbs (gold glow), Divine Orbs, Mirror of Kalandra (rarest item in game)
+- **Death**: "YOU HAVE DIED" text, XP penalty
+- **Skills**: Build-specific VFX — some skills fill entire screen with color
+- **Herald effects**: Colored explosions/aura on every kill
+- **Level up**: Golden flash, notification
+- **Map boss**: Boss arena, unique mechanics, portal to map
+- **Breach/Legion/Delirium**: League mechanic spawning massive monster packs
+
+Look for: Boss kills (especially pinnacle bosses: Maven, Uber Elder, Sirus), Mirror drops, Exalt drops, massive pack clear with screen-filling VFX, deaths in hardcore (character deleted!), speed clearing, league mechanic encounters.
+Score 0.0 for: hideout, trading, passive tree, stash organizing, town.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
+        "ai_user_prompt": "Analyze this Path of Exile gameplay frame. Is this an exciting moment?",
+    },
+
+    "warframe": {
+        "name": "Warframe",
+        "description": "Action shooter — detects kills, abilities, boss fights, loot, extraction",
+        "detectors": {
+            "kill_feed": {
+                "label": "Kill / Affinity",
+                "weight": 0.25,
+                # Kill counter: bottom-right, accumulates rapidly
+                # Affinity notifications: XP gain
+                # Boss phase transitions
+                "lower": np.array([0, 0, 220]),
+                "upper": np.array([180, 40, 255]),
+                "region": [0.80, 0.98, 0.70, 0.98],
+                "multiplier": 5,
+            },
+            "damage": {
+                "label": "Shield/Health Down",
+                "weight": 0.15,
+                # Shield: blue bar depletes
+                # Health: red bar below shield
+                # Death: bleedout state, teammate can revive
+                "lower": np.array([0, 100, 80]),
+                "upper": np.array([12, 255, 255]),
+                "region": "edges",
+                "edge_size": 0.08,
+                "multiplier": 4,
+            },
+            "hit_marker": {
+                "label": "Crit / Status Proc",
+                "weight": 0.15,
+                # Critical hits: yellow/orange large damage numbers
+                # Status procs: colored icons (fire, electric, etc.)
+                # Headshot multiplier
+                "lower": np.array([20, 120, 200]),
+                "upper": np.array([35, 255, 255]),
+                "region": [0.25, 0.75, 0.25, 0.75],
+                "multiplier": 4,
+            },
+            "explosion": {
+                "label": "Warframe Ability",
+                "weight": 0.30,
+                # Warframe abilities: massive VFX per frame
+                # Saryn: green spore explosions, Mesa: golden gun streams
+                # Volt: blue electric discharge, Ember: orange fire waves
+                "lower": np.array([10, 100, 150]),
+                "upper": np.array([35, 255, 255]),
+                "region": "full",
+                "multiplier": 5,
+            },
+            "special": {
+                "label": "Prime Drop / Extraction",
+                "weight": 0.10,
+                # Rare relic rewards: golden light
+                # Extraction: green marker, countdown
+                # New prime part: reward screen highlight
+                "lower": np.array([15, 120, 180]),
+                "upper": np.array([30, 255, 255]),
+                "region": "full",
+                "multiplier": 5,
+            },
+        },
+        "motion_weight": 0.04, "motion_multiplier": 2,
+        "brightness_weight": 0.03, "brightness_threshold": 0.7, "brightness_multiplier": 1.5,
+        "intensity_threshold": 0.30, "fallback_threshold_ratio": 0.3,
+        "merge_gap": 6, "min_clip_duration": 12, "max_clip_duration": 45, "clip_extension": 6, "pre_pad": 4,
+        "ai_system_prompt": """You are an expert Warframe gameplay analyst. Warframe is a free-to-play co-op action shooter with space ninjas by Digital Extremes.
+
+Key visual cues:
+- **Kill counter**: Bottom-right, rapidly accumulating during missions
+- **Warframe abilities**: Massive VFX per Warframe — Saryn green spores, Mesa golden peacemakers, Volt electric discharge, Mirage clones, Wisp reservoirs
+- **Bullet jumping**: Acrobatic movement with energy trails
+- **Melee combos**: Flashy slash effects, finisher animations
+- **Boss fights**: Phase-based encounters with special mechanics (Eidolons, Profit-Taker)
+- **Extraction**: Green waypoint, countdown timer
+- **Rare drops**: Golden/silver light for rare mods/blueprints
+- **Operator/Drifter mode**: Void beam, transference
+- **Steel Path**: Harder content, steel essence drops
+
+Look for: Massive ability room clears, Eidolon hunts, boss kills, rare drops, high kill count missions, parkour chains, clutch revives, Arbitration saves, Railjack combat.
+Score 0.0 for: orbiter/ship interior, foundry, modding screen, relay/hub, trading.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
+        "ai_user_prompt": "Analyze this Warframe gameplay frame. Is this an exciting moment?",
+    },
+
+    "halo_infinite": {
+        "name": "Halo Infinite",
+        "description": "FPS — detects kills, multikills, power weapons, flag captures, Slayer",
+        "detectors": {
+            "kill_feed": {
+                "label": "Kill / Multikill",
+                "weight": 0.30,
+                # Kill feed: top-right corner
+                # Multikill medals: "Double Kill", "Triple Kill", "Overkill", "Killtacular"
+                # Medals pop up bottom center
+                "lower": np.array([0, 0, 220]),
+                "upper": np.array([180, 40, 255]),
+                "lower2": np.array([0, 120, 170]),
+                "upper2": np.array([10, 255, 255]),
+                "region": [0.01, 0.20, 0.60, 0.99],
+                "multiplier": 8,
+            },
+            "damage": {
+                "label": "Shield Down / Low HP",
+                "weight": 0.20,
+                # Shield: blue/cyan overlay, crackle VFX when broken
+                # Shield broken: red health bar exposed
+                # Low HP: red screen edges
+                "lower": np.array([0, 100, 80]),
+                "upper": np.array([12, 255, 255]),
+                "lower2": np.array([168, 100, 80]),
+                "upper2": np.array([180, 255, 255]),
+                "region": "edges",
+                "edge_size": 0.10,
+                "multiplier": 5,
+            },
+            "hit_marker": {
+                "label": "Shield Pop / Headshot",
+                "weight": 0.25,
+                # Hitmarker: white reticle ticks on hit
+                # Shield pop: distinct crackle sound + VFX
+                # Headshot: red reticle + "Perfect" medal
+                "lower": np.array([0, 0, 235]),
+                "upper": np.array([180, 25, 255]),
+                "region": [0.42, 0.58, 0.42, 0.58],
+                "multiplier": 6,
+            },
+            "explosion": {
+                "label": "Rocket / Grenade / Vehicle",
+                "weight": 0.18,
+                # Rocket launcher: bright orange explosion
+                # Frag grenade: orange flash
+                # Plasma grenade: blue stick + explosion
+                # Vehicle explosion: large fireball
+                "lower": np.array([8, 100, 150]),
+                "upper": np.array([30, 255, 255]),
+                "region": "full",
+                "multiplier": 5,
+            },
+            "special": {
+                "label": "Medal / Power Weapon",
+                "weight": 0.07,
+                # Medal notifications: gold/silver icons bottom center
+                # Power weapon spawn: glowing pickup
+                # Overshield: golden glow
+                "lower": np.array([20, 100, 200]),
+                "upper": np.array([35, 255, 255]),
+                "region": [0.80, 0.98, 0.30, 0.70],
+                "multiplier": 4,
+            },
+        },
+        "audio_weight": 0.25,
+        "audio_threshold_db": -14,
+        "audio_ceiling_db": -3,
+        "motion_weight": 0.03, "motion_multiplier": 2,
+        "brightness_weight": 0.02, "brightness_threshold": 0.7, "brightness_multiplier": 1.5,
+        "intensity_threshold": 0.35, "fallback_threshold_ratio": 0.3,
+        "merge_gap": 5, "min_clip_duration": 10, "max_clip_duration": 40, "clip_extension": 6, "pre_pad": 4,
+        "ai_system_prompt": """You are an expert Halo Infinite gameplay analyst. Halo Infinite is an FPS by 343 Industries/Xbox Game Studios.
+
+Key visual cues:
+- **Kill feed**: Top-right, weapon icon between killer→victim
+- **Medals**: Gold/silver icons at bottom center — "Double Kill", "Triple Kill", "Overkill", "Killtacular", "Killamanjaro"
+- **Shield pop**: Blue crackle VFX when enemy shield breaks — distinctive Halo mechanic
+- **Headshot**: Red reticle feedback, "Perfect" medal for all-headshot kill
+- **Power weapons**: Rocket Launcher, Sniper, Energy Sword, Gravity Hammer — glowing spawn locations
+- **Grenades**: Orange (frag), blue (plasma stick), white (spike)
+- **Vehicles**: Warthog, Scorpion tank, Banshee — vehicular kills
+- **Grappleshot**: Spartan grappling across map, grabbing weapons/players
+- **Repulsor**: Blue blast pushes objects/players
+
+Look for: Multikill sprees (especially Killamanjaro+), Energy Sword rampages, sniper no-scopes, Grappleshot plays, tank kills, Gravity Hammer sprees, Oddball clutches, flag captures under fire.
+Score 0.0 for: customization, menu, loading, spectating idle players.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
+        "ai_user_prompt": "Analyze this Halo Infinite gameplay frame. Is this an exciting moment?",
+    },
+
+    "palworld": {
+        "name": "Palworld",
+        "description": "Survival — detects Pal captures, boss fights, raids, base defense",
+        "detectors": {
+            "kill_feed": {
+                "label": "Pal Capture / Kill",
+                "weight": 0.30,
+                # Pal capture: sphere throw, capture animation, success/fail
+                # Boss defeat: large Pal/boss health bar depletes
+                # XP gain notification
+                "lower": np.array([0, 0, 220]),
+                "upper": np.array([180, 40, 255]),
+                "lower2": np.array([20, 100, 200]),
+                "upper2": np.array([35, 255, 255]),
+                "region": [0.20, 0.50, 0.30, 0.70],
+                "multiplier": 7,
+            },
+            "damage": {
+                "label": "Taking Damage",
+                "weight": 0.15,
+                # Red edges when hit
+                # Low HP warning
+                "lower": np.array([0, 100, 80]),
+                "upper": np.array([12, 255, 255]),
+                "region": "edges",
+                "edge_size": 0.10,
+                "multiplier": 4,
+            },
+            "hit_marker": {
+                "label": "Gun / Pal Attack",
+                "weight": 0.15,
+                # Gunshot: muzzle flash, hit indicator
+                # Pal abilities: colored VFX per element (fire, water, electric, etc.)
+                "lower": np.array([0, 0, 235]),
+                "upper": np.array([180, 25, 255]),
+                "region": [0.30, 0.70, 0.30, 0.70],
+                "multiplier": 4,
+            },
+            "explosion": {
+                "label": "Pal Ability / Explosion",
+                "weight": 0.25,
+                # Fire Pal abilities: orange flames
+                # Electric abilities: blue lightning
+                # Rocket launcher: orange explosion
+                # Base raid: multiple explosions
+                "lower": np.array([10, 100, 150]),
+                "upper": np.array([35, 255, 255]),
+                "region": "full",
+                "multiplier": 5,
+            },
+            "special": {
+                "label": "Capture / Legendary",
+                "weight": 0.15,
+                # Pal Sphere: bright capture animation
+                # Legendary Pal: special aura, unique model
+                # Successful capture: celebration VFX
+                "lower": np.array([100, 80, 150]),
+                "upper": np.array([130, 255, 255]),
+                "region": [0.20, 0.80, 0.20, 0.80],
+                "multiplier": 6,
+            },
+        },
+        "motion_weight": 0.03, "motion_multiplier": 2,
+        "brightness_weight": 0.02, "brightness_threshold": 0.7, "brightness_multiplier": 1.5,
+        "intensity_threshold": 0.30, "fallback_threshold_ratio": 0.3,
+        "merge_gap": 8, "min_clip_duration": 15, "max_clip_duration": 50, "clip_extension": 8, "pre_pad": 6,
+        "ai_system_prompt": """You are an expert Palworld gameplay analyst. Palworld is a survival game with creature capture mechanics (Pals) by Pocketpair.
+
+Key visual cues:
+- **Pal Sphere throw**: Throwing capture sphere at weakened Pal, shaking animation
+- **Successful capture**: Celebration VFX, Pal added to party
+- **Failed capture**: Sphere breaks, Pal escapes
+- **Boss fights**: Large Pal/tower boss with big health bar
+- **Pal abilities**: Element-specific VFX — fire (orange), water (blue), electric (yellow), dragon (purple)
+- **Gunplay**: Assault rifles, rocket launchers, shotguns with muzzle flash
+- **Base raids**: Enemies attacking your base, alarms, defense
+- **Legendary/Alpha Pals**: Special aura, larger models, harder to catch
+- **Butchering**: Dark humor element of the game
+
+Look for: Legendary/Alpha Pal captures, boss tower defeats, base raid defense, PvP fights, Pal combo attacks, funny Pal interactions, massive explosions, clutch captures with low-percentage spheres.
+Score 0.0 for: base building, crafting, walking, breeding menu, inventory management.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
+        "ai_user_prompt": "Analyze this Palworld gameplay frame. Is this an exciting moment?",
+    },
 }
 
 
