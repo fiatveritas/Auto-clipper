@@ -81,6 +81,14 @@ function restoreState() {
     }
 }
 
+// ===== Main Tab Navigation =====
+function switchMainTab(tabName) {
+    document.querySelectorAll(".nav-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tabName));
+    document.querySelectorAll(".main-tab-content").forEach(t => t.classList.remove("active"));
+    const target = document.getElementById(`tab-${tabName}-main`);
+    if (target) target.classList.add("active");
+}
+
 // ===== Game Selection =====
 let selectedGame = "arc_raiders";
 let availableGames = [];
@@ -91,14 +99,17 @@ function loadGames() {
         .then(data => {
             availableGames = data.games || [];
             renderGameOptions();
+            renderGameCards();
+            updateGameActiveDisplay();
         })
         .catch(() => {
-            // Fallback if endpoint fails
             availableGames = [
                 { id: "arc_raiders", name: "Arc Raiders", description: "Sci-fi co-op shooter" },
                 { id: "war_thunder", name: "War Thunder", description: "Military vehicles" },
             ];
             renderGameOptions();
+            renderGameCards();
+            updateGameActiveDisplay();
         });
 }
 
@@ -111,10 +122,69 @@ function renderGameOptions() {
     `).join("");
 }
 
+function getGameTag(game) {
+    const id = game.id.toLowerCase();
+    const desc = (game.description || "").toLowerCase();
+    if (desc.includes("recommended") || id === "arc_raiders") return { label: "Recommended", cls: "recommended" };
+    if (desc.includes("aggressive") || desc.includes("wide-net")) return { label: "Aggressive", cls: "aggressive" };
+    if (desc.includes("audio")) return { label: "Audio-Heavy", cls: "audio" };
+    if (desc.includes("motion")) return { label: "Motion-Based", cls: "motion" };
+    if (desc.includes("precision") || desc.includes("conservative")) return { label: "Precision", cls: "precision" };
+    if (desc.includes("pvpve") || id.includes("v7")) return { label: "PvPvE", cls: "pvpve" };
+    return null;
+}
+
+function renderGameCards() {
+    const container = document.getElementById("game-cards-container");
+    if (!container) return;
+    container.innerHTML = availableGames.map(game => {
+        const tag = getGameTag(game);
+        const tagHtml = tag ? `<span class="game-card-tag ${tag.cls}">${tag.label}</span>` : '';
+        return `
+            <div class="game-card ${game.id === selectedGame ? 'selected' : ''}"
+                 data-game-id="${game.id}"
+                 onclick="selectGameCard('${game.id}')">
+                <div class="game-card-name">${escapeHtml(game.name)}</div>
+                <div class="game-card-desc">${escapeHtml(game.description)}</div>
+                ${tagHtml}
+            </div>
+        `;
+    }).join("");
+}
+
+function updateGameActiveDisplay() {
+    const game = availableGames.find(g => g.id === selectedGame) || { name: selectedGame, description: "" };
+    const nameEl = document.getElementById("game-active-name");
+    const descEl = document.getElementById("game-active-desc");
+    if (nameEl) nameEl.textContent = game.name;
+    if (descEl) descEl.textContent = game.description;
+}
+
+function selectGameCard(gameId) {
+    selectedGame = gameId;
+    const select = document.getElementById("game-select");
+    if (select.value !== gameId) select.value = gameId;
+    renderGameCards();
+    updateGameActiveDisplay();
+    // Auto-collapse after selection
+    document.getElementById("game-cards-container").classList.add("hidden");
+    document.getElementById("game-cards-toggle").textContent = "Show all";
+    saveState();
+}
+
+function toggleGameCards() {
+    const container = document.getElementById("game-cards-container");
+    const btn = document.getElementById("game-cards-toggle");
+    const isHidden = container.classList.toggle("hidden");
+    btn.textContent = isHidden ? "Show all" : "Hide";
+}
+
 function selectGame(gameId) {
     selectedGame = gameId;
     const select = document.getElementById("game-select");
     if (select.value !== gameId) select.value = gameId;
+    renderGameCards();
+    updateGameActiveDisplay();
     saveState();
 }
 
@@ -273,17 +343,19 @@ function loadLibrary() {
         .then(res => res.json())
         .then(data => {
             const vods = data.vods || [];
-            const section = document.getElementById("library-section");
             const list = document.getElementById("library-list");
             const count = document.getElementById("library-count");
+            const empty = document.getElementById("library-empty");
+
+            count.textContent = vods.length;
 
             if (vods.length === 0) {
-                section.classList.add("hidden");
+                list.innerHTML = "";
+                if (empty) empty.classList.remove("hidden");
                 return;
             }
 
-            section.classList.remove("hidden");
-            count.textContent = vods.length;
+            if (empty) empty.classList.add("hidden");
 
             list.innerHTML = vods.map(vod => `
                 <div class="library-item">
@@ -353,17 +425,19 @@ function loadSessions() {
         .then(res => res.json())
         .then(data => {
             const sessions = data.sessions || [];
-            const section = document.getElementById("sessions-section");
             const list = document.getElementById("sessions-list");
             const count = document.getElementById("sessions-count");
+            const empty = document.getElementById("sessions-empty");
+
+            count.textContent = sessions.length;
 
             if (sessions.length === 0) {
-                section.classList.add("hidden");
+                list.innerHTML = "";
+                if (empty) empty.classList.remove("hidden");
                 return;
             }
 
-            section.classList.remove("hidden");
-            count.textContent = sessions.length;
+            if (empty) empty.classList.add("hidden");
 
             list.innerHTML = sessions.map(s => `
                 <div class="library-item">
@@ -2221,9 +2295,8 @@ function loadAnalytics() {
 }
 
 function toggleAnalytics() {
-    const content = document.getElementById("analytics-content");
-    content.classList.toggle("hidden");
-    if (!content.classList.contains("hidden")) loadAnalytics();
+    // Analytics is now always visible in the Library tab
+    loadAnalytics();
 }
 
 // ===== EXPORT PRESETS =====

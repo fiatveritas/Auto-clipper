@@ -18,19 +18,39 @@
 
     <div class="app hidden" id="app-container">
         <header>
-            <h1>Auto-Clipper</h1>
-            <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">&#9788;</button>
+            <div class="header-row">
+                <h1>Auto-Clipper</h1>
+                <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">&#9788;</button>
+            </div>
             <p class="subtitle">Upload your VOD or paste a link — AI finds the best moments</p>
         </header>
 
-        <!-- Game Selection -->
+        <!-- Navigation Tabs -->
+        <nav class="main-nav">
+            <button class="nav-tab active" data-tab="analyze" onclick="switchMainTab('analyze')">Analyze</button>
+            <button class="nav-tab" data-tab="library" onclick="switchMainTab('library')">Library</button>
+            <button class="nav-tab" data-tab="settings" onclick="switchMainTab('settings')">Settings</button>
+        </nav>
+
+        <!-- ==================== ANALYZE TAB ==================== -->
+        <div id="tab-analyze-main" class="main-tab-content active">
+
+        <!-- Game Selection — Card-Based -->
         <section id="game-section" class="card">
-            <div class="game-selector">
-                <label class="game-label" for="game-select">Game</label>
-                <select id="game-select" class="game-dropdown" onchange="selectGame(this.value)">
-                    <!-- Populated by JS -->
-                </select>
+            <div class="game-section-header">
+                <h2 class="section-title">Game Profile</h2>
+                <button class="collapse-btn" onclick="toggleGameCards()" id="game-cards-toggle">Show all</button>
             </div>
+            <div class="game-active-display" id="game-active-display" onclick="toggleGameCards()">
+                <div class="game-active-name" id="game-active-name">Arc Raiders</div>
+                <div class="game-active-desc" id="game-active-desc">Simple detection — Recommended</div>
+                <span class="game-active-change">Change</span>
+            </div>
+            <div id="game-cards-container" class="game-cards-container hidden">
+                <!-- Populated by JS -->
+            </div>
+            <!-- Hidden select for compatibility -->
+            <select id="game-select" class="hidden" onchange="selectGame(this.value)"></select>
         </section>
 
         <!-- Input Section -->
@@ -227,154 +247,6 @@
             <div id="error-msg" class="error-msg hidden"></div>
         </section>
 
-        <!-- Saved VODs Library -->
-        <section id="library-section" class="card hidden">
-            <div class="library-header">
-                <h2>Saved VODs</h2>
-                <span id="library-count" class="badge">0</span>
-                <button id="watch-folder-btn" class="trim-btn" onclick="toggleWatchFolder()">Watch Folder: Off</button>
-            </div>
-            <p class="library-hint">Previously downloaded VODs. Click one to re-analyze without re-downloading.</p>
-            <div id="library-list" class="library-list"></div>
-        </section>
-
-        <!-- Recent Sessions -->
-        <section id="sessions-section" class="card hidden">
-            <div class="library-header">
-                <h2>Recent Sessions</h2>
-                <span id="sessions-count" class="badge">0</span>
-            </div>
-            <p class="library-hint">Previously analyzed clips — click to resume editing.</p>
-            <div id="sessions-list" class="library-list"></div>
-        </section>
-
-        <!-- Analytics Dashboard -->
-        <section id="analytics-section" class="card hidden">
-            <div class="library-header">
-                <h2>Analytics</h2>
-                <button class="trim-btn" onclick="toggleAnalytics()">Show/Hide</button>
-            </div>
-            <div id="analytics-content" class="hidden">
-                <div class="analytics-grid">
-                    <div class="analytics-stat">
-                        <div class="analytics-stat-value" id="stat-total-clips">0</div>
-                        <div class="analytics-stat-label">Total Clips</div>
-                    </div>
-                    <div class="analytics-stat">
-                        <div class="analytics-stat-value" id="stat-total-exports">0</div>
-                        <div class="analytics-stat-label">Exports</div>
-                    </div>
-                    <div class="analytics-stat">
-                        <div class="analytics-stat-value" id="stat-total-tiktoks">0</div>
-                        <div class="analytics-stat-label">TikToks Made</div>
-                    </div>
-                    <div class="analytics-stat">
-                        <div class="analytics-stat-value" id="stat-total-gifs">0</div>
-                        <div class="analytics-stat-label">GIFs Made</div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Export Settings -->
-        <section id="export-settings-section" class="card hidden">
-            <div class="library-header">
-                <h2>Export Settings</h2>
-                <button class="trim-btn" onclick="toggleExportSettings()">Show/Hide</button>
-            </div>
-            <div id="export-settings-content" class="hidden">
-                <div class="export-settings-grid">
-                    <div class="export-setting">
-                        <label>Resolution</label>
-                        <select id="export-resolution">
-                            <option value="source">Source (original)</option>
-                            <option value="1080p">1080p</option>
-                            <option value="720p">720p</option>
-                            <option value="480p">480p</option>
-                        </select>
-                    </div>
-                    <div class="export-setting">
-                        <label>Format</label>
-                        <select id="export-format">
-                            <option value="mp4">MP4 (H.264)</option>
-                            <option value="webm">WebM (VP9)</option>
-                            <option value="mov">MOV (ProRes)</option>
-                        </select>
-                    </div>
-                    <div class="export-setting">
-                        <label>Quality</label>
-                        <select id="export-quality">
-                            <option value="high">High (larger files)</option>
-                            <option value="medium" selected>Medium (balanced)</option>
-                            <option value="low">Low (smaller files)</option>
-                        </select>
-                    </div>
-                    <div class="export-setting">
-                        <label>Audio</label>
-                        <select id="export-audio">
-                            <option value="aac" selected>AAC</option>
-                            <option value="copy">Copy (no re-encode)</option>
-                            <option value="none">No audio</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Custom Game Profile Builder -->
-        <section id="custom-profile-section" class="card hidden">
-            <div class="library-header">
-                <h2>Custom Game Profile</h2>
-                <button class="trim-btn" onclick="toggleCustomProfile()">Show/Hide</button>
-            </div>
-            <div id="custom-profile-content" class="hidden">
-                <div class="custom-profile-form">
-                    <div class="export-setting">
-                        <label>Game Name</label>
-                        <input type="text" id="cp-name" placeholder="My Game" autocomplete="off">
-                    </div>
-                    <div class="export-setting">
-                        <label>Profile ID</label>
-                        <input type="text" id="cp-id" placeholder="my_game" autocomplete="off">
-                    </div>
-                    <div class="export-settings-grid">
-                        <div class="export-setting">
-                            <label>Audio Threshold (dB)</label>
-                            <input type="number" id="cp-audio-threshold" value="-8" min="-30" max="0" step="1">
-                        </div>
-                        <div class="export-setting">
-                            <label>Audio Weight (0-1)</label>
-                            <input type="number" id="cp-audio-weight" value="0.7" min="0" max="1" step="0.1">
-                        </div>
-                        <div class="export-setting">
-                            <label>Intensity Threshold</label>
-                            <input type="number" id="cp-intensity" value="0.35" min="0.1" max="1" step="0.05">
-                        </div>
-                        <div class="export-setting">
-                            <label>Min Clip (sec)</label>
-                            <input type="number" id="cp-min-clip" value="20" min="5" max="120">
-                        </div>
-                        <div class="export-setting">
-                            <label>Max Clip (sec)</label>
-                            <input type="number" id="cp-max-clip" value="60" min="10" max="300">
-                        </div>
-                        <div class="export-setting">
-                            <label>Merge Gap (sec)</label>
-                            <input type="number" id="cp-merge-gap" value="8" min="1" max="60">
-                        </div>
-                    </div>
-                    <div class="export-setting">
-                        <label>AI System Prompt (for AI Vision mode)</label>
-                        <textarea id="cp-ai-prompt" rows="3" placeholder="You are an expert analyst for this game. Analyze gameplay frames for exciting moments..."></textarea>
-                    </div>
-                    <div class="custom-profile-footer">
-                        <button class="btn-apply-trim" onclick="saveCustomProfile()">Save Profile</button>
-                        <span id="cp-status" class="trim-status"></span>
-                    </div>
-                </div>
-            </div>
-        </section>
-
         <!-- Progress Section -->
         <section id="progress-section" class="card hidden">
             <div class="progress-header">
@@ -423,6 +295,171 @@
                 <p>No highlights were detected. Try a different stream with more action!</p>
             </div>
         </section>
+
+        </div><!-- end analyze tab -->
+
+        <!-- ==================== LIBRARY TAB ==================== -->
+        <div id="tab-library-main" class="main-tab-content">
+
+            <!-- Saved VODs Library -->
+            <section id="library-section" class="card">
+                <div class="library-header">
+                    <h2>Saved VODs</h2>
+                    <span id="library-count" class="badge">0</span>
+                    <button id="watch-folder-btn" class="trim-btn" onclick="toggleWatchFolder()">Watch Folder: Off</button>
+                </div>
+                <p class="library-hint">Previously downloaded VODs. Click one to re-analyze without re-downloading.</p>
+                <div id="library-list" class="library-list"></div>
+                <div id="library-empty" class="empty-state">
+                    <div class="empty-icon">&#128193;</div>
+                    <p>No saved VODs yet</p>
+                    <p class="empty-hint">Downloaded VODs will appear here for easy re-analysis</p>
+                </div>
+            </section>
+
+            <!-- Recent Sessions -->
+            <section id="sessions-section" class="card">
+                <div class="library-header">
+                    <h2>Recent Sessions</h2>
+                    <span id="sessions-count" class="badge">0</span>
+                </div>
+                <p class="library-hint">Previously analyzed clips — click to resume editing.</p>
+                <div id="sessions-list" class="library-list"></div>
+                <div id="sessions-empty" class="empty-state">
+                    <div class="empty-icon">&#128203;</div>
+                    <p>No previous sessions</p>
+                    <p class="empty-hint">Analysis results will be saved here automatically</p>
+                </div>
+            </section>
+
+            <!-- Analytics Dashboard -->
+            <section id="analytics-section" class="card">
+                <div class="library-header">
+                    <h2>Analytics</h2>
+                </div>
+                <div id="analytics-content">
+                    <div class="analytics-grid">
+                        <div class="analytics-stat">
+                            <div class="analytics-stat-value" id="stat-total-clips">0</div>
+                            <div class="analytics-stat-label">Total Clips</div>
+                        </div>
+                        <div class="analytics-stat">
+                            <div class="analytics-stat-value" id="stat-total-exports">0</div>
+                            <div class="analytics-stat-label">Exports</div>
+                        </div>
+                        <div class="analytics-stat">
+                            <div class="analytics-stat-value" id="stat-total-tiktoks">0</div>
+                            <div class="analytics-stat-label">TikToks Made</div>
+                        </div>
+                        <div class="analytics-stat">
+                            <div class="analytics-stat-value" id="stat-total-gifs">0</div>
+                            <div class="analytics-stat-label">GIFs Made</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div><!-- end library tab -->
+
+        <!-- ==================== SETTINGS TAB ==================== -->
+        <div id="tab-settings-main" class="main-tab-content">
+
+            <!-- Export Settings -->
+            <section id="export-settings-section" class="card">
+                <div class="library-header">
+                    <h2>Export Settings</h2>
+                </div>
+                <div id="export-settings-content">
+                    <div class="export-settings-grid">
+                        <div class="export-setting">
+                            <label>Resolution</label>
+                            <select id="export-resolution">
+                                <option value="source">Source (original)</option>
+                                <option value="1080p">1080p</option>
+                                <option value="720p">720p</option>
+                                <option value="480p">480p</option>
+                            </select>
+                        </div>
+                        <div class="export-setting">
+                            <label>Format</label>
+                            <select id="export-format">
+                                <option value="mp4">MP4 (H.264)</option>
+                                <option value="webm">WebM (VP9)</option>
+                                <option value="mov">MOV (ProRes)</option>
+                            </select>
+                        </div>
+                        <div class="export-setting">
+                            <label>Quality</label>
+                            <select id="export-quality">
+                                <option value="high">High (larger files)</option>
+                                <option value="medium" selected>Medium (balanced)</option>
+                                <option value="low">Low (smaller files)</option>
+                            </select>
+                        </div>
+                        <div class="export-setting">
+                            <label>Audio</label>
+                            <select id="export-audio">
+                                <option value="aac" selected>AAC</option>
+                                <option value="copy">Copy (no re-encode)</option>
+                                <option value="none">No audio</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Custom Game Profile Builder -->
+            <section id="custom-profile-section" class="card">
+                <div class="library-header">
+                    <h2>Custom Game Profile</h2>
+                </div>
+                <div id="custom-profile-content">
+                    <div class="custom-profile-form">
+                        <div class="export-setting">
+                            <label>Game Name</label>
+                            <input type="text" id="cp-name" placeholder="My Game" autocomplete="off">
+                        </div>
+                        <div class="export-setting">
+                            <label>Profile ID</label>
+                            <input type="text" id="cp-id" placeholder="my_game" autocomplete="off">
+                        </div>
+                        <div class="export-settings-grid">
+                            <div class="export-setting">
+                                <label>Audio Threshold (dB)</label>
+                                <input type="number" id="cp-audio-threshold" value="-8" min="-30" max="0" step="1">
+                            </div>
+                            <div class="export-setting">
+                                <label>Audio Weight (0-1)</label>
+                                <input type="number" id="cp-audio-weight" value="0.7" min="0" max="1" step="0.1">
+                            </div>
+                            <div class="export-setting">
+                                <label>Intensity Threshold</label>
+                                <input type="number" id="cp-intensity" value="0.35" min="0.1" max="1" step="0.05">
+                            </div>
+                            <div class="export-setting">
+                                <label>Min Clip (sec)</label>
+                                <input type="number" id="cp-min-clip" value="20" min="5" max="120">
+                            </div>
+                            <div class="export-setting">
+                                <label>Max Clip (sec)</label>
+                                <input type="number" id="cp-max-clip" value="60" min="10" max="300">
+                            </div>
+                            <div class="export-setting">
+                                <label>Merge Gap (sec)</label>
+                                <input type="number" id="cp-merge-gap" value="8" min="1" max="60">
+                            </div>
+                        </div>
+                        <div class="export-setting">
+                            <label>AI System Prompt (for AI Vision mode)</label>
+                            <textarea id="cp-ai-prompt" rows="3" placeholder="You are an expert analyst for this game. Analyze gameplay frames for exciting moments..."></textarea>
+                        </div>
+                        <div class="custom-profile-footer">
+                            <button class="btn-apply-trim" onclick="saveCustomProfile()">Save Profile</button>
+                            <span id="cp-status" class="trim-status"></span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div><!-- end settings tab -->
 
         <!-- Clip Preview + Editor Modal -->
         <div id="preview-modal" class="modal hidden" onclick="closeModal(event)">

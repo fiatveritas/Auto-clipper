@@ -160,138 +160,128 @@ Score guide: 0.0 = menu/nothing happening, 0.3 = minor action, 0.6 = good combat
     # Sources: ARC Raiders Wiki, GameRant, GamingBolt, Steam Community, NerdSchalk,
     #   Beebom, GameSpot, Epiccarry, NeonLightsMedia, The Escapist, Kotaku
     "arc_raiders_v2": {
-        "name": "Arc Raiders (Research)",
-        "description": "Research-based detection \u2014 tuned to actual HUD colors and enemy visuals",
+        "name": "Arc Raiders v2 (Refined)",
+        "description": "Research-based detection \u2014 wider color ranges, better audio blend, fewer false negatives",
 
         "detectors": {
             "muzzle_flash": {
                 "label": "Gunfire / Muzzle Flash",
-                "weight": 0.25,
-                # THIRD-PERSON: muzzle flash on character model (right side of screen,
-                # lower area where the over-the-shoulder weapon renders)
-                # Orange-yellow muzzle flash + white energy weapon flash
-                "lower": np.array([10, 120, 180]),
-                "upper": np.array([30, 255, 255]),
-                "lower2": np.array([0, 0, 240]),
-                "upper2": np.array([180, 40, 255]),
-                # Right-center lower area (third-person weapon position)
-                "region": [0.40, 0.85, 0.40, 0.80],
-                "multiplier": 6,
+                "weight": 0.22,
+                # THIRD-PERSON: muzzle flash on character model
+                # Widened hue range to catch energy weapons (bluer flash)
+                # Lowered sat floor to catch washed-out muzzle flashes in bright areas
+                "lower": np.array([8, 100, 170]),
+                "upper": np.array([35, 255, 255]),
+                # White/blue energy weapon flash
+                "lower2": np.array([0, 0, 230]),
+                "upper2": np.array([180, 50, 255]),
+                # Wider region — character can be left/right depending on camera
+                "region": [0.35, 0.90, 0.25, 0.85],
+                "multiplier": 5,
             },
             "death_flare": {
                 "label": "Death / Kill",
-                "weight": 0.10,
-                # NO kill feed in Arc Raiders — instead a bright RED FLARE
-                # shoots skyward when a player dies, visible across the map
-                "lower": np.array([0, 150, 180]),
-                "upper": np.array([10, 255, 255]),
-                "lower2": np.array([170, 150, 180]),
+                "weight": 0.12,
+                # Bright RED FLARE skyward on player death
+                # Widened sat range — flares can be partially washed out at distance
+                "lower": np.array([0, 130, 160]),
+                "upper": np.array([12, 255, 255]),
+                "lower2": np.array([168, 130, 160]),
                 "upper2": np.array([180, 255, 255]),
-                # Upper portion of screen where flares appear in the sky
-                "region": [0.0, 0.50, 0.10, 0.90],
-                "multiplier": 6,
+                "region": [0.0, 0.55, 0.05, 0.95],
+                "multiplier": 7,
             },
             "red_scanner": {
                 "label": "ARC Enemy Aggro",
                 "weight": 0.15,
-                # ARC enemies switch scanner beam to RED when attacking
-                # Universal combat indicator (Wasps, Bastions, Turrets, Hornets)
-                # Also catches red directional damage indicators
-                "lower": np.array([0, 140, 150]),
-                "upper": np.array([8, 255, 255]),
-                "lower2": np.array([172, 140, 150]),
+                # ARC scanner beams turn RED when attacking
+                # Slightly wider hue range to catch orange-red transition
+                "lower": np.array([0, 130, 140]),
+                "upper": np.array([10, 255, 255]),
+                "lower2": np.array([170, 130, 140]),
                 "upper2": np.array([180, 255, 255]),
-                "region": [0.10, 0.75, 0.10, 0.90],
+                "region": [0.08, 0.80, 0.08, 0.92],
                 "multiplier": 5,
             },
             "explosion": {
                 "label": "Explosion",
                 "weight": 0.12,
                 # Large explosions, grenades, ARC self-destruct
-                # Restrict to center+lower to avoid sunset/sky false positives
-                "lower": np.array([5, 150, 170]),
-                "upper": np.array([25, 255, 255]),
-                "region": [0.25, 0.90, 0.15, 0.85],
+                # Added wider region and slightly lower sat floor
+                "lower": np.array([5, 130, 160]),
+                "upper": np.array([28, 255, 255]),
+                "region": [0.20, 0.92, 0.10, 0.90],
                 "multiplier": 5,
             },
             "health_bar": {
                 "label": "Health/Shield Drop",
                 "weight": 0.13,
                 # WHITE health bar + BLUE SEGMENTED shield boxes — bottom-left HUD
-                # Each blue segment = 10 shield charge points
-                # Shield = damage reduction, not a second health pool
                 "region": "health_bar",
-                "bar_region": [0.88, 0.95, 0.02, 0.22],
+                "bar_region": [0.86, 0.96, 0.01, 0.24],
                 "bar_colors": [
-                    # White health bar (very bright, low saturation)
-                    {"lower": np.array([0, 0, 180]), "upper": np.array([180, 40, 255])},
-                    # Blue shield segments
-                    {"lower": np.array([90, 60, 100]), "upper": np.array([130, 255, 255])},
+                    {"lower": np.array([0, 0, 170]), "upper": np.array([180, 45, 255])},
+                    {"lower": np.array([85, 50, 90]), "upper": np.array([135, 255, 255])},
                 ],
-                "depletion_threshold": 0.10,
+                "depletion_threshold": 0.08,
                 "multiplier": 6,
             },
             "damage_indicators": {
                 "label": "Taking Damage",
-                "weight": 0.10,
-                # Red DIRECTIONAL indicators pointing toward damage source
-                # + red vignette at screen edges when hit
-                "lower": np.array([0, 120, 100]),
-                "upper": np.array([10, 255, 255]),
-                "lower2": np.array([170, 120, 100]),
+                "weight": 0.11,
+                # Red directional indicators + vignette
+                # Wider edge region to catch more subtle indicators
+                "lower": np.array([0, 110, 90]),
+                "upper": np.array([12, 255, 255]),
+                "lower2": np.array([168, 110, 90]),
                 "upper2": np.array([180, 255, 255]),
                 "region": "edges",
-                "edge_size": 0.10,
+                "edge_size": 0.12,
                 "multiplier": 4,
             },
             "weak_point_glow": {
                 "label": "Weak Point Hit",
                 "weight": 0.05,
-                # Enemy weak points glow YELLOW when vulnerable
-                # Bastion kneecaps/rear cylinder, Rocketeer red core,
-                # Wasp/Hornet thrusters
-                "lower": np.array([20, 100, 150]),
-                "upper": np.array([40, 255, 255]),
-                "region": "full",
+                # Yellow weak point glow on enemies
+                "lower": np.array([18, 90, 140]),
+                "upper": np.array([42, 255, 255]),
+                "region": [0.15, 0.85, 0.15, 0.85],
                 "multiplier": 3,
             },
             "crosshair_activity": {
                 "label": "Combat (Crosshair)",
                 "weight": 0.10,
-                # Dynamic crosshair tightens during ADS
-                # Circle crosshair = weapon spread indicator
-                # Default white but can be any RGB color
-                "lower": np.array([0, 0, 240]),
-                "upper": np.array([180, 25, 255]),
-                "region": [0.43, 0.57, 0.43, 0.57],
+                # Dynamic crosshair center screen — bright white
+                "lower": np.array([0, 0, 235]),
+                "upper": np.array([180, 30, 255]),
+                "region": [0.42, 0.58, 0.42, 0.58],
                 "multiplier": 5,
             },
         },
 
-        # Audio: blend with visual, don't dominate
-        "audio_weight": 0.40,
-        "audio_threshold_db": -15,
+        # Audio: important signal but don't let it overwhelm
+        "audio_weight": 0.35,
+        "audio_threshold_db": -18,
         "audio_ceiling_db": -3,
 
-        # Motion: moderate — gunfights have more motion than walking
-        "motion_weight": 0.05,
-        "motion_multiplier": 2,
+        # Motion: slight boost — combat has more movement
+        "motion_weight": 0.08,
+        "motion_multiplier": 2.5,
 
-        # Brightness: detect explosion whiteouts
-        "brightness_weight": 0.03,
-        "brightness_threshold": 0.75,
-        "brightness_multiplier": 2,
+        # Brightness: catch explosion whiteouts
+        "brightness_weight": 0.04,
+        "brightness_threshold": 0.70,
+        "brightness_multiplier": 2.5,
 
-        # Scoring
-        "intensity_threshold": 0.35,
-        "fallback_threshold_ratio": 0.4,
-        "merge_gap": 8,
-        "min_clip_duration": 20,
+        # Scoring — slightly lower threshold to catch more action
+        "intensity_threshold": 0.30,
+        "fallback_threshold_ratio": 0.35,
+        "merge_gap": 6,
+        "min_clip_duration": 15,
         "max_clip_duration": 60,
         "clip_extension": 10,
         "pre_pad": 8,
 
-        # AI prompt — detailed with Arc Raiders specific knowledge
         "ai_system_prompt": """You are an expert Arc Raiders gameplay analyst. Arc Raiders is a PvE co-op extraction shooter by Embark Studios where players fight robot enemies called ARCs.
 
 IMPORTANT GAME KNOWLEDGE:
@@ -302,26 +292,649 @@ IMPORTANT GAME KNOWLEDGE:
 - ARC scanner beams turn RED when attacking (white=patrol, blue=curious, yellow=alert, red=aggro)
 - Weak points glow YELLOW (Bastion kneecaps, Rocketeer glowing red core, Wasp thrusters)
 - Player HUD: white health bar + blue segmented shield boxes (bottom-left), ammo (bottom-right)
-- Shield is damage REDUCTION, not a second health pool — every hit still does health damage
+- Shield is damage REDUCTION, not a second health pool
 - Red directional indicators point toward damage source
-- Weapons: Stitcher SMG, Ferro, Rattler, Hullcracker, plus shotguns/energy weapons
 
 Look for these highlights:
 - **Active Combat**: Muzzle flash on character model, enemies with RED scanners, explosions
-- **Kills**: ARC enemies staggering/collapsing/exploding, parts flying off, rotors failing
-- **Deaths**: RED FLARE in the sky = someone died (exciting moment!)
-- **Taking Damage**: Red directional indicators, health bar depleting, shield breaking
-- **Boss Encounters**: Large ARCs (Bastion, Crusher, Matriarch) in combat
-- **Close Calls**: Very low health, downed state (bleed-out timer), crawling
+- **Kills**: ARC enemies staggering/collapsing/exploding, parts flying off
+- **Deaths**: RED FLARE in the sky = someone died
+- **Taking Damage**: Red indicators, health/shield depleting
+- **Boss Encounters**: Large ARCs (Bastion, Crusher, Matriarch)
+- **Close Calls**: Very low health, downed state, crawling
 - **Explosions**: Grenades, environmental destruction, ARC self-destruct
 
-Score 0.0 for: menus, inventory, crafting screens, loading, lobby (Speranza), map screen, settings.
+Score 0.0 for: menus, inventory, crafting, loading, lobby (Speranza), map, settings.
 
 For each frame, respond with ONLY a JSON object (no markdown):
 {"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}
 
 Score guide: 0.0 = menu/nothing, 0.3 = minor action, 0.6 = good combat, 0.8 = kill/major, 1.0 = insane play""",
         "ai_user_prompt": "Analyze this Arc Raiders gameplay frame. Is this an exciting moment?",
+    },
+
+    # ===== ARC RAIDERS V3 — Aggressive / Wide-net =====
+    # Strategy: Cast a very wide net. Lower all thresholds, wider color ranges,
+    # more generous regions. Produces MORE clips but may include some false positives.
+    # Good for short streams where you don't want to miss anything.
+    "arc_raiders_v3": {
+        "name": "Arc Raiders v3 (Aggressive)",
+        "description": "Wide-net detection \u2014 catches more action, may include false positives",
+
+        "detectors": {
+            "combat_flash": {
+                "label": "Combat / Muzzle Flash",
+                "weight": 0.20,
+                # Very wide orange-yellow range to catch any flash-like event
+                # Includes warm whites from energy weapons
+                "lower": np.array([5, 80, 150]),
+                "upper": np.array([40, 255, 255]),
+                "region": "full",
+                "multiplier": 4,
+            },
+            "death_flare": {
+                "label": "Death / Kill",
+                "weight": 0.15,
+                # Wider red range — catches flares, blood, damage indicators all at once
+                "lower": np.array([0, 100, 130]),
+                "upper": np.array([15, 255, 255]),
+                "lower2": np.array([165, 100, 130]),
+                "upper2": np.array([180, 255, 255]),
+                "region": "full",
+                "multiplier": 5,
+            },
+            "red_scanner": {
+                "label": "ARC Enemy Aggro",
+                "weight": 0.12,
+                # Scanner beam — broader range
+                "lower": np.array([0, 120, 120]),
+                "upper": np.array([12, 255, 255]),
+                "lower2": np.array([168, 120, 120]),
+                "upper2": np.array([180, 255, 255]),
+                "region": [0.05, 0.80, 0.05, 0.95],
+                "multiplier": 4,
+            },
+            "explosion": {
+                "label": "Explosion",
+                "weight": 0.12,
+                # Bright explosions across most of screen
+                "lower": np.array([3, 120, 150]),
+                "upper": np.array([30, 255, 255]),
+                "region": [0.15, 0.95, 0.05, 0.95],
+                "multiplier": 4,
+            },
+            "health_bar": {
+                "label": "Health/Shield Drop",
+                "weight": 0.10,
+                "region": "health_bar",
+                "bar_region": [0.85, 0.97, 0.01, 0.25],
+                "bar_colors": [
+                    {"lower": np.array([0, 0, 160]), "upper": np.array([180, 50, 255])},
+                    {"lower": np.array([80, 40, 80]), "upper": np.array([140, 255, 255])},
+                ],
+                "depletion_threshold": 0.06,
+                "multiplier": 5,
+            },
+            "damage": {
+                "label": "Taking Damage",
+                "weight": 0.10,
+                "lower": np.array([0, 100, 80]),
+                "upper": np.array([12, 255, 255]),
+                "lower2": np.array([168, 100, 80]),
+                "upper2": np.array([180, 255, 255]),
+                "region": "edges",
+                "edge_size": 0.15,
+                "multiplier": 3,
+            },
+            "yellow_glow": {
+                "label": "Weak Point / Alert",
+                "weight": 0.08,
+                # Yellow glow — weak points + yellow scanner state (alert)
+                "lower": np.array([15, 80, 130]),
+                "upper": np.array([45, 255, 255]),
+                "region": "full",
+                "multiplier": 3,
+            },
+            "blue_energy": {
+                "label": "Energy / Shield VFX",
+                "weight": 0.08,
+                # Blue energy effects — shield recharge, scanner curious state,
+                # energy weapon trails
+                "lower": np.array([95, 80, 130]),
+                "upper": np.array([125, 255, 255]),
+                "region": [0.10, 0.90, 0.10, 0.90],
+                "multiplier": 3,
+            },
+            "crosshair": {
+                "label": "Combat (Crosshair)",
+                "weight": 0.05,
+                "lower": np.array([0, 0, 230]),
+                "upper": np.array([180, 35, 255]),
+                "region": [0.40, 0.60, 0.40, 0.60],
+                "multiplier": 4,
+            },
+        },
+
+        # Audio: strong weight — explosions/gunfire are very reliable
+        "audio_weight": 0.40,
+        "audio_threshold_db": -20,
+        "audio_ceiling_db": -3,
+
+        # Motion: decent weight — action = camera shake
+        "motion_weight": 0.12,
+        "motion_multiplier": 3,
+
+        # Brightness: moderate
+        "brightness_weight": 0.06,
+        "brightness_threshold": 0.60,
+        "brightness_multiplier": 3,
+
+        # Scoring — LOWER threshold catches more moments
+        "intensity_threshold": 0.22,
+        "fallback_threshold_ratio": 0.30,
+        "merge_gap": 5,
+        "min_clip_duration": 12,
+        "max_clip_duration": 75,
+        "clip_extension": 12,
+        "pre_pad": 10,
+
+        "ai_system_prompt": """You are an expert Arc Raiders gameplay analyst. Arc Raiders is a PvE co-op extraction shooter. THIRD-PERSON, NO kill feed (red flare = death), NO hit markers.
+
+Be GENEROUS with scoring — if in doubt, score higher. The user wants to catch everything.
+
+Look for: combat, explosions, deaths (red flares), ARC aggro (red scanners), taking damage, boss fights, close calls, loot moments, any exciting action.
+
+Score 0.0 ONLY for: menus, inventory, loading screens, lobby.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
+        "ai_user_prompt": "Analyze this Arc Raiders gameplay frame. Is this an exciting moment?",
+    },
+
+    # ===== ARC RAIDERS V4 — Audio-Primary =====
+    # Strategy: Let audio do most of the heavy lifting. Gunshots, explosions,
+    # and combat audio are the most reliable signals. CV provides secondary
+    # confirmation but doesn't drive decisions alone.
+    "arc_raiders_v4": {
+        "name": "Arc Raiders v4 (Audio-Heavy)",
+        "description": "Audio-driven detection \u2014 relies on gunshots/explosions audio, CV as backup",
+
+        "detectors": {
+            "combat_flash": {
+                "label": "Combat Flash",
+                "weight": 0.15,
+                # Standard muzzle flash — kept tight since audio does the heavy work
+                "lower": np.array([10, 130, 180]),
+                "upper": np.array([35, 255, 255]),
+                "region": [0.30, 0.90, 0.20, 0.80],
+                "multiplier": 3,
+            },
+            "death_flare": {
+                "label": "Death / Kill",
+                "weight": 0.08,
+                "lower": np.array([0, 150, 180]),
+                "upper": np.array([10, 255, 255]),
+                "lower2": np.array([170, 150, 180]),
+                "upper2": np.array([180, 255, 255]),
+                "region": [0.0, 0.50, 0.10, 0.90],
+                "multiplier": 5,
+            },
+            "red_aggro": {
+                "label": "ARC Aggro",
+                "weight": 0.10,
+                "lower": np.array([0, 140, 150]),
+                "upper": np.array([8, 255, 255]),
+                "lower2": np.array([172, 140, 150]),
+                "upper2": np.array([180, 255, 255]),
+                "region": [0.10, 0.75, 0.10, 0.90],
+                "multiplier": 4,
+            },
+            "explosion": {
+                "label": "Explosion",
+                "weight": 0.07,
+                "lower": np.array([5, 150, 170]),
+                "upper": np.array([25, 255, 255]),
+                "region": [0.20, 0.90, 0.10, 0.90],
+                "multiplier": 4,
+            },
+            "health_bar": {
+                "label": "Health/Shield Drop",
+                "weight": 0.08,
+                "region": "health_bar",
+                "bar_region": [0.88, 0.95, 0.02, 0.22],
+                "bar_colors": [
+                    {"lower": np.array([0, 0, 180]), "upper": np.array([180, 40, 255])},
+                    {"lower": np.array([90, 60, 100]), "upper": np.array([130, 255, 255])},
+                ],
+                "depletion_threshold": 0.10,
+                "multiplier": 5,
+            },
+            "damage": {
+                "label": "Taking Damage",
+                "weight": 0.07,
+                "lower": np.array([0, 120, 100]),
+                "upper": np.array([10, 255, 255]),
+                "lower2": np.array([170, 120, 100]),
+                "upper2": np.array([180, 255, 255]),
+                "region": "edges",
+                "edge_size": 0.10,
+                "multiplier": 3,
+            },
+        },
+
+        # Audio: DOMINANT — this is the core signal
+        "audio_weight": 0.60,
+        "audio_threshold_db": -22,
+        "audio_ceiling_db": -3,
+
+        # Motion: minor
+        "motion_weight": 0.03,
+        "motion_multiplier": 2,
+
+        # Brightness: minor
+        "brightness_weight": 0.02,
+        "brightness_threshold": 0.70,
+        "brightness_multiplier": 2,
+
+        # Scoring
+        "intensity_threshold": 0.28,
+        "fallback_threshold_ratio": 0.35,
+        "merge_gap": 6,
+        "min_clip_duration": 15,
+        "max_clip_duration": 60,
+        "clip_extension": 10,
+        "pre_pad": 8,
+
+        "ai_system_prompt": """You are an expert Arc Raiders gameplay analyst. Focus on AUDIO cues — this profile relies heavily on sound.
+
+Arc Raiders is a PvE co-op extraction shooter. THIRD-PERSON, NO kill feed (red flare = death), NO hit markers.
+
+Look for: any frame where combat is happening based on visual cues like muzzle flash, explosions, red scanners, damage indicators.
+
+Score 0.0 for: menus, inventory, loading, lobby.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
+        "ai_user_prompt": "Analyze this Arc Raiders gameplay frame. Is this an exciting moment?",
+    },
+
+    # ===== ARC RAIDERS V5 — Motion + Brightness =====
+    # Strategy: Use motion detection and brightness changes as primary signals.
+    # Combat = camera shake, fast movement, explosions creating brightness spikes.
+    # Less dependent on exact color matching which can fail with different
+    # game settings, color grading, or stream compression.
+    "arc_raiders_v5": {
+        "name": "Arc Raiders v5 (Motion-Based)",
+        "description": "Motion + brightness detection \u2014 works regardless of color settings",
+
+        "detectors": {
+            "combat_flash": {
+                "label": "Combat Flash",
+                "weight": 0.12,
+                # Minimal color detection — just catch the most obvious
+                "lower": np.array([10, 130, 180]),
+                "upper": np.array([35, 255, 255]),
+                "region": "full",
+                "multiplier": 3,
+            },
+            "death_flare": {
+                "label": "Death / Kill",
+                "weight": 0.08,
+                "lower": np.array([0, 150, 180]),
+                "upper": np.array([10, 255, 255]),
+                "lower2": np.array([170, 150, 180]),
+                "upper2": np.array([180, 255, 255]),
+                "region": [0.0, 0.50, 0.10, 0.90],
+                "multiplier": 5,
+            },
+            "red_combat": {
+                "label": "Red (Damage/Aggro)",
+                "weight": 0.10,
+                # Combined red signal — catches scanners AND damage indicators
+                "lower": np.array([0, 130, 130]),
+                "upper": np.array([10, 255, 255]),
+                "lower2": np.array([170, 130, 130]),
+                "upper2": np.array([180, 255, 255]),
+                "region": "full",
+                "multiplier": 3,
+            },
+            "explosion": {
+                "label": "Explosion",
+                "weight": 0.08,
+                "lower": np.array([5, 140, 160]),
+                "upper": np.array([28, 255, 255]),
+                "region": "full",
+                "multiplier": 3,
+            },
+            "health_bar": {
+                "label": "Health/Shield Drop",
+                "weight": 0.08,
+                "region": "health_bar",
+                "bar_region": [0.88, 0.95, 0.02, 0.22],
+                "bar_colors": [
+                    {"lower": np.array([0, 0, 180]), "upper": np.array([180, 40, 255])},
+                    {"lower": np.array([90, 60, 100]), "upper": np.array([130, 255, 255])},
+                ],
+                "depletion_threshold": 0.10,
+                "multiplier": 5,
+            },
+        },
+
+        # Audio: secondary support
+        "audio_weight": 0.25,
+        "audio_threshold_db": -15,
+        "audio_ceiling_db": -3,
+
+        # Motion: PRIMARY SIGNAL — combat = fast movement, camera shake
+        "motion_weight": 0.30,
+        "motion_multiplier": 4,
+
+        # Brightness: STRONG SIGNAL — flashes, explosions, whiteouts
+        "brightness_weight": 0.15,
+        "brightness_threshold": 0.55,
+        "brightness_multiplier": 4,
+
+        # Scoring — lower threshold since motion is inherently noisier
+        "intensity_threshold": 0.25,
+        "fallback_threshold_ratio": 0.35,
+        "merge_gap": 6,
+        "min_clip_duration": 12,
+        "max_clip_duration": 60,
+        "clip_extension": 10,
+        "pre_pad": 8,
+        # Higher peak weight — motion spikes are bursty
+        "peak_weight": 0.75,
+
+        "ai_system_prompt": """You are an expert Arc Raiders gameplay analyst. Arc Raiders is a PvE co-op extraction shooter. THIRD-PERSON.
+
+Focus on MOTION and VISUAL INTENSITY — fast camera movement, explosions, flashes, combat chaos.
+
+Look for: combat, explosions, deaths, taking damage, boss fights, chases, any high-action moments.
+
+Score 0.0 for: menus, inventory, loading, lobby, standing still.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}""",
+        "ai_user_prompt": "Analyze this Arc Raiders gameplay frame. Is this an exciting moment?",
+    },
+
+    # ===== ARC RAIDERS V6 — Conservative / Precision =====
+    # Strategy: Only clip the BEST moments. Very tight color ranges,
+    # high thresholds, strict requirements. Fewer clips but higher quality.
+    # Best for long streams where you want only the highlights.
+    "arc_raiders_v6": {
+        "name": "Arc Raiders v6 (Precision)",
+        "description": "Conservative detection \u2014 only clips the most intense moments, fewer false positives",
+
+        "detectors": {
+            "muzzle_flash": {
+                "label": "Gunfire",
+                "weight": 0.25,
+                # Tight muzzle flash range — only the most obvious
+                "lower": np.array([12, 150, 200]),
+                "upper": np.array([28, 255, 255]),
+                "region": [0.40, 0.85, 0.35, 0.80],
+                "multiplier": 6,
+            },
+            "death_flare": {
+                "label": "Death / Kill",
+                "weight": 0.15,
+                # Very strict red — only catch actual flares
+                "lower": np.array([0, 170, 200]),
+                "upper": np.array([8, 255, 255]),
+                "lower2": np.array([172, 170, 200]),
+                "upper2": np.array([180, 255, 255]),
+                "region": [0.0, 0.40, 0.15, 0.85],
+                "multiplier": 8,
+            },
+            "red_scanner": {
+                "label": "ARC Aggro",
+                "weight": 0.15,
+                # Strict red scanner — only when very clearly red
+                "lower": np.array([0, 160, 170]),
+                "upper": np.array([6, 255, 255]),
+                "lower2": np.array([174, 160, 170]),
+                "upper2": np.array([180, 255, 255]),
+                "region": [0.15, 0.70, 0.15, 0.85],
+                "multiplier": 5,
+            },
+            "explosion": {
+                "label": "Explosion",
+                "weight": 0.15,
+                # Only large, obvious explosions
+                "lower": np.array([8, 170, 190]),
+                "upper": np.array([22, 255, 255]),
+                "region": [0.25, 0.85, 0.15, 0.85],
+                "multiplier": 6,
+            },
+            "health_bar": {
+                "label": "Health/Shield Drop",
+                "weight": 0.15,
+                "region": "health_bar",
+                "bar_region": [0.88, 0.95, 0.02, 0.22],
+                "bar_colors": [
+                    {"lower": np.array([0, 0, 190]), "upper": np.array([180, 35, 255])},
+                    {"lower": np.array([95, 70, 110]), "upper": np.array([125, 255, 255])},
+                ],
+                # Higher depletion threshold — only clip significant health drops
+                "depletion_threshold": 0.15,
+                "multiplier": 7,
+            },
+            "damage_indicators": {
+                "label": "Taking Damage",
+                "weight": 0.15,
+                # Strict damage — only obvious red edges
+                "lower": np.array([0, 140, 120]),
+                "upper": np.array([8, 255, 255]),
+                "lower2": np.array([172, 140, 120]),
+                "upper2": np.array([180, 255, 255]),
+                "region": "edges",
+                "edge_size": 0.08,
+                "multiplier": 5,
+            },
+        },
+
+        # Audio: moderate support
+        "audio_weight": 0.30,
+        "audio_threshold_db": -12,
+        "audio_ceiling_db": -2,
+
+        # Motion: minimal — avoid false positives from camera movement
+        "motion_weight": 0.05,
+        "motion_multiplier": 2,
+
+        # Brightness: moderate
+        "brightness_weight": 0.04,
+        "brightness_threshold": 0.80,
+        "brightness_multiplier": 2,
+
+        # Scoring — HIGH threshold = only the best moments
+        "intensity_threshold": 0.45,
+        "fallback_threshold_ratio": 0.50,
+        "merge_gap": 10,
+        "min_clip_duration": 20,
+        "max_clip_duration": 50,
+        "clip_extension": 8,
+        "pre_pad": 6,
+
+        "ai_system_prompt": """You are an expert Arc Raiders gameplay analyst. Be STRICT — only flag truly exciting moments.
+
+Arc Raiders is a PvE co-op extraction shooter. THIRD-PERSON, NO kill feed (red flare = death), NO hit markers.
+
+ONLY score high for: confirmed kills (parts flying off, enemies collapsing), boss encounters, near-death moments, massive explosions, multiple enemies engaging at once.
+
+Score 0.0 for: menus, lobby, walking, looting (unless rare loot), mild combat, single enemy encounters.
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}
+
+Be conservative: 0.0 = not exciting, 0.5 = decent action, 0.8+ = truly exceptional moment only.""",
+        "ai_user_prompt": "Analyze this Arc Raiders gameplay frame. Is this an exciting moment? Be strict.",
+    },
+
+    # ===== ARC RAIDERS V7 — ARC + Raider PvPvE Focus =====
+    # Strategy: Detect BOTH ARC robot enemies AND other Raider players.
+    # Arc Raiders is PvPvE — the most exciting moments often involve
+    # other players (PvP) during ARC encounters. This profile emphasizes
+    # player-vs-player encounters alongside PvE combat.
+    # Key PvP signals: other players shooting, player-on-player combat,
+    # multiple death flares, extraction zone fights.
+    "arc_raiders_v7": {
+        "name": "Arc Raiders v7 (PvPvE)",
+        "description": "PvPvE-focused \u2014 detects ARC robots AND other Raider players, extraction fights",
+
+        "detectors": {
+            "muzzle_flash_close": {
+                "label": "Close-Range Gunfire",
+                "weight": 0.18,
+                # Your character's weapon fire — close range, lower screen area
+                "lower": np.array([8, 110, 170]),
+                "upper": np.array([35, 255, 255]),
+                # White energy weapon flash
+                "lower2": np.array([0, 0, 235]),
+                "upper2": np.array([180, 45, 255]),
+                "region": [0.45, 0.90, 0.30, 0.85],
+                "multiplier": 5,
+            },
+            "muzzle_flash_distant": {
+                "label": "Distant Gunfire",
+                "weight": 0.10,
+                # Other players/ARCs shooting — can be anywhere on screen
+                # Smaller, less saturated flashes at distance
+                "lower": np.array([10, 100, 160]),
+                "upper": np.array([30, 255, 255]),
+                "region": [0.10, 0.75, 0.10, 0.90],
+                "multiplier": 3,
+            },
+            "death_flare": {
+                "label": "Death Flare (Kill!)",
+                "weight": 0.15,
+                # Death flares — MORE IMPORTANT here because PvP kills
+                # produce the same red flare as PvE kills
+                # Multiple flares = intense firefight
+                "lower": np.array([0, 140, 170]),
+                "upper": np.array([12, 255, 255]),
+                "lower2": np.array([168, 140, 170]),
+                "upper2": np.array([180, 255, 255]),
+                "region": [0.0, 0.55, 0.05, 0.95],
+                "multiplier": 7,
+            },
+            "red_scanner_aggro": {
+                "label": "ARC Enemy Aggro",
+                "weight": 0.12,
+                # ARC scanner beams in red state
+                "lower": np.array([0, 135, 145]),
+                "upper": np.array([10, 255, 255]),
+                "lower2": np.array([170, 135, 145]),
+                "upper2": np.array([180, 255, 255]),
+                "region": [0.10, 0.75, 0.10, 0.90],
+                "multiplier": 5,
+            },
+            "yellow_scanner_alert": {
+                "label": "ARC Alert State",
+                "weight": 0.06,
+                # Yellow scanner = alert state — ARCs detected something
+                # Often triggers right before a firefight starts
+                "lower": np.array([20, 120, 150]),
+                "upper": np.array([35, 255, 255]),
+                "region": [0.10, 0.80, 0.10, 0.90],
+                "multiplier": 3,
+            },
+            "explosion": {
+                "label": "Explosion",
+                "weight": 0.10,
+                "lower": np.array([5, 140, 165]),
+                "upper": np.array([28, 255, 255]),
+                "region": [0.20, 0.90, 0.10, 0.90],
+                "multiplier": 5,
+            },
+            "health_bar": {
+                "label": "Health/Shield Drop",
+                "weight": 0.10,
+                "region": "health_bar",
+                "bar_region": [0.87, 0.96, 0.01, 0.23],
+                "bar_colors": [
+                    {"lower": np.array([0, 0, 175]), "upper": np.array([180, 42, 255])},
+                    {"lower": np.array([88, 55, 95]), "upper": np.array([132, 255, 255])},
+                ],
+                "depletion_threshold": 0.08,
+                "multiplier": 6,
+            },
+            "damage_indicators": {
+                "label": "Taking Damage",
+                "weight": 0.10,
+                # Slightly wider edges — PvP can hit from unexpected angles
+                "lower": np.array([0, 115, 95]),
+                "upper": np.array([12, 255, 255]),
+                "lower2": np.array([168, 115, 95]),
+                "upper2": np.array([180, 255, 255]),
+                "region": "edges",
+                "edge_size": 0.13,
+                "multiplier": 4,
+            },
+            "crosshair_activity": {
+                "label": "Aiming (Combat)",
+                "weight": 0.09,
+                # Crosshair tightening during ADS — sign of active combat
+                "lower": np.array([0, 0, 235]),
+                "upper": np.array([180, 30, 255]),
+                "region": [0.42, 0.58, 0.42, 0.58],
+                "multiplier": 4,
+            },
+        },
+
+        # Audio: important — especially for PvP (player gunfire from behind)
+        "audio_weight": 0.38,
+        "audio_threshold_db": -18,
+        "audio_ceiling_db": -3,
+
+        # Motion: moderate — PvP has erratic movement
+        "motion_weight": 0.10,
+        "motion_multiplier": 3,
+
+        # Brightness: moderate
+        "brightness_weight": 0.05,
+        "brightness_threshold": 0.65,
+        "brightness_multiplier": 3,
+
+        # Scoring — balanced threshold
+        "intensity_threshold": 0.28,
+        "fallback_threshold_ratio": 0.35,
+        "merge_gap": 5,
+        "min_clip_duration": 12,
+        "max_clip_duration": 65,
+        "clip_extension": 12,
+        "pre_pad": 10,
+
+        "ai_system_prompt": """You are an expert Arc Raiders gameplay analyst. Arc Raiders is a PvPvE co-op extraction shooter.
+
+CRITICAL: This game has BOTH robot enemies (ARCs) and other human players (Raiders). The most exciting moments involve:
+
+PvP (Player vs Player):
+- Other Raiders shooting at you — muzzle flash from unexpected directions
+- Multiple death flares in quick succession = intense PvP fight
+- Extraction zone battles — players fighting over the extract point
+- Ambushes, backstabs, third-party attacks during ARC fights
+
+PvE (Player vs Environment):
+- ARC robot attacks — red scanner beams, swarming, boss encounters
+- Bastion, Crusher, Matriarch boss fights
+- Horde-style encounters with many small ARCs
+
+BOTH AT ONCE (best content):
+- Fighting ARCs while other Raiders attack you
+- Contested extraction with ARCs and Raiders
+- Chaotic multi-way fights
+
+THIRD-PERSON, NO kill feed (red flare = death), NO hit markers.
+
+Score 0.0 for: menus, inventory, loading, lobby (Speranza).
+
+For each frame, respond with ONLY a JSON object (no markdown):
+{"exciting": true/false, "score": 0.0-1.0, "label": "short description", "reason": "brief reason"}
+
+Score guide: 0.3 = minor combat, 0.5 = PvE fight, 0.7 = PvP encounter, 0.9 = PvPvE chaos, 1.0 = insane multi-way fight""",
+        "ai_user_prompt": "Analyze this Arc Raiders gameplay frame. Is this an exciting PvPvE moment?",
     },
 
     "war_thunder": {
