@@ -255,6 +255,7 @@ class PixelAnalyzer:
 
     def __init__(self, logger):
         self.logger = logger
+        self.menu_suppress = True  # Can be toggled off via detection_overrides
         # Temporal tracking: store previous frame data for change detection
         self._prev_brightness = None
         self._prev_center_brightness = None
@@ -404,7 +405,7 @@ class PixelAnalyzer:
             r["screen_state"] = "death_screen"
         elif avg_b < self.MENU_BRIGHT_MAX:
             center_b = self._avg_brightness(self._region(frame, (0.2, 0.2, 0.8, 0.8)))
-            if center_b > self.MENU_CENTER_MIN:
+            if self.menu_suppress and center_b > self.MENU_CENTER_MIN:
                 r["screen_state"] = "inventory"
             else:
                 r["screen_state"] = "dark_gameplay"
@@ -1158,14 +1159,21 @@ class ArcClipDetectorAdapter:
 
     def __init__(self, game_id="arc_raiders", weights_path=None,
                  confidence=0.25, device="", threshold=None,
-                 scoring_version="v3_temporal"):
+                 scoring_version="v3_temporal", detection_overrides=None):
         self.game_id = game_id
         self.weights_path = weights_path
         self.confidence = confidence
         self.device = device
         self.scoring_version = scoring_version
+        self.overrides = detection_overrides or {}
         # Use version-specific threshold if not explicitly set
-        self.threshold = threshold if threshold is not None else self.VERSION_THRESHOLDS.get(scoring_version, 40.0)
+        if "intensity_threshold" in self.overrides:
+            # Detection settings panel override takes priority
+            self.threshold = self.overrides["intensity_threshold"] * 100  # normalize 0-1 -> 0-100 for clustering
+        elif threshold is not None:
+            self.threshold = threshold
+        else:
+            self.threshold = self.VERSION_THRESHOLDS.get(scoring_version, 40.0)
         self.has_yolo = False
 
         # Try to find weights — if not found, pixel-only mode
@@ -1217,12 +1225,32 @@ class ArcClipDetectorAdapter:
             print("  [ArcClipDetector] Pure OpenCV pixel analysis mode (no YOLO weights needed)")
 
         pixel = PixelAnalyzer(logger)
+        # Apply menu_suppress override to pixel analyzer
+        if self.overrides.get("menu_suppress") == "off":
+            pixel.menu_suppress = False
+            print("  [ArcClipDetector] [Override] menu_suppress = off")
+        else:
+            pixel.menu_suppress = True
+
         scorer = ScoringEngine()
         version = self.scoring_version
         print(f"  [ArcClipDetector] Scoring version: {version} (threshold: {self.threshold})")
+
+        # Apply overrides
+        ov = self.overrides
+        if ov:
+            for k, v in ov.items():
+                if k not in ("menu_suppress",):
+                    print(f"  [ArcClipDetector] [Override] {k} = {v}")
+
         # Pixel-only mode: use the version's recommended threshold
         threshold = self.threshold if detector else self.VERSION_THRESHOLDS.get(version, 35.0)
-        clusterer = Clusterer(logger, thresh=threshold)
+
+        # Clusterer with overridable merge_gap, min/max clip duration
+        merge_gap = ov.get("merge_gap", 5)
+        min_d = ov.get("min_clip_duration", 3)
+        max_d = ov.get("max_clip_duration", 60)
+        clusterer = Clusterer(logger, thresh=threshold, gap=merge_gap, min_d=min_d, max_d=max_d)
 
         # Open video
         cap = cv2.VideoCapture(video_path)
@@ -1232,7 +1260,11 @@ class ArcClipDetectorAdapter:
         fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         duration = total_frames / fps
-        frame_skip = max(1, int(fps * self.SAMPLE_INTERVAL))
+        # sample_fps override: convert FPS to interval (e.g., 2 fps = 0.5s interval)
+        sample_interval = self.SAMPLE_INTERVAL
+        if "sample_fps" in ov:
+            sample_interval = 1.0 / max(1, ov["sample_fps"])
+        frame_skip = max(1, int(fps * sample_interval))
 
         print(f"  [ArcClipDetector] Analyzing {video_path} ({duration:.0f}s)")
 
@@ -1354,7 +1386,9 @@ class ArcClipDetectorAdapter:
         highlights = []
         for clip in clips:
             clip_duration = clip.duration
-            clip_duration = max(20, min(60, clip_duration + 10))
+            min_clip = ov.get("min_clip_duration", 20)
+            max_clip = ov.get("max_clip_duration", 60)
+            clip_duration = max(min_clip, min(max_clip, clip_duration + 10))
 
             entities = ", ".join(f"{k}({v})" for k, v in clip.entities_seen.items())
             label_parts = []

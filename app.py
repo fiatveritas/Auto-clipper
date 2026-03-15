@@ -1838,6 +1838,7 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
                 analyzer = ArcClipDetectorAdapter(
                     game_id=game_id,
                     scoring_version=cv_version,
+                    detection_overrides=detection_overrides,
                 )
                 highlights = analyzer.analyze_video(
                     video_path,
