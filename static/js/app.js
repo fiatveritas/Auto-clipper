@@ -11,6 +11,7 @@ function loadState() {
 }
 
 function saveState() {
+    const triggerWordsEl = document.getElementById("trigger-words-input");
     const state = {
         selectedGame: selectedGame,
         apiKey: document.getElementById("api-key").value.trim(),
@@ -23,6 +24,7 @@ function saveState() {
         source: currentSource,
         currentJobId: currentJobId,
         detectionSettings: saveDetectionSettings(),
+        triggerWords: triggerWordsEl ? triggerWordsEl.value : "",
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
@@ -74,6 +76,10 @@ function restoreState() {
     }
     if (state.detectionSettings) {
         restoreDetectionSettings(state.detectionSettings);
+    }
+    if (state.triggerWords) {
+        const el = document.getElementById("trigger-words-input");
+        if (el) el.value = state.triggerWords;
     }
     if (state.currentJobId) {
         currentJobId = state.currentJobId;
@@ -753,6 +759,7 @@ function initTimeline() {
     document.getElementById("timeline-end-label").textContent = formatTime(maxTime);
 
     updateTimelineUI();
+    initTimelineClickToClip();
 }
 
 function updateTimelineUI() {
@@ -2760,6 +2767,31 @@ function restoreDetectionSettings(settings) {
     }
 }
 
+// ===== Toast Notifications =====
+
+function showToast(message, type = "info", duration = 3000) {
+    let container = document.getElementById("toast-container");
+    if (!container) {
+        container = document.createElement("div");
+        container.id = "toast-container";
+        container.className = "toast-container";
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement("div");
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `<span class="toast-msg">${message}</span><button class="toast-close" onclick="this.parentElement.remove()">&times;</button>`;
+    container.appendChild(toast);
+
+    // Trigger animation
+    requestAnimationFrame(() => toast.classList.add("toast-visible"));
+
+    setTimeout(() => {
+        toast.classList.remove("toast-visible");
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+}
+
 // ===== Manual Clip & Clip Trigger Features =====
 
 let manualClipVod = null; // currently selected library VOD for manual clipping
@@ -2771,6 +2803,23 @@ function showManualClip(filename) {
     document.getElementById("manual-clip-timestamp").value = "";
     document.getElementById("manual-clip-status").textContent = "";
     section.classList.remove("hidden");
+
+    // Check whisper availability
+    fetch("/api/clip-trigger-status")
+        .then(r => r.json())
+        .then(data => {
+            const scanBtn = document.getElementById("btn-scan-triggers");
+            if (scanBtn) {
+                if (data.available) {
+                    scanBtn.title = `Using ${data.backend}`;
+                    scanBtn.disabled = false;
+                } else {
+                    scanBtn.title = "Whisper not installed - pip install faster-whisper";
+                    scanBtn.disabled = false; // Still allow click to show error
+                }
+            }
+        })
+        .catch(() => {});
 }
 
 function hideManualClip() {
@@ -2779,9 +2828,10 @@ function hideManualClip() {
 }
 
 function parseTimestamp(str) {
-    // Parse "1:23:45", "23:45", "45", or raw seconds
-    str = str.trim();
+    // Parse "1:23:45", "23:45", "45", "end", or raw seconds
+    str = str.trim().toLowerCase();
     if (!str) return null;
+    if (str === "end" && vodDuration > 0) return vodDuration;
     const parts = str.split(":").map(Number);
     if (parts.some(isNaN)) return null;
     if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
@@ -2799,7 +2849,7 @@ function createManualClip() {
 
     const timestamp = parseTimestamp(tsInput);
     if (timestamp === null || timestamp < 0) {
-        status.textContent = "Enter a valid timestamp (e.g. 1:23:45)";
+        status.textContent = "Enter a valid timestamp (e.g. 1:23:45 or 'end')";
         status.className = "trim-status error";
         return;
     }
@@ -2823,12 +2873,13 @@ function createManualClip() {
             status.className = "trim-status error";
             return;
         }
-        status.textContent = "Clip created!";
-        status.className = "trim-status success";
+        status.textContent = "";
+        showToast(`Clip created at ${formatTime(timestamp)}!`, "success");
 
         // Switch to the new session to show the clip
         currentJobId = data.job_id;
         currentClips = [data.clip];
+        vodDuration = 0; // Will be set when we fetch clips
         renderClips();
         switchMainTab("analyze");
         loadSessions();
@@ -2845,6 +2896,13 @@ function scanClipTriggers() {
     const status = document.getElementById("manual-clip-status");
     const duration = parseInt(document.getElementById("manual-clip-duration").value) || 30;
 
+    // Get custom trigger words if configured
+    const triggerInput = document.getElementById("trigger-words-input");
+    let customTriggers = null;
+    if (triggerInput && triggerInput.value.trim()) {
+        customTriggers = triggerInput.value.split(",").map(s => s.trim()).filter(Boolean);
+    }
+
     status.textContent = "Starting clip trigger scan...";
     status.className = "trim-status";
 
@@ -2854,6 +2912,7 @@ function scanClipTriggers() {
         body: JSON.stringify({
             library_file: manualClipVod,
             clip_duration: duration,
+            custom_triggers: customTriggers,
         }),
     })
     .then(res => res.json())
@@ -2861,6 +2920,7 @@ function scanClipTriggers() {
         if (data.error) {
             status.textContent = data.error;
             status.className = "trim-status error";
+            showToast(data.error, "error", 5000);
             return;
         }
         // Switch to analyze tab and start polling
@@ -2869,8 +2929,8 @@ function scanClipTriggers() {
         setAnalyzing(true);
         showProgress();
         startPolling();
-        status.textContent = "Scanning... check progress above.";
-        status.className = "trim-status";
+        showToast("Scanning VOD for clip triggers...", "info");
+        status.textContent = "";
     })
     .catch(() => {
         status.textContent = "Failed to start scan";
@@ -2919,14 +2979,130 @@ function createSessionManualClip() {
             status.className = "trim-status error";
             return;
         }
-        status.textContent = "Clip added!";
-        status.className = "trim-status success";
+        status.textContent = "";
+        showToast(`Clip added at ${formatTime(timestamp)}!`, "success");
         // Add to current clips and re-render
         currentClips.push(data.clip);
         renderClips();
+        // Scroll to the new clip
+        setTimeout(() => {
+            const cards = document.querySelectorAll(".clip-card");
+            if (cards.length) cards[cards.length - 1].scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 100);
     })
     .catch(() => {
         status.textContent = "Failed to create clip";
         status.className = "trim-status error";
+    });
+}
+
+// ===== Keyboard Shortcuts =====
+
+document.addEventListener("keydown", function(e) {
+    // Don't fire shortcuts when typing in inputs
+    const tag = e.target.tagName.toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select") return;
+
+    // Ctrl/Cmd + Shift + C = Manual clip at current preview video time
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "c") {
+        e.preventDefault();
+        clipFromPreviewVideo();
+        return;
+    }
+
+    // Escape = close modals/panels
+    if (e.key === "Escape") {
+        const modal = document.getElementById("preview-modal");
+        if (modal && !modal.classList.contains("hidden")) {
+            modal.classList.add("hidden");
+            return;
+        }
+        const panel = document.getElementById("session-manual-clip");
+        if (panel && !panel.classList.contains("hidden")) {
+            panel.classList.add("hidden");
+            return;
+        }
+    }
+});
+
+function clipFromPreviewVideo() {
+    // If the preview modal is open, clip at the current playback position
+    const video = document.getElementById("preview-video");
+    const modal = document.getElementById("preview-modal");
+    if (!video || !modal || modal.classList.contains("hidden")) {
+        showToast("Open a clip preview first, then press Ctrl+Shift+C", "info");
+        return;
+    }
+
+    if (!currentJobId) {
+        showToast("No active session for clipping", "error");
+        return;
+    }
+
+    // The preview shows a clip, but we want to clip from the original VOD
+    // Use the clip's start_time + current playback position as the VOD timestamp
+    if (!previewClipData) return;
+
+    const vodTimestamp = previewClipData.start_time + video.currentTime;
+    showToast(`Clipping at ${formatTime(vodTimestamp)}...`, "info");
+
+    fetch(`/api/clips/${currentJobId}/manual-clip`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            timestamp: vodTimestamp,
+            duration: 30,
+        }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            showToast(data.error, "error");
+            return;
+        }
+        showToast("Clip created from preview position!", "success");
+        currentClips.push(data.clip);
+        renderClips();
+    })
+    .catch(() => showToast("Failed to create clip", "error"));
+}
+
+// ===== Timeline Click-to-Clip =====
+// Double-click on the timeline track to create a manual clip at that point
+
+function initTimelineClickToClip() {
+    const track = document.getElementById("timeline-track");
+    if (!track || track._clipClickBound) return;
+    track._clipClickBound = true;
+
+    track.addEventListener("dblclick", function(e) {
+        if (!currentJobId || !previewClipData) return;
+
+        const rect = track.getBoundingClientRect();
+        const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        const maxTime = vodDuration || (previewClipData ? previewClipData.end_time + 60 : 300);
+        const timestamp = pct * maxTime;
+
+        showToast(`Creating clip at ${formatTime(timestamp)}...`, "info");
+
+        fetch(`/api/clips/${currentJobId}/manual-clip`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                timestamp: timestamp,
+                duration: 30,
+            }),
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) {
+                showToast(data.error, "error");
+                return;
+            }
+            showToast(`Clip added at ${formatTime(timestamp)}!`, "success");
+            currentClips.push(data.clip);
+            renderClips();
+        })
+        .catch(() => showToast("Failed to create clip", "error"));
     });
 }

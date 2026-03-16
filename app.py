@@ -1243,8 +1243,12 @@ def sorted_clips(job_id):
 # ---------------------------------------------------------------------------
 # Route 22: Watch folder start / stop / status
 # ---------------------------------------------------------------------------
-def _watch_folder_loop(api_key, game_id):
-    """Background loop that watches LIBRARY_DIR for new files and auto-analyzes."""
+def _watch_folder_loop(api_key, game_id, detection_method="audio_cv"):
+    """Background loop that watches LIBRARY_DIR for new files and auto-analyzes.
+
+    Supports all detection methods including 'clip_triggers' for automatic
+    voice trigger scanning on every new VOD.
+    """
     global watch_folder_running
     import time
     seen = set(os.listdir(LIBRARY_DIR))
@@ -1261,21 +1265,40 @@ def _watch_folder_loop(api_key, game_id):
                 if ext not in {".mp4", ".mkv", ".mov", ".avi", ".flv", ".ts", ".webm"}:
                     continue
                 job_id = str(uuid.uuid4())[:8]
-                jobs[job_id] = {
-                    "status": "analyzing",
-                    "progress": 42,
-                    "message": f"Auto-analyzing {fname}...",
-                    "clips": [],
-                    "error": None,
-                    "url": f"watch:{fname}",
-                    "vod_path": fpath,
-                    "vod_duration": 0,
-                }
-                thread = threading.Thread(
-                    target=_run_analysis_on_file,
-                    args=(job_id, fpath, api_key, "", "", game_id),
-                    daemon=True,
-                )
+
+                if detection_method == "clip_triggers":
+                    # Use clip trigger scanning for this VOD
+                    jobs[job_id] = {
+                        "status": "analyzing",
+                        "progress": 5,
+                        "message": f"Auto-scanning {fname} for clip triggers...",
+                        "clips": [],
+                        "error": None,
+                        "url": f"watch:{fname}",
+                        "vod_path": fpath,
+                        "vod_duration": 0,
+                    }
+                    thread = threading.Thread(
+                        target=_run_clip_trigger_scan,
+                        args=(job_id, fpath, 30),
+                        daemon=True,
+                    )
+                else:
+                    jobs[job_id] = {
+                        "status": "analyzing",
+                        "progress": 42,
+                        "message": f"Auto-analyzing {fname}...",
+                        "clips": [],
+                        "error": None,
+                        "url": f"watch:{fname}",
+                        "vod_path": fpath,
+                        "vod_duration": 0,
+                    }
+                    thread = threading.Thread(
+                        target=_run_analysis_on_file,
+                        args=(job_id, fpath, api_key, "", "", game_id, detection_method),
+                        daemon=True,
+                    )
                 thread.start()
             seen = current
         except OSError:
@@ -1293,10 +1316,11 @@ def watch_folder_start():
     data = request.get_json() or {}
     api_key = data.get("api_key", "")
     game_id = data.get("game", "arc_raiders")
+    detection_method = data.get("detection_method", "audio_cv")
 
     watch_folder_running = True
     watch_folder_thread = threading.Thread(
-        target=_watch_folder_loop, args=(api_key, game_id), daemon=True
+        target=_watch_folder_loop, args=(api_key, game_id, detection_method), daemon=True
     )
     watch_folder_thread.start()
 
@@ -1710,12 +1734,16 @@ def manual_clip_to_session(job_id):
 def clip_trigger_scan():
     """Scan a library VOD for 'clip that/this/clip' voice triggers.
 
-    Expects JSON: {library_file, clip_duration (optional, default 30)}
+    Expects JSON: {library_file, clip_duration (optional, default 30),
+                   custom_triggers (optional, list of phrases),
+                   model_size (optional, default 'base')}
     Runs Whisper transcription to find trigger phrases and auto-clips them.
     """
     data = request.get_json()
     library_file = data.get("library_file", "").strip()
     clip_duration = int(data.get("clip_duration", 30))
+    custom_triggers = data.get("custom_triggers")  # list of strings or None
+    model_size = data.get("model_size", "base").strip()
 
     if not library_file:
         return jsonify({"error": "No library file specified"}), 400
@@ -1740,14 +1768,27 @@ def clip_trigger_scan():
 
     thread = threading.Thread(
         target=_run_clip_trigger_scan,
-        args=(job_id, vod_path, clip_duration),
+        args=(job_id, vod_path, clip_duration, custom_triggers, model_size),
         daemon=True,
     )
     thread.start()
     return jsonify({"job_id": job_id})
 
 
-def _run_clip_trigger_scan(job_id, vod_path, clip_duration=30):
+@app.route("/api/clip-trigger-status")
+def clip_trigger_status():
+    """Check if a Whisper backend is available for clip trigger detection."""
+    detector = ClipTriggerDetector()
+    backend = detector.get_backend()
+    return jsonify({
+        "available": bool(backend),
+        "backend": backend or None,
+        "install_instructions": detector.get_install_instructions() if not backend else None,
+    })
+
+
+def _run_clip_trigger_scan(job_id, vod_path, clip_duration=30,
+                           custom_triggers=None, model_size="base"):
     """Background thread: run Whisper clip trigger detection."""
     job = jobs[job_id]
 
@@ -1760,11 +1801,17 @@ def _run_clip_trigger_scan(job_id, vod_path, clip_duration=30):
         duration = clip_manager.get_vod_duration(vod_path)
         job["vod_duration"] = duration
 
-        detector = ClipTriggerDetector(clip_duration=clip_duration)
+        detector = ClipTriggerDetector(
+            clip_duration=clip_duration,
+            model_size=model_size,
+            custom_triggers=custom_triggers,
+        )
 
         if not detector.is_available():
             raise Exception(
-                "Whisper is not installed. Install it with: pip install openai-whisper"
+                "No speech-to-text backend found. Install one:\n"
+                "  pip install faster-whisper   (recommended, 4x faster)\n"
+                "  pip install openai-whisper   (original)"
             )
 
         update("analyzing", 10, "Transcribing audio with Whisper...")
@@ -2102,7 +2149,11 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
             )
         elif detection_method == "clip_triggers":
             update("analyzing", 42, "Transcribing audio for clip triggers...")
-            detector = ClipTriggerDetector(clip_duration=30)
+            custom_triggers = (detection_overrides or {}).get("trigger_phrases")
+            detector = ClipTriggerDetector(
+                clip_duration=30,
+                custom_triggers=custom_triggers if isinstance(custom_triggers, list) else None,
+            )
             highlights = detector.analyze_video(
                 video_path,
                 progress_callback=lambda p: update(

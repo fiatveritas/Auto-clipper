@@ -302,7 +302,7 @@
                     <h3>Manual Clip from VOD</h3>
                     <button class="file-remove" onclick="document.getElementById('session-manual-clip').classList.add('hidden')">&times;</button>
                 </div>
-                <p class="api-hint">Enter a VOD timestamp to clip the previous 30 seconds of action.</p>
+                <p class="api-hint">Enter a VOD timestamp to clip the previous 30 seconds. <strong>Tip:</strong> Double-click the timeline to clip at that point. <kbd>Ctrl+Shift+C</kbd> clips at the current preview position.</p>
                 <div class="manual-clip-controls">
                     <div class="time-range-inputs">
                         <div class="time-field">
@@ -350,7 +350,7 @@
                         <div class="time-range-inputs">
                             <div class="time-field">
                                 <label>Timestamp</label>
-                                <input type="text" id="manual-clip-timestamp" placeholder="e.g. 1:23:45 or end" autocomplete="off">
+                                <input type="text" id="manual-clip-timestamp" placeholder="e.g. 1:23:45 or 'end'" autocomplete="off">
                             </div>
                             <div class="time-field">
                                 <label>Duration (sec)</label>
@@ -359,9 +359,17 @@
                         </div>
                         <div class="manual-clip-actions">
                             <button class="btn-apply-trim" onclick="createManualClip()">Clip It</button>
-                            <button class="btn-apply-trim" onclick="scanClipTriggers()" title="Scan entire VOD for 'clip that!' voice commands">Scan for &quot;Clip That!&quot;</button>
+                            <button class="btn-apply-trim" id="btn-scan-triggers" onclick="scanClipTriggers()" title="Scan entire VOD for voice commands using Whisper">Scan for &quot;Clip That!&quot;</button>
                             <span id="manual-clip-status" class="trim-status"></span>
                         </div>
+                        <!-- Custom Trigger Words -->
+                        <details class="trigger-words-details">
+                            <summary>Custom Trigger Words</summary>
+                            <div class="trigger-words-config">
+                                <p class="api-hint">Comma-separated phrases that trigger a clip. Leave empty for defaults (clip that, clip this, clip it, clip).</p>
+                                <input type="text" id="trigger-words-input" placeholder="clip that, clip this, oh my god, insane, let's go" autocomplete="off" onchange="saveState()">
+                            </div>
+                        </details>
                     </div>
                 </div>
                 <div id="library-list" class="library-list"></div>
