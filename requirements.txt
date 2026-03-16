@@ -7,3 +7,4 @@ pywebview
 requests
 ultralytics
 tqdm
+openai-whisper

@@ -18,6 +18,7 @@ from analysis.roboflow_analyzer import RoboflowWorkflowAnalyzer
 from analysis.roboflow_model_analyzer import RoboflowModelAnalyzer
 from analysis.yolo_local_analyzer import YoloLocalAnalyzer
 from analysis.arc_clip_detector import ArcClipDetectorAdapter
+from analysis.clip_trigger_detector import ClipTriggerDetector
 from analysis.game_profiles import get_all_games
 from clip_manager import ClipManager
 
@@ -1587,6 +1588,221 @@ def list_custom_profiles():
         return jsonify({"profiles": json.load(f)})
 
 
+# ---------------------------------------------------------------------------
+# Manual Clip: Extract a clip at a specific timestamp from a library VOD
+# ---------------------------------------------------------------------------
+@app.route("/api/manual-clip", methods=["POST"])
+def manual_clip():
+    """Create a clip from a library VOD at a specific timestamp.
+
+    Expects JSON: {library_file, timestamp, duration (optional, default 30)}
+    The clip covers [timestamp - duration, timestamp].
+    """
+    data = request.get_json()
+    library_file = data.get("library_file", "").strip()
+    timestamp = data.get("timestamp")
+    duration = float(data.get("duration", 30))
+
+    if not library_file:
+        return jsonify({"error": "No library file specified"}), 400
+    if timestamp is None:
+        return jsonify({"error": "No timestamp specified"}), 400
+
+    timestamp = float(timestamp)
+    safe_name = os.path.basename(library_file)
+    vod_path = os.path.join(LIBRARY_DIR, safe_name)
+
+    if not os.path.exists(vod_path):
+        return jsonify({"error": "VOD not found in library"}), 404
+
+    # Clip covers [timestamp - duration, timestamp]
+    start = max(0, timestamp - duration)
+    end = timestamp
+
+    job_id = str(uuid.uuid4())[:8]
+    clip_id = str(uuid.uuid4())[:8]
+
+    result = clip_manager.extend_clip(vod_path, job_id, clip_id, start, end)
+    if not result:
+        return jsonify({"error": "Failed to extract clip"}), 500
+
+    clip = {
+        "id": clip_id,
+        "filename": result["filename"],
+        "thumbnail": result.get("thumbnail"),
+        "start_time": result["start_time"],
+        "end_time": result["end_time"],
+        "duration": result["duration"],
+        "label": "Manual Clip",
+        "confidence": 1.0,
+        "timestamp_display": result.get("timestamp_display", ""),
+    }
+
+    # Add to an existing job or create a new one
+    if job_id not in jobs:
+        jobs[job_id] = {
+            "status": "complete",
+            "progress": 100,
+            "message": "Manual clip created",
+            "clips": [clip],
+            "error": None,
+            "vod_path": vod_path,
+            "vod_duration": clip_manager.get_vod_duration(vod_path),
+            "url": f"library:{safe_name}",
+            "created_at": datetime.now().isoformat(),
+        }
+        _save_session(job_id)
+
+    return jsonify({"success": True, "job_id": job_id, "clip": clip})
+
+
+@app.route("/api/clips/<job_id>/manual-clip", methods=["POST"])
+def manual_clip_to_session(job_id):
+    """Add a manual clip to an existing session/job.
+
+    Expects JSON: {timestamp, duration (optional, default 30)}
+    """
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+
+    vod_path = job.get("vod_path")
+    if not vod_path or not os.path.exists(vod_path):
+        return jsonify({"error": "VOD no longer available"}), 400
+
+    data = request.get_json()
+    timestamp = data.get("timestamp")
+    duration = float(data.get("duration", 30))
+
+    if timestamp is None:
+        return jsonify({"error": "No timestamp specified"}), 400
+
+    timestamp = float(timestamp)
+    start = max(0, timestamp - duration)
+    end = timestamp
+
+    clip_id = str(uuid.uuid4())[:8]
+    result = clip_manager.extend_clip(vod_path, job_id, clip_id, start, end)
+    if not result:
+        return jsonify({"error": "Failed to extract clip"}), 500
+
+    clip = {
+        "id": clip_id,
+        "filename": result["filename"],
+        "thumbnail": result.get("thumbnail"),
+        "start_time": result["start_time"],
+        "end_time": result["end_time"],
+        "duration": result["duration"],
+        "label": "Manual Clip",
+        "confidence": 1.0,
+        "timestamp_display": result.get("timestamp_display", ""),
+    }
+
+    job["clips"].append(clip)
+    _save_session(job_id)
+    return jsonify({"success": True, "clip": clip})
+
+
+# ---------------------------------------------------------------------------
+# Clip Trigger Detection: find "clip that" / "clip this" in speech
+# ---------------------------------------------------------------------------
+@app.route("/api/clip-trigger-scan", methods=["POST"])
+def clip_trigger_scan():
+    """Scan a library VOD for 'clip that/this/clip' voice triggers.
+
+    Expects JSON: {library_file, clip_duration (optional, default 30)}
+    Runs Whisper transcription to find trigger phrases and auto-clips them.
+    """
+    data = request.get_json()
+    library_file = data.get("library_file", "").strip()
+    clip_duration = int(data.get("clip_duration", 30))
+
+    if not library_file:
+        return jsonify({"error": "No library file specified"}), 400
+
+    safe_name = os.path.basename(library_file)
+    vod_path = os.path.join(LIBRARY_DIR, safe_name)
+
+    if not os.path.exists(vod_path):
+        return jsonify({"error": "VOD not found in library"}), 404
+
+    job_id = str(uuid.uuid4())[:8]
+    jobs[job_id] = {
+        "status": "analyzing",
+        "progress": 5,
+        "message": "Scanning for clip triggers...",
+        "clips": [],
+        "error": None,
+        "vod_path": vod_path,
+        "vod_duration": 0,
+        "url": f"library:{safe_name}",
+    }
+
+    thread = threading.Thread(
+        target=_run_clip_trigger_scan,
+        args=(job_id, vod_path, clip_duration),
+        daemon=True,
+    )
+    thread.start()
+    return jsonify({"job_id": job_id})
+
+
+def _run_clip_trigger_scan(job_id, vod_path, clip_duration=30):
+    """Background thread: run Whisper clip trigger detection."""
+    job = jobs[job_id]
+
+    def update(status, progress, message=""):
+        job["status"] = status
+        job["progress"] = progress
+        job["message"] = message
+
+    try:
+        duration = clip_manager.get_vod_duration(vod_path)
+        job["vod_duration"] = duration
+
+        detector = ClipTriggerDetector(clip_duration=clip_duration)
+
+        if not detector.is_available():
+            raise Exception(
+                "Whisper is not installed. Install it with: pip install openai-whisper"
+            )
+
+        update("analyzing", 10, "Transcribing audio with Whisper...")
+
+        highlights = detector.analyze_video(
+            vod_path,
+            progress_callback=lambda p: update(
+                "analyzing", 10 + int(p * 70),
+                f"Scanning for clip triggers... {int(p * 100)}%"
+            ),
+        )
+
+        if not highlights:
+            update("complete", 100, "No clip triggers found in audio")
+            job["clips"] = []
+            job["created_at"] = datetime.now().isoformat()
+            _save_session(job_id)
+            return
+
+        update("clipping", 82, f"Extracting {len(highlights)} triggered clips...")
+        clips = clip_manager.extract_clips(
+            vod_path, highlights, job_id,
+            progress_callback=lambda p: update(
+                "clipping", 82 + int(p * 16),
+                f"Cutting clip {int(p * len(highlights)) + 1} of {len(highlights)}..."
+            ),
+        )
+
+        job["clips"] = clips
+        job["created_at"] = datetime.now().isoformat()
+        update("complete", 100, f"Done! Found {len(clips)} clip trigger(s)")
+        _save_session(job_id)
+
+    except Exception as e:
+        job["error"] = str(e)
+        update("error", 0, str(e))
+
+
 def _run_analysis(job_id, url, api_key="", time_start="", time_end="", game_id="arc_raiders", detection_method="audio_cv", sensitivity=50, detection_overrides=None):
     job = jobs[job_id]
     platform = _get_platform_name(url)
@@ -1882,6 +2098,16 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
                 progress_callback=lambda p: update(
                     "analyzing", 42 + int(p * 38),
                     f"Analyzing chat activity... {int(p * 100)}%"
+                )
+            )
+        elif detection_method == "clip_triggers":
+            update("analyzing", 42, "Transcribing audio for clip triggers...")
+            detector = ClipTriggerDetector(clip_duration=30)
+            highlights = detector.analyze_video(
+                video_path,
+                progress_callback=lambda p: update(
+                    "analyzing", 42 + int(p * 38),
+                    f"Scanning for clip triggers... {int(p * 100)}%"
                 )
             )
         else:

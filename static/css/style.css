@@ -2735,6 +2735,70 @@ kbd {
     background: #1ad6cc;
 }
 
+/* ===== MANUAL CLIP ===== */
+.manual-clip-section {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.manual-clip-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.manual-clip-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--text);
+}
+
+.manual-clip-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.manual-clip-controls .time-range-inputs {
+    display: flex;
+    gap: 12px;
+    align-items: end;
+}
+
+.manual-clip-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.manual-clip-vod-name {
+    font-size: 0.85rem;
+    color: var(--accent);
+    font-weight: 500;
+}
+
+.library-item-clip {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 4px 10px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-right: 4px;
+    white-space: nowrap;
+}
+
+.library-item-clip:hover {
+    filter: brightness(1.15);
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
     .main-nav {

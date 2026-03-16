@@ -366,6 +366,7 @@ function loadLibrary() {
                             ${vod.duration ? ' &middot; ' + formatTime(vod.duration) : ''}
                         </span>
                     </div>
+                    <button class="library-item-clip" onclick="event.stopPropagation(); showManualClip('${escapeHtml(vod.filename)}')" title="Manual Clip">Clip</button>
                     <button class="library-item-delete" onclick="deleteLibraryVod('${escapeHtml(vod.filename)}')" title="Delete">&times;</button>
                 </div>
             `).join("");
@@ -1284,6 +1285,7 @@ function onDetectionMethodChange(method) {
         motion: "Detects high-movement periods (combat, camera shakes, explosions). Pure pixel motion analysis.",
         scene_change: "Finds visual disruptions — explosions, flashes, damage effects. Measures how fast the scene shifts.",
         hybrid: "Runs audio + motion + scene change together. Slowest but catches everything — if any signal fires, it counts.",
+        clip_triggers: "Transcribes audio with Whisper to find when someone says 'clip that!', 'clip this!', or 'clip!' — auto-clips the preceding 30 seconds. Requires openai-whisper (pip install openai-whisper).",
         chat_spikes: "Uses Twitch chat activity spikes to find hype moments. Only works with Twitch VOD URLs.",
         ai_vision: "AI analyzes screenshots of your gameplay. Most accurate but requires xAI API key and costs per use.",
         roboflow_workflow: "Roboflow AI workflow for Arc Raiders — streams video through a detect-and-classify pipeline. Requires Roboflow API key.",
@@ -2756,4 +2758,175 @@ function restoreDetectionSettings(settings) {
         const el = document.getElementById(id);
         if (el) el.value = val;
     }
+}
+
+// ===== Manual Clip & Clip Trigger Features =====
+
+let manualClipVod = null; // currently selected library VOD for manual clipping
+
+function showManualClip(filename) {
+    manualClipVod = filename;
+    const section = document.getElementById("manual-clip-section");
+    document.getElementById("manual-clip-vod").textContent = filename;
+    document.getElementById("manual-clip-timestamp").value = "";
+    document.getElementById("manual-clip-status").textContent = "";
+    section.classList.remove("hidden");
+}
+
+function hideManualClip() {
+    document.getElementById("manual-clip-section").classList.add("hidden");
+    manualClipVod = null;
+}
+
+function parseTimestamp(str) {
+    // Parse "1:23:45", "23:45", "45", or raw seconds
+    str = str.trim();
+    if (!str) return null;
+    const parts = str.split(":").map(Number);
+    if (parts.some(isNaN)) return null;
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 1) return parts[0];
+    return null;
+}
+
+function createManualClip() {
+    if (!manualClipVod) return;
+
+    const tsInput = document.getElementById("manual-clip-timestamp").value;
+    const duration = parseInt(document.getElementById("manual-clip-duration").value) || 30;
+    const status = document.getElementById("manual-clip-status");
+
+    const timestamp = parseTimestamp(tsInput);
+    if (timestamp === null || timestamp < 0) {
+        status.textContent = "Enter a valid timestamp (e.g. 1:23:45)";
+        status.className = "trim-status error";
+        return;
+    }
+
+    status.textContent = "Clipping...";
+    status.className = "trim-status";
+
+    fetch("/api/manual-clip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            library_file: manualClipVod,
+            timestamp: timestamp,
+            duration: duration,
+        }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            status.textContent = data.error;
+            status.className = "trim-status error";
+            return;
+        }
+        status.textContent = "Clip created!";
+        status.className = "trim-status success";
+
+        // Switch to the new session to show the clip
+        currentJobId = data.job_id;
+        currentClips = [data.clip];
+        renderClips();
+        switchMainTab("analyze");
+        loadSessions();
+    })
+    .catch(() => {
+        status.textContent = "Failed to create clip";
+        status.className = "trim-status error";
+    });
+}
+
+function scanClipTriggers() {
+    if (!manualClipVod) return;
+
+    const status = document.getElementById("manual-clip-status");
+    const duration = parseInt(document.getElementById("manual-clip-duration").value) || 30;
+
+    status.textContent = "Starting clip trigger scan...";
+    status.className = "trim-status";
+
+    fetch("/api/clip-trigger-scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            library_file: manualClipVod,
+            clip_duration: duration,
+        }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            status.textContent = data.error;
+            status.className = "trim-status error";
+            return;
+        }
+        // Switch to analyze tab and start polling
+        currentJobId = data.job_id;
+        switchMainTab("analyze");
+        setAnalyzing(true);
+        showProgress();
+        startPolling();
+        status.textContent = "Scanning... check progress above.";
+        status.className = "trim-status";
+    })
+    .catch(() => {
+        status.textContent = "Failed to start scan";
+        status.className = "trim-status error";
+    });
+}
+
+// In-session manual clip (from clips toolbar)
+function showSessionManualClip() {
+    const panel = document.getElementById("session-manual-clip");
+    document.getElementById("session-clip-timestamp").value = "";
+    document.getElementById("session-clip-status").textContent = "";
+    panel.classList.remove("hidden");
+    document.getElementById("session-clip-timestamp").focus();
+}
+
+function createSessionManualClip() {
+    if (!currentJobId) return;
+
+    const tsInput = document.getElementById("session-clip-timestamp").value;
+    const duration = parseInt(document.getElementById("session-clip-duration").value) || 30;
+    const status = document.getElementById("session-clip-status");
+
+    const timestamp = parseTimestamp(tsInput);
+    if (timestamp === null || timestamp < 0) {
+        status.textContent = "Enter a valid timestamp (e.g. 1:23:45)";
+        status.className = "trim-status error";
+        return;
+    }
+
+    status.textContent = "Clipping...";
+    status.className = "trim-status";
+
+    fetch(`/api/clips/${currentJobId}/manual-clip`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            timestamp: timestamp,
+            duration: duration,
+        }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            status.textContent = data.error;
+            status.className = "trim-status error";
+            return;
+        }
+        status.textContent = "Clip added!";
+        status.className = "trim-status success";
+        // Add to current clips and re-render
+        currentClips.push(data.clip);
+        renderClips();
+    })
+    .catch(() => {
+        status.textContent = "Failed to create clip";
+        status.className = "trim-status error";
+    });
 }

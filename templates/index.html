@@ -136,6 +136,7 @@
                     <option value="motion">Motion Detection</option>
                     <option value="scene_change">Scene Change Detection</option>
                     <option value="hybrid">Hybrid (all signals combined)</option>
+                    <option value="clip_triggers">Clip Triggers ("clip that!" voice detection)</option>
                     <option value="chat_spikes">Chat Spikes (Twitch only)</option>
                     <option value="ai_vision">AI Vision (xAI Grok)</option>
                     <option value="roboflow_workflow">Roboflow AI Workflow</option>
@@ -284,6 +285,7 @@
                     </select>
                 </div>
                 <div class="clips-actions-bulk">
+                    <button class="trim-btn" onclick="showSessionManualClip()" id="btn-manual-clip-session" title="Manually clip a moment from this VOD">Manual Clip</button>
                     <button class="trim-btn" onclick="exportHighlightReel()">Highlight Reel</button>
                     <button class="trim-btn" onclick="batchTikTok()">Batch TikTok</button>
                     <button class="trim-btn" onclick="findDuplicates()">Find Duplicates</button>
@@ -293,6 +295,30 @@
             <div id="clips-grid" class="clips-grid"></div>
             <div id="no-clips" class="no-clips hidden">
                 <p>No highlights were detected. Try a different stream with more action!</p>
+            </div>
+            <!-- In-session Manual Clip Panel -->
+            <div id="session-manual-clip" class="manual-clip-section hidden">
+                <div class="manual-clip-header">
+                    <h3>Manual Clip from VOD</h3>
+                    <button class="file-remove" onclick="document.getElementById('session-manual-clip').classList.add('hidden')">&times;</button>
+                </div>
+                <p class="api-hint">Enter a VOD timestamp to clip the previous 30 seconds of action.</p>
+                <div class="manual-clip-controls">
+                    <div class="time-range-inputs">
+                        <div class="time-field">
+                            <label>Timestamp (where to clip)</label>
+                            <input type="text" id="session-clip-timestamp" placeholder="e.g. 1:23:45" autocomplete="off">
+                        </div>
+                        <div class="time-field">
+                            <label>Duration (sec)</label>
+                            <input type="number" id="session-clip-duration" value="30" min="5" max="120" step="5">
+                        </div>
+                    </div>
+                    <div class="manual-clip-actions">
+                        <button class="btn-apply-trim" onclick="createSessionManualClip()">Clip It</button>
+                        <span id="session-clip-status" class="trim-status"></span>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -309,6 +335,35 @@
                     <button id="watch-folder-btn" class="trim-btn" onclick="toggleWatchFolder()">Watch Folder: Off</button>
                 </div>
                 <p class="library-hint">Previously downloaded VODs. Click one to re-analyze without re-downloading.</p>
+                <!-- Manual Clip Controls -->
+                <div id="manual-clip-section" class="manual-clip-section hidden">
+                    <div class="manual-clip-header">
+                        <h3>Manual Clip</h3>
+                        <button class="file-remove" onclick="hideManualClip()">&times;</button>
+                    </div>
+                    <p class="api-hint">Clip the last 30 seconds from a specific point in the VOD.</p>
+                    <div class="manual-clip-controls">
+                        <div class="time-field">
+                            <label>VOD:</label>
+                            <span id="manual-clip-vod" class="manual-clip-vod-name"></span>
+                        </div>
+                        <div class="time-range-inputs">
+                            <div class="time-field">
+                                <label>Timestamp</label>
+                                <input type="text" id="manual-clip-timestamp" placeholder="e.g. 1:23:45 or end" autocomplete="off">
+                            </div>
+                            <div class="time-field">
+                                <label>Duration (sec)</label>
+                                <input type="number" id="manual-clip-duration" value="30" min="5" max="120" step="5">
+                            </div>
+                        </div>
+                        <div class="manual-clip-actions">
+                            <button class="btn-apply-trim" onclick="createManualClip()">Clip It</button>
+                            <button class="btn-apply-trim" onclick="scanClipTriggers()" title="Scan entire VOD for 'clip that!' voice commands">Scan for &quot;Clip That!&quot;</button>
+                            <span id="manual-clip-status" class="trim-status"></span>
+                        </div>
+                    </div>
+                </div>
                 <div id="library-list" class="library-list"></div>
                 <div id="library-empty" class="empty-state">
                     <div class="empty-icon">&#128193;</div>
