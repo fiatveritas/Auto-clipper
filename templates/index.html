@@ -5,9 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Auto-Clipper</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body>
-    <!-- Loading overlay - shown until backend is ready -->
+    <!-- Loading overlay -->
     <div id="loading-overlay" class="loading-overlay">
         <div class="loading-content">
             <div class="loading-spinner"></div>
@@ -16,930 +18,1030 @@
         </div>
     </div>
 
-    <div class="app hidden" id="app-container">
-        <header>
-            <div class="header-row">
-                <h1>Auto-Clipper</h1>
-                <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">&#9788;</button>
-            </div>
-            <p class="subtitle">Upload your VOD or paste a link — AI finds the best moments</p>
-        </header>
-
-        <!-- Navigation Tabs -->
-        <nav class="main-nav">
-            <button class="nav-tab active" data-tab="analyze" onclick="switchMainTab('analyze')">Analyze</button>
-            <button class="nav-tab" data-tab="library" onclick="switchMainTab('library')">Library</button>
-            <button class="nav-tab" data-tab="settings" onclick="switchMainTab('settings')">Settings</button>
-        </nav>
-
-        <!-- ==================== ANALYZE TAB ==================== -->
-        <div id="tab-analyze-main" class="main-tab-content active">
-
-        <!-- Game Selection — Card-Based -->
-        <section id="game-section" class="card">
-            <div class="game-section-header">
-                <h2 class="section-title">Game Profile</h2>
-                <button class="collapse-btn" onclick="toggleGameCards()" id="game-cards-toggle">Show all</button>
-            </div>
-            <div class="game-active-display" id="game-active-display" onclick="toggleGameCards()">
-                <div class="game-active-name" id="game-active-name">Arc Raiders</div>
-                <div class="game-active-desc" id="game-active-desc">Simple detection — Recommended</div>
-                <span class="game-active-change">Change</span>
-            </div>
-            <div id="game-cards-container" class="game-cards-container hidden">
-                <!-- Populated by JS -->
-            </div>
-            <!-- Hidden select for compatibility -->
-            <select id="game-select" class="hidden" onchange="selectGame(this.value)"></select>
-        </section>
-
-        <!-- Input Section -->
-        <section id="input-section" class="card">
-            <!-- Source Toggle: URL or Upload -->
-            <div class="source-toggle">
-                <button class="source-btn active" data-source="url" onclick="setSource('url')">Paste URL</button>
-                <button class="source-btn" data-source="upload" onclick="setSource('upload')">Upload File</button>
-            </div>
-
-            <!-- URL Mode -->
-            <div id="url-mode" class="input-group">
-                <input type="text" id="vod-url"
-                    placeholder="Paste Twitch or YouTube VOD link"
-                    autocomplete="off">
-                <button id="analyze-btn" onclick="startAnalysis()">
-                    <span class="btn-text">Analyze</span>
-                    <span class="btn-icon">&#9654;</span>
-                </button>
-            </div>
-
-            <!-- Batch Queue -->
-            <div id="batch-queue-section" class="hidden">
-                <div class="batch-queue-header">
-                    <span class="badge" id="batch-count">0 queued</span>
-                    <button class="trim-btn" onclick="clearBatchQueue()">Clear Queue</button>
+    <div class="app-layout hidden" id="app-container">
+        <!-- ==================== SIDEBAR ==================== -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="url(#brand-grad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <defs><linearGradient id="brand-grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#9147ff"/><stop offset="100%" stop-color="#e879f9"/></linearGradient></defs>
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
                 </div>
-                <div id="batch-queue-list" class="batch-queue-list"></div>
-                <button id="batch-start-btn" class="upload-btn hidden" onclick="startBatchAnalysis()">
-                    <span class="btn-text">Analyze All</span>
-                    <span class="btn-icon">&#9654;</span>
+                <span class="brand-text">Auto-Clipper</span>
+            </div>
+
+            <nav class="sidebar-nav">
+                <button class="nav-item active" data-tab="analyze" onclick="switchMainTab('analyze')">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    <span>Analyze</span>
+                </button>
+                <button class="nav-item" data-tab="library" onclick="switchMainTab('library')">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    <span>Library</span>
+                </button>
+                <button class="nav-item" data-tab="settings" onclick="switchMainTab('settings')">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                    <span>Settings</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                </button>
+                <div class="sidebar-version">v2.0</div>
+            </div>
+        </aside>
+
+        <!-- ==================== MAIN CONTENT ==================== -->
+        <main class="main-content">
+            <!-- Mobile Header (visible on small screens) -->
+            <div class="mobile-header">
+                <button class="mobile-menu-btn" onclick="toggleSidebar()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                <span class="mobile-title">Auto-Clipper</span>
+                <button class="theme-toggle-mobile" onclick="toggleTheme()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                 </button>
             </div>
 
-            <!-- Upload Mode -->
-            <div id="upload-mode" class="hidden">
-                <div id="drop-zone" class="drop-zone">
-                    <div class="drop-zone-content">
-                        <div class="drop-zone-icon">&#128193;</div>
-                        <p class="drop-zone-text">Drag &amp; drop your VOD here</p>
-                        <p class="drop-zone-hint">or click to browse &mdash; MP4, MKV, MOV, AVI, FLV, TS, WebM</p>
+            <!-- ==================== ANALYZE TAB ==================== -->
+            <div id="tab-analyze-main" class="main-tab-content active">
+                <!-- Page Header -->
+                <div class="page-header">
+                    <div class="page-header-text">
+                        <h1>Analyze VOD</h1>
+                        <p class="page-subtitle">Upload or paste a link &mdash; AI finds the best moments</p>
                     </div>
-                    <input type="file" id="file-input" accept=".mp4,.mkv,.mov,.avi,.flv,.ts,.webm" hidden>
                 </div>
-                <div id="file-info" class="file-info hidden">
-                    <span id="file-name" class="file-name"></span>
-                    <span id="file-size" class="file-size"></span>
-                    <button class="file-remove" onclick="clearFile()">&times;</button>
-                </div>
-                <button id="upload-btn" class="upload-btn hidden" onclick="startUploadAnalysis()">
-                    <span class="btn-text">Upload &amp; Analyze</span>
-                    <span class="btn-icon">&#9654;</span>
-                </button>
-            </div>
-            <!-- Time Range -->
-            <div class="time-range-section">
-                <button class="toggle-api" onclick="toggleTimeRange()">
-                    <span id="time-toggle-icon">+</span> Download specific part (faster)
-                </button>
-                <div id="time-range-wrapper" class="hidden">
-                    <div class="time-range-inputs">
-                        <div class="time-field">
-                            <label>From</label>
-                            <input type="text" id="time-start" placeholder="0:00:00" autocomplete="off">
+
+                <!-- Game Selection -->
+                <section id="game-section" class="card glass-card">
+                    <div class="card-header">
+                        <div class="card-header-left">
+                            <div class="card-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><circle cx="16" cy="10" r="1"/><circle cx="18" cy="12" r="1"/></svg>
+                            </div>
+                            <h2 class="card-title">Game Profile</h2>
                         </div>
-                        <span class="time-arrow">to</span>
-                        <div class="time-field">
-                            <label>To</label>
-                            <input type="text" id="time-end" placeholder="End of stream" autocomplete="off">
+                        <button class="collapse-btn" onclick="toggleGameCards()" id="game-cards-toggle">Show all</button>
+                    </div>
+                    <!-- Game Search -->
+                    <div class="game-search-bar" id="game-search-bar">
+                        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="game-search" placeholder="Search games..." oninput="filterGameCards(this.value)" autocomplete="off">
+                    </div>
+                    <div class="game-active-display" id="game-active-display" onclick="toggleGameCards()">
+                        <div class="game-active-name" id="game-active-name">Arc Raiders</div>
+                        <div class="game-active-desc" id="game-active-desc">Simple detection &mdash; Recommended</div>
+                        <span class="game-active-change">Change</span>
+                    </div>
+                    <div id="game-cards-container" class="game-cards-container hidden">
+                        <!-- Populated by JS -->
+                    </div>
+                    <select id="game-select" class="hidden" onchange="selectGame(this.value)"></select>
+                </section>
+
+                <!-- Input Section -->
+                <section id="input-section" class="card glass-card">
+                    <!-- Source Toggle -->
+                    <div class="source-toggle">
+                        <button class="source-btn active" data-source="url" onclick="setSource('url')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                            Paste URL
+                        </button>
+                        <button class="source-btn" data-source="upload" onclick="setSource('upload')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            Upload File
+                        </button>
+                    </div>
+
+                    <!-- URL Mode -->
+                    <div id="url-mode" class="input-group">
+                        <input type="text" id="vod-url" placeholder="Paste Twitch or YouTube VOD link" autocomplete="off">
+                        <button id="analyze-btn" onclick="startAnalysis()">
+                            <span class="btn-text">Analyze</span>
+                            <svg class="btn-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Batch Queue -->
+                    <div id="batch-queue-section" class="hidden">
+                        <div class="batch-queue-header">
+                            <span class="badge" id="batch-count">0 queued</span>
+                            <button class="trim-btn" onclick="clearBatchQueue()">Clear Queue</button>
+                        </div>
+                        <div id="batch-queue-list" class="batch-queue-list"></div>
+                        <button id="batch-start-btn" class="upload-btn hidden" onclick="startBatchAnalysis()">
+                            <span class="btn-text">Analyze All</span>
+                        </button>
+                    </div>
+
+                    <!-- Upload Mode -->
+                    <div id="upload-mode" class="hidden">
+                        <div id="drop-zone" class="drop-zone">
+                            <div class="drop-zone-content">
+                                <div class="drop-zone-icon">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                </div>
+                                <p class="drop-zone-text">Drag &amp; drop your VOD here</p>
+                                <p class="drop-zone-hint">or click to browse &mdash; MP4, MKV, MOV, AVI, FLV, TS, WebM</p>
+                            </div>
+                            <input type="file" id="file-input" accept=".mp4,.mkv,.mov,.avi,.flv,.ts,.webm" hidden>
+                        </div>
+                        <div id="file-info" class="file-info hidden">
+                            <span id="file-name" class="file-name"></span>
+                            <span id="file-size" class="file-size"></span>
+                            <button class="file-remove" onclick="clearFile()">&times;</button>
+                        </div>
+                        <button id="upload-btn" class="upload-btn hidden" onclick="startUploadAnalysis()">
+                            <span class="btn-text">Upload &amp; Analyze</span>
+                        </button>
+                    </div>
+
+                    <!-- Time Range -->
+                    <div class="time-range-section">
+                        <button class="toggle-api" onclick="toggleTimeRange()">
+                            <span id="time-toggle-icon">+</span> Download specific part (faster)
+                        </button>
+                        <div id="time-range-wrapper" class="hidden">
+                            <div class="time-range-inputs">
+                                <div class="time-field">
+                                    <label>From</label>
+                                    <input type="text" id="time-start" placeholder="0:00:00" autocomplete="off">
+                                </div>
+                                <span class="time-arrow">to</span>
+                                <div class="time-field">
+                                    <label>To</label>
+                                    <input type="text" id="time-end" placeholder="End of stream" autocomplete="off">
+                                </div>
+                            </div>
+                            <p class="api-hint">Only download part of the stream. Use format like <strong>1:30:00</strong> or <strong>45:00</strong>.</p>
                         </div>
                     </div>
-                    <p class="api-hint">Only download part of the stream. Use format like <strong>1:30:00</strong> or <strong>45:00</strong>. Leave empty for full VOD.</p>
-                </div>
-            </div>
 
-            <!-- Detection Method -->
-            <div class="detection-method-section">
-                <label class="game-label" for="detection-method">Detection Method</label>
-                <select id="detection-method" class="game-dropdown" onchange="onDetectionMethodChange(this.value)">
-                    <option value="audio_cv" selected>Audio + Vision (Recommended)</option>
-                    <option value="audio_only">Audio Only (fastest)</option>
-                    <option value="cv_only">Computer Vision Only</option>
-                    <option value="motion">Motion Detection</option>
-                    <option value="scene_change">Scene Change Detection</option>
-                    <option value="hybrid">Hybrid (all signals combined)</option>
-                    <option value="clip_triggers">Clip Triggers ("clip that!" voice detection)</option>
-                    <option value="chat_spikes">Chat Spikes (Twitch only)</option>
-                    <option value="ai_vision">AI Vision (xAI Grok)</option>
-                    <option value="roboflow_workflow">Roboflow AI Workflow</option>
-                    <option value="roboflow_model">Roboflow Model</option>
-                    <option value="yolo_local">YOLO Local Model (requires best.pt)</option>
-                    <option value="arc_cv_pipeline">CV Pipeline — HUD + VFX Analysis (no model needed)</option>
-                </select>
-                <p class="api-hint" id="detection-hint">Uses audio spikes (gunshots/explosions) combined with visual detection. Best for most games.</p>
-            </div>
-
-            <!-- Sensitivity Slider -->
-            <div class="sensitivity-section">
-                <label class="game-label">Sensitivity</label>
-                <div class="sensitivity-slider-row">
-                    <span class="sensitivity-label-left">Fewer clips</span>
-                    <input type="range" id="sensitivity" min="0" max="100" value="50" step="5"
-                        oninput="onSensitivityChange(this.value)">
-                    <span class="sensitivity-label-right">More clips</span>
-                </div>
-                <p class="api-hint" id="sensitivity-hint">50% — Balanced: catches most action without too many false positives.</p>
-            </div>
-
-            <!-- Advanced Detection Settings (collapsible) -->
-            <div class="detection-settings-toggle">
-                <button class="detection-settings-btn" onclick="toggleDetectionSettings()">
-                    <span id="detection-settings-arrow">&#9654;</span> Detection Settings
-                </button>
-            </div>
-            <div id="detection-settings" class="detection-settings hidden">
-                <div class="detection-settings-grid">
-                    <div class="det-setting">
-                        <label for="det-intensity">Intensity Threshold</label>
-                        <input type="number" id="det-intensity" value="0.35" min="0.05" max="1.0" step="0.05">
-                        <span class="det-hint">Min score to clip (lower = more clips)</span>
-                    </div>
-                    <div class="det-setting">
-                        <label for="det-audio-weight">Audio Weight</label>
-                        <input type="number" id="det-audio-weight" value="0.30" min="0" max="1.0" step="0.05">
-                        <span class="det-hint">Audio vs CV blend (0 = CV only)</span>
-                    </div>
-                    <div class="det-setting">
-                        <label for="det-audio-thresh">Audio Threshold (dB)</label>
-                        <input type="number" id="det-audio-thresh" value="-15" min="-40" max="0" step="1">
-                        <span class="det-hint">Quieter = catches more sounds</span>
-                    </div>
-                    <div class="det-setting">
-                        <label for="det-merge-gap">Merge Gap (sec)</label>
-                        <input type="number" id="det-merge-gap" value="8" min="1" max="60" step="1">
-                        <span class="det-hint">Merge clips within N seconds</span>
-                    </div>
-                    <div class="det-setting">
-                        <label for="det-min-clip">Min Clip (sec)</label>
-                        <input type="number" id="det-min-clip" value="20" min="5" max="120" step="5">
-                        <span class="det-hint">Shortest allowed clip</span>
-                    </div>
-                    <div class="det-setting">
-                        <label for="det-max-clip">Max Clip (sec)</label>
-                        <input type="number" id="det-max-clip" value="60" min="10" max="300" step="5">
-                        <span class="det-hint">Longest allowed clip</span>
-                    </div>
-                    <div class="det-setting">
-                        <label for="det-sample-fps">Sample FPS</label>
-                        <input type="number" id="det-sample-fps" value="2" min="1" max="10" step="1">
-                        <span class="det-hint">Frames analyzed per second</span>
-                    </div>
-                    <div class="det-setting">
-                        <label for="det-fallback-ratio">Fallback Ratio</label>
-                        <input type="number" id="det-fallback-ratio" value="0.30" min="0.05" max="1.0" step="0.05">
-                        <span class="det-hint">Threshold multiplier for fallback clips</span>
-                    </div>
-                    <div class="det-setting">
-                        <label for="det-window-sec">Window Size (sec)</label>
-                        <input type="number" id="det-window-sec" value="3" min="1" max="10" step="1">
-                        <span class="det-hint">Scoring window duration</span>
-                    </div>
-                    <div class="det-setting">
-                        <label for="det-peak-weight">Peak vs Avg Blend</label>
-                        <input type="number" id="det-peak-weight" value="0.60" min="0" max="1.0" step="0.05">
-                        <span class="det-hint">1.0 = peak only, 0 = average only</span>
-                    </div>
-                    <div class="det-setting">
-                        <label for="det-menu-suppress">Menu Suppression</label>
-                        <select id="det-menu-suppress">
-                            <option value="on" selected>On</option>
-                            <option value="off">Off (debug)</option>
+                    <!-- Detection Method -->
+                    <div class="detection-method-section">
+                        <label class="field-label" for="detection-method">Detection Method</label>
+                        <select id="detection-method" class="select-field" onchange="onDetectionMethodChange(this.value)">
+                            <option value="audio_cv" selected>Audio + Vision (Recommended)</option>
+                            <option value="audio_only">Audio Only (fastest)</option>
+                            <option value="cv_only">Computer Vision Only</option>
+                            <option value="motion">Motion Detection</option>
+                            <option value="scene_change">Scene Change Detection</option>
+                            <option value="hybrid">Hybrid (all signals combined)</option>
+                            <option value="clip_triggers">Clip Triggers ("clip that!" voice detection)</option>
+                            <option value="chat_spikes">Chat Spikes (Twitch only)</option>
+                            <option value="ai_vision">AI Vision (xAI Grok)</option>
+                            <option value="roboflow_workflow">Roboflow AI Workflow</option>
+                            <option value="roboflow_model">Roboflow Model</option>
+                            <option value="yolo_local">YOLO Local Model (requires best.pt)</option>
+                            <option value="arc_cv_pipeline">CV Pipeline &mdash; HUD + VFX Analysis</option>
                         </select>
-                        <span class="det-hint">Disable to stop menu frame zeroing</span>
+                        <p class="hint-text" id="detection-hint">Uses audio spikes combined with visual detection. Best for most games.</p>
                     </div>
-                    <div class="det-setting">
-                        <label for="det-brightness-thresh">Brightness Threshold</label>
-                        <input type="number" id="det-brightness-thresh" value="0.60" min="0.1" max="1.0" step="0.05">
-                        <span class="det-hint">Min brightness for flash detection</span>
-                    </div>
-                </div>
-                <div class="det-setting-actions">
-                    <button class="det-reset-btn" onclick="resetDetectionSettings()">Reset to Defaults</button>
-                </div>
-            </div>
 
-            <!-- API Key (shown only for AI Vision mode) -->
-            <div class="api-key-section hidden" id="api-key-section">
-                <div id="api-key-wrapper">
-                    <input type="password" id="api-key"
-                        placeholder="Paste your xAI API key for AI-powered analysis"
-                        autocomplete="off">
-                    <p class="api-hint">Grok Vision AI analyzes screenshots of your gameplay to find exciting moments.</p>
-                </div>
-            </div>
-            <div id="error-msg" class="error-msg hidden"></div>
-        </section>
-
-        <!-- Progress Section -->
-        <section id="progress-section" class="card hidden">
-            <div class="progress-header">
-                <h2 id="progress-title">Processing...</h2>
-                <span id="progress-pct">0%</span>
-            </div>
-            <div class="progress-bar-track">
-                <div id="progress-bar" class="progress-bar-fill" style="width: 0%"></div>
-            </div>
-            <p id="progress-message" class="progress-message">Starting...</p>
-        </section>
-
-        <!-- Clips Section -->
-        <section id="clips-section" class="hidden">
-            <div class="clips-header">
-                <h2>Detected Highlights</h2>
-                <span id="clip-count" class="badge">0 clips</span>
-            </div>
-            <div class="clips-toolbar">
-                <div class="clips-sort">
-                    <label>Sort:</label>
-                    <select id="clips-sort" onchange="sortClips(this.value)">
-                        <option value="time">Time</option>
-                        <option value="confidence">Confidence</option>
-                        <option value="duration">Duration</option>
-                    </select>
-                </div>
-                <div class="clips-filter">
-                    <label>Filter:</label>
-                    <select id="clips-filter" onchange="filterClips(this.value)">
-                        <option value="all">All</option>
-                        <option value="approved">Approved</option>
-                        <option value="rejected">Rejected</option>
-                        <option value="pending">Pending Review</option>
-                    </select>
-                </div>
-                <div class="clips-actions-bulk">
-                    <button class="trim-btn" onclick="showSessionManualClip()" id="btn-manual-clip-session" title="Manually clip a moment from this VOD">Manual Clip</button>
-                    <button class="trim-btn" onclick="exportHighlightReel()">Highlight Reel</button>
-                    <button class="trim-btn" onclick="batchTikTok()">Batch TikTok</button>
-                    <button class="trim-btn" onclick="findDuplicates()">Find Duplicates</button>
-                    <button class="trim-btn" onclick="showMergePanel()">Merge Selected</button>
-                </div>
-            </div>
-            <div id="clips-grid" class="clips-grid"></div>
-            <div id="no-clips" class="no-clips hidden">
-                <p>No highlights were detected. Try a different stream with more action!</p>
-            </div>
-            <!-- In-session Manual Clip Panel -->
-            <div id="session-manual-clip" class="manual-clip-section hidden">
-                <div class="manual-clip-header">
-                    <h3>Manual Clip from VOD</h3>
-                    <button class="file-remove" onclick="document.getElementById('session-manual-clip').classList.add('hidden')">&times;</button>
-                </div>
-                <p class="api-hint">Enter a VOD timestamp to clip the previous 30 seconds. <strong>Tip:</strong> Double-click the timeline to clip at that point. <kbd>Ctrl+Shift+C</kbd> clips at the current preview position.</p>
-                <div class="manual-clip-controls">
-                    <div class="time-range-inputs">
-                        <div class="time-field">
-                            <label>Timestamp (where to clip)</label>
-                            <input type="text" id="session-clip-timestamp" placeholder="e.g. 1:23:45" autocomplete="off">
+                    <!-- Sensitivity Slider -->
+                    <div class="sensitivity-section">
+                        <label class="field-label">Sensitivity</label>
+                        <div class="sensitivity-slider-row">
+                            <span class="sensitivity-label-left">Fewer clips</span>
+                            <input type="range" id="sensitivity" min="0" max="100" value="50" step="5" oninput="onSensitivityChange(this.value)">
+                            <span class="sensitivity-label-right">More clips</span>
                         </div>
-                        <div class="time-field">
-                            <label>Duration (sec)</label>
-                            <input type="number" id="session-clip-duration" value="30" min="5" max="120" step="5">
+                        <p class="hint-text" id="sensitivity-hint">50% &mdash; Balanced: catches most action without too many false positives.</p>
+                    </div>
+
+                    <!-- Advanced Detection Settings -->
+                    <div class="detection-settings-toggle">
+                        <button class="detection-settings-btn" onclick="toggleDetectionSettings()">
+                            <span id="detection-settings-arrow">&#9654;</span> Detection Settings
+                        </button>
+                    </div>
+                    <div id="detection-settings" class="detection-settings hidden">
+                        <div class="detection-settings-grid">
+                            <div class="det-setting">
+                                <label for="det-intensity">Intensity Threshold</label>
+                                <input type="number" id="det-intensity" value="0.35" min="0.05" max="1.0" step="0.05">
+                                <span class="det-hint">Min score to clip (lower = more clips)</span>
+                            </div>
+                            <div class="det-setting">
+                                <label for="det-audio-weight">Audio Weight</label>
+                                <input type="number" id="det-audio-weight" value="0.30" min="0" max="1.0" step="0.05">
+                                <span class="det-hint">Audio vs CV blend (0 = CV only)</span>
+                            </div>
+                            <div class="det-setting">
+                                <label for="det-audio-thresh">Audio Threshold (dB)</label>
+                                <input type="number" id="det-audio-thresh" value="-15" min="-40" max="0" step="1">
+                                <span class="det-hint">Quieter = catches more sounds</span>
+                            </div>
+                            <div class="det-setting">
+                                <label for="det-merge-gap">Merge Gap (sec)</label>
+                                <input type="number" id="det-merge-gap" value="8" min="1" max="60" step="1">
+                                <span class="det-hint">Merge clips within N seconds</span>
+                            </div>
+                            <div class="det-setting">
+                                <label for="det-min-clip">Min Clip (sec)</label>
+                                <input type="number" id="det-min-clip" value="20" min="5" max="120" step="5">
+                                <span class="det-hint">Shortest allowed clip</span>
+                            </div>
+                            <div class="det-setting">
+                                <label for="det-max-clip">Max Clip (sec)</label>
+                                <input type="number" id="det-max-clip" value="60" min="10" max="300" step="5">
+                                <span class="det-hint">Longest allowed clip</span>
+                            </div>
+                            <div class="det-setting">
+                                <label for="det-sample-fps">Sample FPS</label>
+                                <input type="number" id="det-sample-fps" value="2" min="1" max="10" step="1">
+                                <span class="det-hint">Frames analyzed per second</span>
+                            </div>
+                            <div class="det-setting">
+                                <label for="det-fallback-ratio">Fallback Ratio</label>
+                                <input type="number" id="det-fallback-ratio" value="0.30" min="0.05" max="1.0" step="0.05">
+                                <span class="det-hint">Threshold multiplier for fallback clips</span>
+                            </div>
+                            <div class="det-setting">
+                                <label for="det-window-sec">Window Size (sec)</label>
+                                <input type="number" id="det-window-sec" value="3" min="1" max="10" step="1">
+                                <span class="det-hint">Scoring window duration</span>
+                            </div>
+                            <div class="det-setting">
+                                <label for="det-peak-weight">Peak vs Avg Blend</label>
+                                <input type="number" id="det-peak-weight" value="0.60" min="0" max="1.0" step="0.05">
+                                <span class="det-hint">1.0 = peak only, 0 = average only</span>
+                            </div>
+                            <div class="det-setting">
+                                <label for="det-menu-suppress">Menu Suppression</label>
+                                <select id="det-menu-suppress">
+                                    <option value="on" selected>On</option>
+                                    <option value="off">Off (debug)</option>
+                                </select>
+                                <span class="det-hint">Disable to stop menu frame zeroing</span>
+                            </div>
+                            <div class="det-setting">
+                                <label for="det-brightness-thresh">Brightness Threshold</label>
+                                <input type="number" id="det-brightness-thresh" value="0.60" min="0.1" max="1.0" step="0.05">
+                                <span class="det-hint">Min brightness for flash detection</span>
+                            </div>
+                        </div>
+                        <div class="det-setting-actions">
+                            <button class="det-reset-btn" onclick="resetDetectionSettings()">Reset to Defaults</button>
                         </div>
                     </div>
-                    <div class="manual-clip-actions">
-                        <button class="btn-apply-trim" onclick="createSessionManualClip()">Clip It</button>
-                        <span id="session-clip-status" class="trim-status"></span>
-                    </div>
-                </div>
-            </div>
-        </section>
 
-        </div><!-- end analyze tab -->
-
-        <!-- ==================== LIBRARY TAB ==================== -->
-        <div id="tab-library-main" class="main-tab-content">
-
-            <!-- Saved VODs Library -->
-            <section id="library-section" class="card">
-                <div class="library-header">
-                    <h2>Saved VODs</h2>
-                    <span id="library-count" class="badge">0</span>
-                    <button id="watch-folder-btn" class="trim-btn" onclick="toggleWatchFolder()">Watch Folder: Off</button>
-                </div>
-                <p class="library-hint">Previously downloaded VODs. Click one to re-analyze without re-downloading.</p>
-                <!-- Manual Clip Controls -->
-                <div id="manual-clip-section" class="manual-clip-section hidden">
-                    <div class="manual-clip-header">
-                        <h3>Manual Clip</h3>
-                        <button class="file-remove" onclick="hideManualClip()">&times;</button>
-                    </div>
-                    <p class="api-hint">Clip the last 30 seconds from a specific point in the VOD.</p>
-                    <div class="manual-clip-controls">
-                        <div class="time-field">
-                            <label>VOD:</label>
-                            <span id="manual-clip-vod" class="manual-clip-vod-name"></span>
+                    <!-- API Key -->
+                    <div class="api-key-section hidden" id="api-key-section">
+                        <div id="api-key-wrapper">
+                            <input type="password" id="api-key" placeholder="Paste your xAI API key for AI-powered analysis" autocomplete="off">
+                            <p class="hint-text">Grok Vision AI analyzes screenshots of your gameplay to find exciting moments.</p>
                         </div>
-                        <div class="time-range-inputs">
+                    </div>
+                    <div id="error-msg" class="error-msg hidden"></div>
+                </section>
+
+                <!-- Progress Section -->
+                <section id="progress-section" class="card glass-card hidden">
+                    <div class="progress-header">
+                        <h2 id="progress-title">Processing...</h2>
+                        <span id="progress-pct" class="progress-pct">0%</span>
+                    </div>
+                    <div class="progress-bar-track">
+                        <div id="progress-bar" class="progress-bar-fill" style="width: 0%"></div>
+                    </div>
+                    <p id="progress-message" class="progress-message">Starting...</p>
+                </section>
+
+                <!-- Clips Section -->
+                <section id="clips-section" class="hidden">
+                    <div class="clips-header">
+                        <h2>Detected Highlights</h2>
+                        <span id="clip-count" class="badge">0 clips</span>
+                    </div>
+                    <div class="clips-toolbar">
+                        <div class="clips-sort">
+                            <label>Sort:</label>
+                            <select id="clips-sort" onchange="sortClips(this.value)">
+                                <option value="time">Time</option>
+                                <option value="confidence">Confidence</option>
+                                <option value="duration">Duration</option>
+                            </select>
+                        </div>
+                        <div class="clips-filter">
+                            <label>Filter:</label>
+                            <select id="clips-filter" onchange="filterClips(this.value)">
+                                <option value="all">All</option>
+                                <option value="approved">Approved</option>
+                                <option value="rejected">Rejected</option>
+                                <option value="pending">Pending Review</option>
+                            </select>
+                        </div>
+                        <div class="clips-actions-bulk">
+                            <button class="trim-btn" onclick="showSessionManualClip()" id="btn-manual-clip-session" title="Manually clip a moment">Manual Clip</button>
+                            <button class="trim-btn" onclick="exportHighlightReel()">Highlight Reel</button>
+                            <button class="trim-btn" onclick="batchTikTok()">Batch TikTok</button>
+                            <button class="trim-btn" onclick="findDuplicates()">Find Duplicates</button>
+                            <button class="trim-btn" onclick="showMergePanel()">Merge Selected</button>
+                        </div>
+                    </div>
+                    <div id="clips-grid" class="clips-grid"></div>
+                    <div id="no-clips" class="no-clips hidden">
+                        <div class="empty-icon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        </div>
+                        <p>No highlights were detected. Try a different stream with more action!</p>
+                    </div>
+
+                    <!-- In-session Manual Clip Panel -->
+                    <div id="session-manual-clip" class="manual-clip-section hidden">
+                        <div class="manual-clip-header">
+                            <h3>Manual Clip from VOD</h3>
+                            <button class="file-remove" onclick="document.getElementById('session-manual-clip').classList.add('hidden')">&times;</button>
+                        </div>
+                        <p class="hint-text">Enter a VOD timestamp to clip the previous 30 seconds. <strong>Tip:</strong> Double-click the timeline to clip at that point. <kbd>Ctrl+Shift+C</kbd> clips at the current preview position.</p>
+                        <div class="manual-clip-controls">
+                            <div class="time-range-inputs">
+                                <div class="time-field">
+                                    <label>Timestamp (where to clip)</label>
+                                    <input type="text" id="session-clip-timestamp" placeholder="e.g. 1:23:45" autocomplete="off">
+                                </div>
+                                <div class="time-field">
+                                    <label>Duration (sec)</label>
+                                    <input type="number" id="session-clip-duration" value="30" min="5" max="120" step="5">
+                                </div>
+                            </div>
+                            <div class="manual-clip-actions">
+                                <button class="btn-primary" onclick="createSessionManualClip()">Clip It</button>
+                                <span id="session-clip-status" class="trim-status"></span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div><!-- end analyze tab -->
+
+            <!-- ==================== LIBRARY TAB ==================== -->
+            <div id="tab-library-main" class="main-tab-content">
+                <div class="page-header">
+                    <h1>Library</h1>
+                    <p class="page-subtitle">Saved VODs, sessions, and analytics</p>
+                </div>
+
+                <!-- Saved VODs -->
+                <section id="library-section" class="card glass-card">
+                    <div class="card-header">
+                        <div class="card-header-left">
+                            <div class="card-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            </div>
+                            <h2 class="card-title">Saved VODs</h2>
+                            <span id="library-count" class="badge badge-sm">0</span>
+                        </div>
+                        <button id="watch-folder-btn" class="trim-btn" onclick="toggleWatchFolder()">Watch Folder: Off</button>
+                    </div>
+                    <p class="hint-text">Previously downloaded VODs. Click one to re-analyze without re-downloading.</p>
+                    <!-- Manual Clip Controls -->
+                    <div id="manual-clip-section" class="manual-clip-section hidden">
+                        <div class="manual-clip-header">
+                            <h3>Manual Clip</h3>
+                            <button class="file-remove" onclick="hideManualClip()">&times;</button>
+                        </div>
+                        <p class="hint-text">Clip the last 30 seconds from a specific point in the VOD.</p>
+                        <div class="manual-clip-controls">
                             <div class="time-field">
-                                <label>Timestamp</label>
-                                <input type="text" id="manual-clip-timestamp" placeholder="e.g. 1:23:45 or 'end'" autocomplete="off">
+                                <label>VOD:</label>
+                                <span id="manual-clip-vod" class="manual-clip-vod-name"></span>
                             </div>
-                            <div class="time-field">
-                                <label>Duration (sec)</label>
-                                <input type="number" id="manual-clip-duration" value="30" min="5" max="120" step="5">
+                            <div class="time-range-inputs">
+                                <div class="time-field">
+                                    <label>Timestamp</label>
+                                    <input type="text" id="manual-clip-timestamp" placeholder="e.g. 1:23:45 or 'end'" autocomplete="off">
+                                </div>
+                                <div class="time-field">
+                                    <label>Duration (sec)</label>
+                                    <input type="number" id="manual-clip-duration" value="30" min="5" max="120" step="5">
+                                </div>
                             </div>
-                        </div>
-                        <div class="manual-clip-actions">
-                            <button class="btn-apply-trim" onclick="createManualClip()">Clip It</button>
-                            <button class="btn-apply-trim" id="btn-scan-triggers" onclick="scanClipTriggers()" title="Scan entire VOD for voice commands using Whisper">Scan for &quot;Clip That!&quot;</button>
-                            <span id="manual-clip-status" class="trim-status"></span>
-                        </div>
-                        <!-- Custom Trigger Words -->
-                        <details class="trigger-words-details">
-                            <summary>Custom Trigger Words</summary>
-                            <div class="trigger-words-config">
-                                <p class="api-hint">Comma-separated phrases that trigger a clip. Leave empty for defaults (clip that, clip this, clip it, clip).</p>
-                                <input type="text" id="trigger-words-input" placeholder="clip that, clip this, oh my god, insane, let's go" autocomplete="off" onchange="saveState()">
+                            <div class="manual-clip-actions">
+                                <button class="btn-primary" onclick="createManualClip()">Clip It</button>
+                                <button class="btn-primary" id="btn-scan-triggers" onclick="scanClipTriggers()" title="Scan VOD for voice commands">Scan for &quot;Clip That!&quot;</button>
+                                <span id="manual-clip-status" class="trim-status"></span>
                             </div>
-                        </details>
-                    </div>
-                </div>
-                <div id="library-list" class="library-list"></div>
-                <div id="library-empty" class="empty-state">
-                    <div class="empty-icon">&#128193;</div>
-                    <p>No saved VODs yet</p>
-                    <p class="empty-hint">Downloaded VODs will appear here for easy re-analysis</p>
-                </div>
-            </section>
-
-            <!-- Recent Sessions -->
-            <section id="sessions-section" class="card">
-                <div class="library-header">
-                    <h2>Recent Sessions</h2>
-                    <span id="sessions-count" class="badge">0</span>
-                </div>
-                <p class="library-hint">Previously analyzed clips — click to resume editing.</p>
-                <div id="sessions-list" class="library-list"></div>
-                <div id="sessions-empty" class="empty-state">
-                    <div class="empty-icon">&#128203;</div>
-                    <p>No previous sessions</p>
-                    <p class="empty-hint">Analysis results will be saved here automatically</p>
-                </div>
-            </section>
-
-            <!-- Analytics Dashboard -->
-            <section id="analytics-section" class="card">
-                <div class="library-header">
-                    <h2>Analytics</h2>
-                </div>
-                <div id="analytics-content">
-                    <div class="analytics-grid">
-                        <div class="analytics-stat">
-                            <div class="analytics-stat-value" id="stat-total-clips">0</div>
-                            <div class="analytics-stat-label">Total Clips</div>
-                        </div>
-                        <div class="analytics-stat">
-                            <div class="analytics-stat-value" id="stat-total-exports">0</div>
-                            <div class="analytics-stat-label">Exports</div>
-                        </div>
-                        <div class="analytics-stat">
-                            <div class="analytics-stat-value" id="stat-total-tiktoks">0</div>
-                            <div class="analytics-stat-label">TikToks Made</div>
-                        </div>
-                        <div class="analytics-stat">
-                            <div class="analytics-stat-value" id="stat-total-gifs">0</div>
-                            <div class="analytics-stat-label">GIFs Made</div>
+                            <details class="trigger-words-details">
+                                <summary>Custom Trigger Words</summary>
+                                <div class="trigger-words-config">
+                                    <p class="hint-text">Comma-separated phrases that trigger a clip.</p>
+                                    <input type="text" id="trigger-words-input" placeholder="clip that, clip this, oh my god, insane, let's go" autocomplete="off" onchange="saveState()">
+                                </div>
+                            </details>
                         </div>
                     </div>
-                </div>
-            </section>
-        </div><!-- end library tab -->
+                    <div id="library-list" class="library-list"></div>
+                    <div id="library-empty" class="empty-state">
+                        <div class="empty-icon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                        </div>
+                        <p>No saved VODs yet</p>
+                        <p class="empty-hint">Downloaded VODs will appear here for easy re-analysis</p>
+                    </div>
+                </section>
 
-        <!-- ==================== SETTINGS TAB ==================== -->
-        <div id="tab-settings-main" class="main-tab-content">
-
-            <!-- Export Settings -->
-            <section id="export-settings-section" class="card">
-                <div class="library-header">
-                    <h2>Export Settings</h2>
-                </div>
-                <div id="export-settings-content">
-                    <div class="export-settings-grid">
-                        <div class="export-setting">
-                            <label>Resolution</label>
-                            <select id="export-resolution">
-                                <option value="source">Source (original)</option>
-                                <option value="1080p">1080p</option>
-                                <option value="720p">720p</option>
-                                <option value="480p">480p</option>
-                            </select>
-                        </div>
-                        <div class="export-setting">
-                            <label>Format</label>
-                            <select id="export-format">
-                                <option value="mp4">MP4 (H.264)</option>
-                                <option value="webm">WebM (VP9)</option>
-                                <option value="mov">MOV (ProRes)</option>
-                            </select>
-                        </div>
-                        <div class="export-setting">
-                            <label>Quality</label>
-                            <select id="export-quality">
-                                <option value="high">High (larger files)</option>
-                                <option value="medium" selected>Medium (balanced)</option>
-                                <option value="low">Low (smaller files)</option>
-                            </select>
-                        </div>
-                        <div class="export-setting">
-                            <label>Audio</label>
-                            <select id="export-audio">
-                                <option value="aac" selected>AAC</option>
-                                <option value="copy">Copy (no re-encode)</option>
-                                <option value="none">No audio</option>
-                            </select>
+                <!-- Recent Sessions -->
+                <section id="sessions-section" class="card glass-card">
+                    <div class="card-header">
+                        <div class="card-header-left">
+                            <div class="card-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            </div>
+                            <h2 class="card-title">Recent Sessions</h2>
+                            <span id="sessions-count" class="badge badge-sm">0</span>
                         </div>
                     </div>
-                </div>
-            </section>
+                    <p class="hint-text">Previously analyzed clips &mdash; click to resume editing.</p>
+                    <div id="sessions-list" class="library-list"></div>
+                    <div id="sessions-empty" class="empty-state">
+                        <div class="empty-icon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        </div>
+                        <p>No previous sessions</p>
+                        <p class="empty-hint">Analysis results will be saved here automatically</p>
+                    </div>
+                </section>
 
-            <!-- Custom Game Profile Builder -->
-            <section id="custom-profile-section" class="card">
-                <div class="library-header">
-                    <h2>Custom Game Profile</h2>
+                <!-- Analytics -->
+                <section id="analytics-section" class="card glass-card">
+                    <div class="card-header">
+                        <div class="card-header-left">
+                            <div class="card-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                            </div>
+                            <h2 class="card-title">Analytics</h2>
+                        </div>
+                    </div>
+                    <div id="analytics-content">
+                        <div class="analytics-grid">
+                            <div class="analytics-stat">
+                                <div class="analytics-stat-value" id="stat-total-clips">0</div>
+                                <div class="analytics-stat-label">Total Clips</div>
+                            </div>
+                            <div class="analytics-stat">
+                                <div class="analytics-stat-value" id="stat-total-exports">0</div>
+                                <div class="analytics-stat-label">Exports</div>
+                            </div>
+                            <div class="analytics-stat">
+                                <div class="analytics-stat-value" id="stat-total-tiktoks">0</div>
+                                <div class="analytics-stat-label">TikToks</div>
+                            </div>
+                            <div class="analytics-stat">
+                                <div class="analytics-stat-value" id="stat-total-gifs">0</div>
+                                <div class="analytics-stat-label">GIFs</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div><!-- end library tab -->
+
+            <!-- ==================== SETTINGS TAB ==================== -->
+            <div id="tab-settings-main" class="main-tab-content">
+                <div class="page-header">
+                    <h1>Settings</h1>
+                    <p class="page-subtitle">Configure export and custom game profiles</p>
                 </div>
-                <div id="custom-profile-content">
-                    <div class="custom-profile-form">
-                        <div class="export-setting">
-                            <label>Game Name</label>
-                            <input type="text" id="cp-name" placeholder="My Game" autocomplete="off">
+
+                <!-- Export Settings -->
+                <section id="export-settings-section" class="card glass-card">
+                    <div class="card-header">
+                        <div class="card-header-left">
+                            <div class="card-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            </div>
+                            <h2 class="card-title">Export Settings</h2>
                         </div>
-                        <div class="export-setting">
-                            <label>Profile ID</label>
-                            <input type="text" id="cp-id" placeholder="my_game" autocomplete="off">
-                        </div>
+                    </div>
+                    <div id="export-settings-content">
                         <div class="export-settings-grid">
                             <div class="export-setting">
-                                <label>Audio Threshold (dB)</label>
-                                <input type="number" id="cp-audio-threshold" value="-8" min="-30" max="0" step="1">
-                            </div>
-                            <div class="export-setting">
-                                <label>Audio Weight (0-1)</label>
-                                <input type="number" id="cp-audio-weight" value="0.7" min="0" max="1" step="0.1">
-                            </div>
-                            <div class="export-setting">
-                                <label>Intensity Threshold</label>
-                                <input type="number" id="cp-intensity" value="0.35" min="0.1" max="1" step="0.05">
-                            </div>
-                            <div class="export-setting">
-                                <label>Min Clip (sec)</label>
-                                <input type="number" id="cp-min-clip" value="20" min="5" max="120">
-                            </div>
-                            <div class="export-setting">
-                                <label>Max Clip (sec)</label>
-                                <input type="number" id="cp-max-clip" value="60" min="10" max="300">
-                            </div>
-                            <div class="export-setting">
-                                <label>Merge Gap (sec)</label>
-                                <input type="number" id="cp-merge-gap" value="8" min="1" max="60">
-                            </div>
-                        </div>
-                        <div class="export-setting">
-                            <label>AI System Prompt (for AI Vision mode)</label>
-                            <textarea id="cp-ai-prompt" rows="3" placeholder="You are an expert analyst for this game. Analyze gameplay frames for exciting moments..."></textarea>
-                        </div>
-                        <div class="custom-profile-footer">
-                            <button class="btn-apply-trim" onclick="saveCustomProfile()">Save Profile</button>
-                            <span id="cp-status" class="trim-status"></span>
-                        </div>
-                    </div>
-                </div>
-            </section>
-        </div><!-- end settings tab -->
-
-        <!-- Clip Preview + Editor Modal -->
-        <div id="preview-modal" class="modal hidden" onclick="closeModal(event)">
-            <div class="modal-content editor-modal">
-                <button class="modal-close" onclick="closePreview()">&times;</button>
-                <video id="preview-video" controls></video>
-                <div class="modal-info">
-                    <h3 id="modal-label"></h3>
-                    <p id="modal-time"></p>
-                </div>
-
-                <!-- Editor Tabs -->
-                <div class="editor-tabs">
-                    <button class="editor-tab active" data-tab="trim" onclick="switchEditorTab('trim')">Trim</button>
-                    <button class="editor-tab" data-tab="crop" onclick="switchEditorTab('crop')">Crop</button>
-                    <button class="editor-tab" data-tab="effects" onclick="switchEditorTab('effects')">Effects</button>
-                    <button class="editor-tab" data-tab="captions" onclick="switchEditorTab('captions')">Captions</button>
-                    <button class="editor-tab" data-tab="more" onclick="switchEditorTab('more')">More</button>
-                </div>
-
-                <!-- TRIM TAB -->
-                <div id="tab-trim" class="editor-tab-content active">
-                    <!-- Visual Timeline Scrubber -->
-                    <div class="timeline-scrubber">
-                        <div class="timeline-labels">
-                            <span id="timeline-start-label">0:00</span>
-                            <span class="timeline-title">VOD Timeline</span>
-                            <span id="timeline-end-label">0:00</span>
-                        </div>
-                        <div class="timeline-track" id="timeline-track">
-                            <div class="timeline-range" id="timeline-range"></div>
-                            <div class="timeline-handle timeline-handle-start" id="timeline-handle-start"></div>
-                            <div class="timeline-handle timeline-handle-end" id="timeline-handle-end"></div>
-                        </div>
-                        <div class="timeline-info">
-                            <span id="timeline-range-display">0:00 - 0:00</span>
-                            <span id="timeline-duration-display">0s</span>
-                        </div>
-                    </div>
-
-                    <!-- Fine-tune controls -->
-                    <div class="trim-controls">
-                        <div class="trim-field">
-                            <label>Start</label>
-                            <div class="trim-input-row">
-                                <button class="trim-btn" onclick="adjustTrim('start', -5)">-5s</button>
-                                <button class="trim-btn" onclick="adjustTrim('start', -1)">-1s</button>
-                                <input type="number" id="trim-start" step="0.5" min="0"
-                                    onchange="onTrimInputChange()" oninput="onTrimInputChange()">
-                                <button class="trim-btn" onclick="adjustTrim('start', 1)">+1s</button>
-                                <button class="trim-btn" onclick="adjustTrim('start', 5)">+5s</button>
-                            </div>
-                        </div>
-                        <div class="trim-field">
-                            <label>End</label>
-                            <div class="trim-input-row">
-                                <button class="trim-btn" onclick="adjustTrim('end', -5)">-5s</button>
-                                <button class="trim-btn" onclick="adjustTrim('end', -1)">-1s</button>
-                                <input type="number" id="trim-end" step="0.5" min="0"
-                                    onchange="onTrimInputChange()" oninput="onTrimInputChange()">
-                                <button class="trim-btn" onclick="adjustTrim('end', 1)">+1s</button>
-                                <button class="trim-btn" onclick="adjustTrim('end', 5)">+5s</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="trim-footer">
-                        <span class="trim-duration">Duration: <strong id="trim-duration-display">0s</strong></span>
-                        <span id="trim-status" class="trim-status"></span>
-                        <button id="trim-apply-btn" class="btn-apply-trim" onclick="applyTrim()">Re-cut Clip</button>
-                    </div>
-                </div>
-
-                <!-- CROP TAB -->
-                <div id="tab-crop" class="editor-tab-content">
-                    <div class="crop-presets">
-                        <button class="preset-btn active" onclick="setCropPreset('original')">Original</button>
-                        <button class="preset-btn" onclick="setCropPreset('16:9')">16:9</button>
-                        <button class="preset-btn" onclick="setCropPreset('4:3')">4:3</button>
-                        <button class="preset-btn" onclick="setCropPreset('1:1')">1:1</button>
-                        <button class="preset-btn" onclick="setCropPreset('9:16')">9:16</button>
-                        <button class="preset-btn" onclick="setCropPreset('custom')">Custom</button>
-                    </div>
-                    <div class="crop-canvas-wrap">
-                        <canvas id="crop-canvas"></canvas>
-                        <p class="crop-hint">Drag to reposition the crop region</p>
-                    </div>
-                    <div class="crop-footer">
-                        <span id="crop-size-display" class="trim-duration"></span>
-                        <span id="crop-status" class="trim-status"></span>
-                        <button id="crop-export-btn" class="btn-apply-trim" onclick="exportCrop()">Export Cropped</button>
-                    </div>
-                </div>
-
-                <!-- EFFECTS TAB -->
-                <div id="tab-effects" class="editor-tab-content">
-                    <div class="effects-grid">
-                        <div class="effect-control">
-                            <label>Speed</label>
-                            <div class="effect-slider-row">
-                                <input type="range" id="fx-speed" min="0.25" max="4" step="0.25" value="1"
-                                    oninput="onEffectChange()">
-                                <span id="fx-speed-val" class="effect-val">1x</span>
-                            </div>
-                        </div>
-                        <div class="effect-control">
-                            <label>Brightness</label>
-                            <div class="effect-slider-row">
-                                <input type="range" id="fx-brightness" min="-1" max="1" step="0.05" value="0"
-                                    oninput="onEffectChange()">
-                                <span id="fx-brightness-val" class="effect-val">0</span>
-                            </div>
-                        </div>
-                        <div class="effect-control">
-                            <label>Contrast</label>
-                            <div class="effect-slider-row">
-                                <input type="range" id="fx-contrast" min="0.5" max="2" step="0.05" value="1"
-                                    oninput="onEffectChange()">
-                                <span id="fx-contrast-val" class="effect-val">1.0</span>
-                            </div>
-                        </div>
-                        <div class="effect-control">
-                            <label>Volume</label>
-                            <div class="effect-slider-row">
-                                <input type="range" id="fx-volume" min="0" max="3" step="0.1" value="1"
-                                    oninput="onEffectChange()">
-                                <span id="fx-volume-val" class="effect-val">100%</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="effects-footer">
-                        <button class="trim-btn" onclick="resetEffects()">Reset All</button>
-                        <span id="fx-status" class="trim-status"></span>
-                        <button id="fx-export-btn" class="btn-apply-trim" onclick="exportWithEffects()">Export with Effects</button>
-                    </div>
-                </div>
-
-                <!-- CAPTIONS TAB -->
-                <div id="tab-captions" class="editor-tab-content">
-                    <div class="caption-controls">
-                        <div class="caption-field">
-                            <label>Caption Text</label>
-                            <textarea id="caption-text" rows="2" placeholder="Enter caption text..."></textarea>
-                        </div>
-                        <div class="caption-options">
-                            <div class="caption-option">
-                                <label>Position</label>
-                                <select id="caption-position">
-                                    <option value="bottom">Bottom</option>
-                                    <option value="top">Top</option>
-                                    <option value="center">Center</option>
+                                <label>Resolution</label>
+                                <select id="export-resolution">
+                                    <option value="source">Source (original)</option>
+                                    <option value="1080p">1080p</option>
+                                    <option value="720p">720p</option>
+                                    <option value="480p">480p</option>
                                 </select>
                             </div>
-                            <div class="caption-option">
-                                <label>Size</label>
-                                <input type="range" id="caption-size" min="24" max="96" value="48" oninput="document.getElementById('caption-size-val').textContent=this.value+'px'">
-                                <span id="caption-size-val" class="effect-val">48px</span>
+                            <div class="export-setting">
+                                <label>Format</label>
+                                <select id="export-format">
+                                    <option value="mp4">MP4 (H.264)</option>
+                                    <option value="webm">WebM (VP9)</option>
+                                    <option value="mov">MOV (ProRes)</option>
+                                </select>
                             </div>
-                            <div class="caption-option">
-                                <label>Color</label>
-                                <select id="caption-color">
-                                    <option value="white">White</option>
-                                    <option value="yellow">Yellow</option>
-                                    <option value="red">Red</option>
-                                    <option value="cyan">Cyan</option>
+                            <div class="export-setting">
+                                <label>Quality</label>
+                                <select id="export-quality">
+                                    <option value="high">High (larger files)</option>
+                                    <option value="medium" selected>Medium (balanced)</option>
+                                    <option value="low">Low (smaller files)</option>
+                                </select>
+                            </div>
+                            <div class="export-setting">
+                                <label>Audio</label>
+                                <select id="export-audio">
+                                    <option value="aac" selected>AAC</option>
+                                    <option value="copy">Copy (no re-encode)</option>
+                                    <option value="none">No audio</option>
                                 </select>
                             </div>
                         </div>
                     </div>
-                    <div class="caption-footer">
-                        <span id="caption-status" class="trim-status"></span>
-                        <button id="caption-export-btn" class="btn-apply-trim" onclick="exportCaptions()">Export with Captions</button>
-                    </div>
-                </div>
+                </section>
 
-                <!-- MORE TAB -->
-                <div id="tab-more" class="editor-tab-content">
-                    <div class="more-tools-grid">
-                        <div class="more-tool-card" onclick="showWatermarkPanel()">
-                            <div class="more-tool-icon">&#128247;</div>
-                            <div class="more-tool-name">Watermark</div>
-                            <div class="more-tool-desc">Add logo overlay</div>
-                        </div>
-                        <div class="more-tool-card" onclick="showZoomPanPanel()">
-                            <div class="more-tool-icon">&#128269;</div>
-                            <div class="more-tool-name">Zoom/Pan</div>
-                            <div class="more-tool-desc">Ken Burns effect</div>
-                        </div>
-                        <div class="more-tool-card" onclick="showSfxPanel()">
-                            <div class="more-tool-icon">&#127925;</div>
-                            <div class="more-tool-name">Sound FX</div>
-                            <div class="more-tool-desc">Add sound effects</div>
-                        </div>
-                        <div class="more-tool-card" onclick="showGifPanel()">
-                            <div class="more-tool-icon">&#127910;</div>
-                            <div class="more-tool-name">GIF</div>
-                            <div class="more-tool-desc">Export as GIF</div>
-                        </div>
-                        <div class="more-tool-card" onclick="splitClipUI()">
-                            <div class="more-tool-icon">&#9986;</div>
-                            <div class="more-tool-name">Split</div>
-                            <div class="more-tool-desc">Cut clip in two</div>
-                        </div>
-                        <div class="more-tool-card" onclick="showMergePanel()">
-                            <div class="more-tool-icon">&#128279;</div>
-                            <div class="more-tool-name">Merge</div>
-                            <div class="more-tool-desc">Combine clips</div>
-                        </div>
-                    </div>
-
-                    <!-- Sub-panels (hidden by default, shown when tool card clicked) -->
-                    <div id="watermark-panel" class="more-sub-panel hidden">
-                        <h4>Watermark</h4>
-                        <div class="watermark-controls">
-                            <div class="watermark-upload-row">
-                                <input type="file" id="watermark-file" accept=".png,.jpg,.jpeg" hidden>
-                                <button class="trim-btn" onclick="document.getElementById('watermark-file').click()">Upload Logo</button>
-                                <select id="watermark-select"><option value="">Select watermark...</option></select>
+                <!-- Custom Game Profile -->
+                <section id="custom-profile-section" class="card glass-card">
+                    <div class="card-header">
+                        <div class="card-header-left">
+                            <div class="card-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                             </div>
-                            <div class="watermark-options">
+                            <h2 class="card-title">Custom Game Profile</h2>
+                        </div>
+                    </div>
+                    <div id="custom-profile-content">
+                        <div class="custom-profile-form">
+                            <div class="export-setting">
+                                <label>Game Name</label>
+                                <input type="text" id="cp-name" placeholder="My Game" autocomplete="off">
+                            </div>
+                            <div class="export-setting">
+                                <label>Profile ID</label>
+                                <input type="text" id="cp-id" placeholder="my_game" autocomplete="off">
+                            </div>
+                            <div class="export-settings-grid">
+                                <div class="export-setting">
+                                    <label>Audio Threshold (dB)</label>
+                                    <input type="number" id="cp-audio-threshold" value="-8" min="-30" max="0" step="1">
+                                </div>
+                                <div class="export-setting">
+                                    <label>Audio Weight (0-1)</label>
+                                    <input type="number" id="cp-audio-weight" value="0.7" min="0" max="1" step="0.1">
+                                </div>
+                                <div class="export-setting">
+                                    <label>Intensity Threshold</label>
+                                    <input type="number" id="cp-intensity" value="0.35" min="0.1" max="1" step="0.05">
+                                </div>
+                                <div class="export-setting">
+                                    <label>Min Clip (sec)</label>
+                                    <input type="number" id="cp-min-clip" value="20" min="5" max="120">
+                                </div>
+                                <div class="export-setting">
+                                    <label>Max Clip (sec)</label>
+                                    <input type="number" id="cp-max-clip" value="60" min="10" max="300">
+                                </div>
+                                <div class="export-setting">
+                                    <label>Merge Gap (sec)</label>
+                                    <input type="number" id="cp-merge-gap" value="8" min="1" max="60">
+                                </div>
+                            </div>
+                            <div class="export-setting">
+                                <label>AI System Prompt (for AI Vision mode)</label>
+                                <textarea id="cp-ai-prompt" rows="3" placeholder="You are an expert analyst for this game..."></textarea>
+                            </div>
+                            <div class="custom-profile-footer">
+                                <button class="btn-primary" onclick="saveCustomProfile()">Save Profile</button>
+                                <span id="cp-status" class="trim-status"></span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div><!-- end settings tab -->
+
+            <!-- Clip Preview + Editor Modal -->
+            <div id="preview-modal" class="modal hidden" onclick="closeModal(event)">
+                <div class="modal-content editor-modal">
+                    <button class="modal-close" onclick="closePreview()">&times;</button>
+                    <video id="preview-video" controls></video>
+                    <div class="modal-info">
+                        <h3 id="modal-label"></h3>
+                        <p id="modal-time"></p>
+                    </div>
+
+                    <!-- Editor Tabs -->
+                    <div class="editor-tabs">
+                        <button class="editor-tab active" data-tab="trim" onclick="switchEditorTab('trim')">Trim</button>
+                        <button class="editor-tab" data-tab="crop" onclick="switchEditorTab('crop')">Crop</button>
+                        <button class="editor-tab" data-tab="effects" onclick="switchEditorTab('effects')">Effects</button>
+                        <button class="editor-tab" data-tab="captions" onclick="switchEditorTab('captions')">Captions</button>
+                        <button class="editor-tab" data-tab="more" onclick="switchEditorTab('more')">More</button>
+                    </div>
+
+                    <!-- TRIM TAB -->
+                    <div id="tab-trim" class="editor-tab-content active">
+                        <div class="timeline-scrubber">
+                            <div class="timeline-labels">
+                                <span id="timeline-start-label">0:00</span>
+                                <span class="timeline-title">VOD Timeline</span>
+                                <span id="timeline-end-label">0:00</span>
+                            </div>
+                            <div class="timeline-track" id="timeline-track">
+                                <div class="timeline-range" id="timeline-range"></div>
+                                <div class="timeline-handle timeline-handle-start" id="timeline-handle-start"></div>
+                                <div class="timeline-handle timeline-handle-end" id="timeline-handle-end"></div>
+                            </div>
+                            <div class="timeline-info">
+                                <span id="timeline-range-display">0:00 - 0:00</span>
+                                <span id="timeline-duration-display">0s</span>
+                            </div>
+                        </div>
+                        <div class="trim-controls">
+                            <div class="trim-field">
+                                <label>Start</label>
+                                <div class="trim-input-row">
+                                    <button class="trim-btn" onclick="adjustTrim('start', -5)">-5s</button>
+                                    <button class="trim-btn" onclick="adjustTrim('start', -1)">-1s</button>
+                                    <input type="number" id="trim-start" step="0.5" min="0" onchange="onTrimInputChange()" oninput="onTrimInputChange()">
+                                    <button class="trim-btn" onclick="adjustTrim('start', 1)">+1s</button>
+                                    <button class="trim-btn" onclick="adjustTrim('start', 5)">+5s</button>
+                                </div>
+                            </div>
+                            <div class="trim-field">
+                                <label>End</label>
+                                <div class="trim-input-row">
+                                    <button class="trim-btn" onclick="adjustTrim('end', -5)">-5s</button>
+                                    <button class="trim-btn" onclick="adjustTrim('end', -1)">-1s</button>
+                                    <input type="number" id="trim-end" step="0.5" min="0" onchange="onTrimInputChange()" oninput="onTrimInputChange()">
+                                    <button class="trim-btn" onclick="adjustTrim('end', 1)">+1s</button>
+                                    <button class="trim-btn" onclick="adjustTrim('end', 5)">+5s</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="trim-footer">
+                            <span class="trim-duration">Duration: <strong id="trim-duration-display">0s</strong></span>
+                            <span id="trim-status" class="trim-status"></span>
+                            <button id="trim-apply-btn" class="btn-primary" onclick="applyTrim()">Re-cut Clip</button>
+                        </div>
+                    </div>
+
+                    <!-- CROP TAB -->
+                    <div id="tab-crop" class="editor-tab-content">
+                        <div class="crop-presets">
+                            <button class="preset-btn active" onclick="setCropPreset('original')">Original</button>
+                            <button class="preset-btn" onclick="setCropPreset('16:9')">16:9</button>
+                            <button class="preset-btn" onclick="setCropPreset('4:3')">4:3</button>
+                            <button class="preset-btn" onclick="setCropPreset('1:1')">1:1</button>
+                            <button class="preset-btn" onclick="setCropPreset('9:16')">9:16</button>
+                            <button class="preset-btn" onclick="setCropPreset('custom')">Custom</button>
+                        </div>
+                        <div class="crop-canvas-wrap">
+                            <canvas id="crop-canvas"></canvas>
+                            <p class="crop-hint">Drag to reposition the crop region</p>
+                        </div>
+                        <div class="crop-footer">
+                            <span id="crop-size-display" class="trim-duration"></span>
+                            <span id="crop-status" class="trim-status"></span>
+                            <button id="crop-export-btn" class="btn-primary" onclick="exportCrop()">Export Cropped</button>
+                        </div>
+                    </div>
+
+                    <!-- EFFECTS TAB -->
+                    <div id="tab-effects" class="editor-tab-content">
+                        <div class="effects-grid">
+                            <div class="effect-control">
+                                <label>Speed</label>
+                                <div class="effect-slider-row">
+                                    <input type="range" id="fx-speed" min="0.25" max="4" step="0.25" value="1" oninput="onEffectChange()">
+                                    <span id="fx-speed-val" class="effect-val">1x</span>
+                                </div>
+                            </div>
+                            <div class="effect-control">
+                                <label>Brightness</label>
+                                <div class="effect-slider-row">
+                                    <input type="range" id="fx-brightness" min="-1" max="1" step="0.05" value="0" oninput="onEffectChange()">
+                                    <span id="fx-brightness-val" class="effect-val">0</span>
+                                </div>
+                            </div>
+                            <div class="effect-control">
+                                <label>Contrast</label>
+                                <div class="effect-slider-row">
+                                    <input type="range" id="fx-contrast" min="0.5" max="2" step="0.05" value="1" oninput="onEffectChange()">
+                                    <span id="fx-contrast-val" class="effect-val">1.0</span>
+                                </div>
+                            </div>
+                            <div class="effect-control">
+                                <label>Volume</label>
+                                <div class="effect-slider-row">
+                                    <input type="range" id="fx-volume" min="0" max="3" step="0.1" value="1" oninput="onEffectChange()">
+                                    <span id="fx-volume-val" class="effect-val">100%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="effects-footer">
+                            <button class="trim-btn" onclick="resetEffects()">Reset All</button>
+                            <span id="fx-status" class="trim-status"></span>
+                            <button id="fx-export-btn" class="btn-primary" onclick="exportWithEffects()">Export with Effects</button>
+                        </div>
+                    </div>
+
+                    <!-- CAPTIONS TAB -->
+                    <div id="tab-captions" class="editor-tab-content">
+                        <div class="caption-controls">
+                            <div class="caption-field">
+                                <label>Caption Text</label>
+                                <textarea id="caption-text" rows="2" placeholder="Enter caption text..."></textarea>
+                            </div>
+                            <div class="caption-options">
                                 <div class="caption-option">
                                     <label>Position</label>
-                                    <select id="watermark-position">
-                                        <option value="bottom-right">Bottom Right</option>
-                                        <option value="bottom-left">Bottom Left</option>
-                                        <option value="top-right">Top Right</option>
-                                        <option value="top-left">Top Left</option>
+                                    <select id="caption-position">
+                                        <option value="bottom">Bottom</option>
+                                        <option value="top">Top</option>
                                         <option value="center">Center</option>
                                     </select>
                                 </div>
                                 <div class="caption-option">
-                                    <label>Opacity</label>
-                                    <input type="range" id="watermark-opacity" min="0.1" max="1" step="0.1" value="0.7" oninput="document.getElementById('wm-opacity-val').textContent=Math.round(this.value*100)+'%'">
-                                    <span id="wm-opacity-val" class="effect-val">70%</span>
+                                    <label>Size</label>
+                                    <input type="range" id="caption-size" min="24" max="96" value="48" oninput="document.getElementById('caption-size-val').textContent=this.value+'px'">
+                                    <span id="caption-size-val" class="effect-val">48px</span>
                                 </div>
                                 <div class="caption-option">
-                                    <label>Size</label>
-                                    <input type="range" id="watermark-scale" min="0.05" max="0.4" step="0.05" value="0.15" oninput="document.getElementById('wm-scale-val').textContent=Math.round(this.value*100)+'%'">
-                                    <span id="wm-scale-val" class="effect-val">15%</span>
+                                    <label>Color</label>
+                                    <select id="caption-color">
+                                        <option value="white">White</option>
+                                        <option value="yellow">Yellow</option>
+                                        <option value="red">Red</option>
+                                        <option value="cyan">Cyan</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
-                        <div class="more-panel-footer">
-                            <span id="watermark-status" class="trim-status"></span>
-                            <button class="btn-apply-trim" onclick="exportWatermark()">Apply Watermark</button>
+                        <div class="caption-footer">
+                            <span id="caption-status" class="trim-status"></span>
+                            <button id="caption-export-btn" class="btn-primary" onclick="exportCaptions()">Export with Captions</button>
                         </div>
                     </div>
 
-                    <div id="zoompan-panel" class="more-sub-panel hidden">
-                        <h4>Zoom / Pan Effect</h4>
-                        <div class="zoompan-controls">
-                            <div class="caption-option">
-                                <label>Start Zoom</label>
-                                <input type="range" id="zoom-start" min="1" max="2" step="0.1" value="1" oninput="document.getElementById('zoom-start-val').textContent=this.value+'x'">
-                                <span id="zoom-start-val" class="effect-val">1x</span>
+                    <!-- MORE TAB -->
+                    <div id="tab-more" class="editor-tab-content">
+                        <div class="more-tools-grid">
+                            <div class="more-tool-card" onclick="showWatermarkPanel()">
+                                <div class="more-tool-icon">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                </div>
+                                <div class="more-tool-name">Watermark</div>
+                                <div class="more-tool-desc">Add logo overlay</div>
                             </div>
-                            <div class="caption-option">
-                                <label>End Zoom</label>
-                                <input type="range" id="zoom-end" min="1" max="2" step="0.1" value="1.3" oninput="document.getElementById('zoom-end-val').textContent=this.value+'x'">
-                                <span id="zoom-end-val" class="effect-val">1.3x</span>
+                            <div class="more-tool-card" onclick="showZoomPanPanel()">
+                                <div class="more-tool-icon">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                                </div>
+                                <div class="more-tool-name">Zoom/Pan</div>
+                                <div class="more-tool-desc">Ken Burns effect</div>
+                            </div>
+                            <div class="more-tool-card" onclick="showSfxPanel()">
+                                <div class="more-tool-icon">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                                </div>
+                                <div class="more-tool-name">Sound FX</div>
+                                <div class="more-tool-desc">Add sound effects</div>
+                            </div>
+                            <div class="more-tool-card" onclick="showGifPanel()">
+                                <div class="more-tool-icon">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>
+                                </div>
+                                <div class="more-tool-name">GIF</div>
+                                <div class="more-tool-desc">Export as GIF</div>
+                            </div>
+                            <div class="more-tool-card" onclick="splitClipUI()">
+                                <div class="more-tool-icon">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M9.5 15.5L15 9.5"/></svg>
+                                </div>
+                                <div class="more-tool-name">Split</div>
+                                <div class="more-tool-desc">Cut clip in two</div>
+                            </div>
+                            <div class="more-tool-card" onclick="showMergePanel()">
+                                <div class="more-tool-icon">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                                </div>
+                                <div class="more-tool-name">Merge</div>
+                                <div class="more-tool-desc">Combine clips</div>
                             </div>
                         </div>
-                        <div class="more-panel-footer">
-                            <span id="zoompan-status" class="trim-status"></span>
-                            <button class="btn-apply-trim" onclick="exportZoomPan()">Export with Zoom</button>
+
+                        <!-- Sub-panels -->
+                        <div id="watermark-panel" class="more-sub-panel hidden">
+                            <h4>Watermark</h4>
+                            <div class="watermark-controls">
+                                <div class="watermark-upload-row">
+                                    <input type="file" id="watermark-file" accept=".png,.jpg,.jpeg" hidden>
+                                    <button class="trim-btn" onclick="document.getElementById('watermark-file').click()">Upload Logo</button>
+                                    <select id="watermark-select"><option value="">Select watermark...</option></select>
+                                </div>
+                                <div class="watermark-options">
+                                    <div class="caption-option">
+                                        <label>Position</label>
+                                        <select id="watermark-position">
+                                            <option value="bottom-right">Bottom Right</option>
+                                            <option value="bottom-left">Bottom Left</option>
+                                            <option value="top-right">Top Right</option>
+                                            <option value="top-left">Top Left</option>
+                                            <option value="center">Center</option>
+                                        </select>
+                                    </div>
+                                    <div class="caption-option">
+                                        <label>Opacity</label>
+                                        <input type="range" id="watermark-opacity" min="0.1" max="1" step="0.1" value="0.7" oninput="document.getElementById('wm-opacity-val').textContent=Math.round(this.value*100)+'%'">
+                                        <span id="wm-opacity-val" class="effect-val">70%</span>
+                                    </div>
+                                    <div class="caption-option">
+                                        <label>Size</label>
+                                        <input type="range" id="watermark-scale" min="0.05" max="0.4" step="0.05" value="0.15" oninput="document.getElementById('wm-scale-val').textContent=Math.round(this.value*100)+'%'">
+                                        <span id="wm-scale-val" class="effect-val">15%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="more-panel-footer">
+                                <span id="watermark-status" class="trim-status"></span>
+                                <button class="btn-primary" onclick="exportWatermark()">Apply Watermark</button>
+                            </div>
+                        </div>
+
+                        <div id="zoompan-panel" class="more-sub-panel hidden">
+                            <h4>Zoom / Pan Effect</h4>
+                            <div class="zoompan-controls">
+                                <div class="caption-option">
+                                    <label>Start Zoom</label>
+                                    <input type="range" id="zoom-start" min="1" max="2" step="0.1" value="1" oninput="document.getElementById('zoom-start-val').textContent=this.value+'x'">
+                                    <span id="zoom-start-val" class="effect-val">1x</span>
+                                </div>
+                                <div class="caption-option">
+                                    <label>End Zoom</label>
+                                    <input type="range" id="zoom-end" min="1" max="2" step="0.1" value="1.3" oninput="document.getElementById('zoom-end-val').textContent=this.value+'x'">
+                                    <span id="zoom-end-val" class="effect-val">1.3x</span>
+                                </div>
+                            </div>
+                            <div class="more-panel-footer">
+                                <span id="zoompan-status" class="trim-status"></span>
+                                <button class="btn-primary" onclick="exportZoomPan()">Export with Zoom</button>
+                            </div>
+                        </div>
+
+                        <div id="sfx-panel" class="more-sub-panel hidden">
+                            <h4>Sound Effects</h4>
+                            <div class="sfx-controls">
+                                <div class="sfx-upload-row">
+                                    <input type="file" id="sfx-file" accept=".mp3,.wav,.ogg" hidden>
+                                    <button class="trim-btn" onclick="document.getElementById('sfx-file').click()">Upload SFX</button>
+                                    <select id="sfx-select"><option value="">Select sound...</option></select>
+                                </div>
+                                <div class="caption-option">
+                                    <label>At Time (s)</label>
+                                    <input type="number" id="sfx-timestamp" value="0" min="0" step="0.5">
+                                </div>
+                                <div class="caption-option">
+                                    <label>Volume</label>
+                                    <input type="range" id="sfx-volume" min="0.1" max="2" step="0.1" value="0.8" oninput="document.getElementById('sfx-vol-val').textContent=Math.round(this.value*100)+'%'">
+                                    <span id="sfx-vol-val" class="effect-val">80%</span>
+                                </div>
+                            </div>
+                            <div class="more-panel-footer">
+                                <span id="sfx-status" class="trim-status"></span>
+                                <button class="btn-primary" onclick="exportSfx()">Add Sound Effect</button>
+                            </div>
+                        </div>
+
+                        <div id="gif-panel" class="more-sub-panel hidden">
+                            <h4>GIF Export</h4>
+                            <div class="gif-controls">
+                                <div class="caption-option">
+                                    <label>Start Offset (s)</label>
+                                    <input type="number" id="gif-start" value="0" min="0" step="0.5">
+                                </div>
+                                <div class="caption-option">
+                                    <label>Duration (s)</label>
+                                    <input type="number" id="gif-duration" value="5" min="1" max="30" step="1">
+                                </div>
+                                <div class="caption-option">
+                                    <label>FPS</label>
+                                    <input type="range" id="gif-fps" min="8" max="30" value="15" oninput="document.getElementById('gif-fps-val').textContent=this.value">
+                                    <span id="gif-fps-val" class="effect-val">15</span>
+                                </div>
+                                <div class="caption-option">
+                                    <label>Width</label>
+                                    <select id="gif-width">
+                                        <option value="320">320px</option>
+                                        <option value="480" selected>480px</option>
+                                        <option value="640">640px</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="more-panel-footer">
+                                <span id="gif-status" class="trim-status"></span>
+                                <button class="btn-primary" onclick="exportGif()">Export GIF</button>
+                            </div>
+                        </div>
+
+                        <div id="split-panel" class="more-sub-panel hidden">
+                            <h4>Split Clip</h4>
+                            <div class="split-controls">
+                                <div class="caption-option">
+                                    <label>Split At (seconds)</label>
+                                    <input type="number" id="split-time" value="5" min="0.5" step="0.5">
+                                </div>
+                                <p class="hint-text">Splits the clip into two parts at the specified time.</p>
+                            </div>
+                            <div class="more-panel-footer">
+                                <span id="split-status" class="trim-status"></span>
+                                <button class="btn-primary" onclick="splitClip()">Split Clip</button>
+                            </div>
+                        </div>
+
+                        <div id="merge-panel" class="more-sub-panel hidden">
+                            <h4>Merge Clips</h4>
+                            <div class="merge-controls">
+                                <p class="hint-text">Select clips to merge into one highlight reel:</p>
+                                <div id="merge-clip-list" class="merge-clip-list"></div>
+                                <div class="caption-option">
+                                    <label>Transition</label>
+                                    <select id="merge-transition">
+                                        <option value="none">None (hard cut)</option>
+                                        <option value="fade">Fade</option>
+                                        <option value="wipe">Wipe</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="more-panel-footer">
+                                <span id="merge-status" class="trim-status"></span>
+                                <button class="btn-primary" onclick="mergeClips()">Merge Selected</button>
+                            </div>
                         </div>
                     </div>
 
-                    <div id="sfx-panel" class="more-sub-panel hidden">
-                        <h4>Sound Effects</h4>
-                        <div class="sfx-controls">
-                            <div class="sfx-upload-row">
-                                <input type="file" id="sfx-file" accept=".mp3,.wav,.ogg" hidden>
-                                <button class="trim-btn" onclick="document.getElementById('sfx-file').click()">Upload SFX</button>
-                                <select id="sfx-select"><option value="">Select sound...</option></select>
-                            </div>
-                            <div class="caption-option">
-                                <label>At Time (s)</label>
-                                <input type="number" id="sfx-timestamp" value="0" min="0" step="0.5" class="trim-input-row input">
-                            </div>
-                            <div class="caption-option">
-                                <label>Volume</label>
-                                <input type="range" id="sfx-volume" min="0.1" max="2" step="0.1" value="0.8" oninput="document.getElementById('sfx-vol-val').textContent=Math.round(this.value*100)+'%'">
-                                <span id="sfx-vol-val" class="effect-val">80%</span>
-                            </div>
-                        </div>
-                        <div class="more-panel-footer">
-                            <span id="sfx-status" class="trim-status"></span>
-                            <button class="btn-apply-trim" onclick="exportSfx()">Add Sound Effect</button>
-                        </div>
+                    <div class="modal-actions">
+                        <button class="btn-download" onclick="downloadFromModal()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Download
+                        </button>
+                        <button class="btn-tiktok" onclick="openTikTokEditor()">TikTok</button>
+                        <button class="btn-youtube" onclick="openYouTubeShortEditor()">YT Short</button>
+                        <button class="btn-upload-yt" onclick="uploadToYouTube()">Upload YT</button>
+                        <button class="btn-upload-tt" onclick="uploadToTikTok()">Upload TT</button>
                     </div>
-
-                    <div id="gif-panel" class="more-sub-panel hidden">
-                        <h4>GIF Export</h4>
-                        <div class="gif-controls">
-                            <div class="caption-option">
-                                <label>Start Offset (s)</label>
-                                <input type="number" id="gif-start" value="0" min="0" step="0.5">
-                            </div>
-                            <div class="caption-option">
-                                <label>Duration (s)</label>
-                                <input type="number" id="gif-duration" value="5" min="1" max="30" step="1">
-                            </div>
-                            <div class="caption-option">
-                                <label>FPS</label>
-                                <input type="range" id="gif-fps" min="8" max="30" value="15" oninput="document.getElementById('gif-fps-val').textContent=this.value">
-                                <span id="gif-fps-val" class="effect-val">15</span>
-                            </div>
-                            <div class="caption-option">
-                                <label>Width</label>
-                                <select id="gif-width">
-                                    <option value="320">320px</option>
-                                    <option value="480" selected>480px</option>
-                                    <option value="640">640px</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="more-panel-footer">
-                            <span id="gif-status" class="trim-status"></span>
-                            <button class="btn-apply-trim" onclick="exportGif()">Export GIF</button>
-                        </div>
-                    </div>
-
-                    <div id="split-panel" class="more-sub-panel hidden">
-                        <h4>Split Clip</h4>
-                        <div class="split-controls">
-                            <div class="caption-option">
-                                <label>Split At (seconds)</label>
-                                <input type="number" id="split-time" value="5" min="0.5" step="0.5">
-                            </div>
-                            <p class="api-hint">Splits the clip into two parts at the specified time. Both parts will appear in your clips list.</p>
-                        </div>
-                        <div class="more-panel-footer">
-                            <span id="split-status" class="trim-status"></span>
-                            <button class="btn-apply-trim" onclick="splitClip()">Split Clip</button>
-                        </div>
-                    </div>
-
-                    <div id="merge-panel" class="more-sub-panel hidden">
-                        <h4>Merge Clips</h4>
-                        <div class="merge-controls">
-                            <p class="api-hint">Select clips to merge into one highlight reel:</p>
-                            <div id="merge-clip-list" class="merge-clip-list"></div>
-                            <div class="caption-option">
-                                <label>Transition</label>
-                                <select id="merge-transition">
-                                    <option value="none">None (hard cut)</option>
-                                    <option value="fade">Fade</option>
-                                    <option value="wipe">Wipe</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="more-panel-footer">
-                            <span id="merge-status" class="trim-status"></span>
-                            <button class="btn-apply-trim" onclick="mergeClips()">Merge Selected</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="modal-actions">
-                    <button class="btn-download" onclick="downloadFromModal()">Download Clip</button>
-                    <button class="btn-tiktok" onclick="openTikTokEditor()">Make TikTok</button>
-                    <button class="btn-youtube" onclick="openYouTubeShortEditor()">YouTube Short</button>
-                    <button class="btn-upload-yt" onclick="uploadToYouTube()">Upload to YouTube</button>
-                    <button class="btn-upload-tt" onclick="uploadToTikTok()">Upload to TikTok</button>
                 </div>
             </div>
-        </div>
 
-        <!-- TikTok Editor Modal -->
-        <div id="tiktok-modal" class="modal hidden" onclick="if(event.target===this)closeTikTok()">
-            <div class="modal-content tiktok-editor">
-                <button class="modal-close" onclick="closeTikTok()">&times;</button>
-                <h3 class="tiktok-title">TikTok Editor</h3>
-                <p class="tiktok-subtitle">Draw boxes on the frame to select gameplay and webcam regions</p>
+            <!-- TikTok Editor Modal -->
+            <div id="tiktok-modal" class="modal hidden" onclick="if(event.target===this)closeTikTok()">
+                <div class="modal-content tiktok-editor">
+                    <button class="modal-close" onclick="closeTikTok()">&times;</button>
+                    <h3 class="tiktok-title">TikTok Editor</h3>
+                    <p class="tiktok-subtitle">Draw boxes on the frame to select gameplay and webcam regions</p>
 
-                <div class="tiktok-layout-presets">
-                    <button class="preset-btn active" onclick="setPreset('cam-top-right')">Cam: Top-Right</button>
-                    <button class="preset-btn" onclick="setPreset('cam-top-left')">Cam: Top-Left</button>
-                    <button class="preset-btn" onclick="setPreset('cam-bottom-right')">Cam: Bottom-Right</button>
-                    <button class="preset-btn" onclick="setPreset('cam-bottom-left')">Cam: Bottom-Left</button>
-                    <button class="preset-btn" onclick="setPreset('no-cam')">No Webcam</button>
-                    <button class="preset-btn" onclick="setPreset('custom')">Custom</button>
-                </div>
-
-                <div class="tiktok-canvas-wrap">
-                    <canvas id="tiktok-canvas"></canvas>
-                    <div class="tiktok-canvas-legend">
-                        <span class="legend-gameplay">Green = Gameplay</span>
-                        <span class="legend-webcam">Blue = Webcam</span>
-                        <span class="desktop-hint">Click + drag to draw. Right-click to switch region.</span>
-                        <span class="mobile-hint">Tap + drag to draw.</span>
+                    <div class="tiktok-layout-presets">
+                        <button class="preset-btn active" onclick="setPreset('cam-top-right')">Cam: Top-Right</button>
+                        <button class="preset-btn" onclick="setPreset('cam-top-left')">Cam: Top-Left</button>
+                        <button class="preset-btn" onclick="setPreset('cam-bottom-right')">Cam: Bottom-Right</button>
+                        <button class="preset-btn" onclick="setPreset('cam-bottom-left')">Cam: Bottom-Left</button>
+                        <button class="preset-btn" onclick="setPreset('no-cam')">No Webcam</button>
+                        <button class="preset-btn" onclick="setPreset('custom')">Custom</button>
                     </div>
-                    <button id="tiktok-switch-region" class="btn-switch-region" onclick="switchDrawingRegion()">
-                        Drawing: <strong id="tiktok-drawing-label">Gameplay</strong> — Tap to switch
-                    </button>
-                </div>
 
-                <div class="tiktok-preview-wrap">
-                    <div class="tiktok-preview-label">Preview</div>
-                    <canvas id="tiktok-preview" width="180" height="320"></canvas>
-                </div>
+                    <div class="tiktok-canvas-wrap">
+                        <canvas id="tiktok-canvas"></canvas>
+                        <div class="tiktok-canvas-legend">
+                            <span class="legend-gameplay">Green = Gameplay</span>
+                            <span class="legend-webcam">Blue = Webcam</span>
+                            <span class="desktop-hint">Click + drag to draw. Right-click to switch region.</span>
+                            <span class="mobile-hint">Tap + drag to draw.</span>
+                        </div>
+                        <button id="tiktok-switch-region" class="btn-switch-region" onclick="switchDrawingRegion()">
+                            Drawing: <strong id="tiktok-drawing-label">Gameplay</strong> &mdash; Tap to switch
+                        </button>
+                    </div>
 
-                <div class="tiktok-presets-bar">
-                    <label>Presets:</label>
-                    <select id="export-preset-select" onchange="loadExportPreset(this.value)">
-                        <option value="">None</option>
-                    </select>
-                    <button class="trim-btn" onclick="saveExportPreset()">Save Preset</button>
-                </div>
+                    <div class="tiktok-preview-wrap">
+                        <div class="tiktok-preview-label">Preview</div>
+                        <canvas id="tiktok-preview" width="180" height="320"></canvas>
+                    </div>
 
-                <div class="tiktok-footer">
-                    <span id="tiktok-status" class="trim-status"></span>
-                    <button id="tiktok-export-btn" class="btn-apply-trim" onclick="exportTikTok()">Export TikTok Video</button>
+                    <div class="tiktok-presets-bar">
+                        <label>Presets:</label>
+                        <select id="export-preset-select" onchange="loadExportPreset(this.value)">
+                            <option value="">None</option>
+                        </select>
+                        <button class="trim-btn" onclick="saveExportPreset()">Save Preset</button>
+                    </div>
+
+                    <div class="tiktok-footer">
+                        <span id="tiktok-status" class="trim-status"></span>
+                        <button id="tiktok-export-btn" class="btn-primary" onclick="exportTikTok()">Export TikTok Video</button>
+                    </div>
                 </div>
             </div>
-        </div>
+        </main>
     </div>
+
+    <!-- Sidebar overlay for mobile -->
+    <div class="sidebar-overlay hidden" id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
     <script src="/static/js/app.js"></script>
 </body>

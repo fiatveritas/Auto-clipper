@@ -89,10 +89,32 @@ function restoreState() {
 
 // ===== Main Tab Navigation =====
 function switchMainTab(tabName) {
-    document.querySelectorAll(".nav-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tabName));
+    // Support both old .nav-tab and new .nav-item sidebar buttons
+    document.querySelectorAll(".nav-tab, .nav-item").forEach(t => t.classList.toggle("active", t.dataset.tab === tabName));
     document.querySelectorAll(".main-tab-content").forEach(t => t.classList.remove("active"));
     const target = document.getElementById(`tab-${tabName}-main`);
     if (target) target.classList.add("active");
+    // Close sidebar on mobile after selection
+    const sidebar = document.getElementById("sidebar");
+    const overlay = document.getElementById("sidebar-overlay");
+    if (sidebar) sidebar.classList.remove("open");
+    if (overlay) overlay.classList.remove("visible");
+}
+
+function toggleSidebar() {
+    const sidebar = document.getElementById("sidebar");
+    const overlay = document.getElementById("sidebar-overlay");
+    if (sidebar) sidebar.classList.toggle("open");
+    if (overlay) overlay.classList.toggle("visible");
+}
+
+function filterGameCards(query) {
+    const q = (query || "").toLowerCase().trim();
+    document.querySelectorAll(".game-card").forEach(card => {
+        const name = (card.querySelector(".game-card-name")?.textContent || "").toLowerCase();
+        const desc = (card.querySelector(".game-card-desc")?.textContent || "").toLowerCase();
+        card.style.display = (!q || name.includes(q) || desc.includes(q)) ? "" : "none";
+    });
 }
 
 // ===== Game Selection =====
