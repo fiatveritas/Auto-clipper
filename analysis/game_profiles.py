@@ -15,116 +15,81 @@ import numpy as np
 GAME_PROFILES = {
     "arc_raiders": {
         "name": "Arc Raiders",
-        "description": "Simple detection \u2014 Recommended, works best for most streams",
+        "description": "Sci-fi co-op shooter \u2014 detects kills, Arc enemies, damage, explosions",
 
-        # NOTE: Arc Raiders has NO kill feed. Deaths emit a RED FLARE in the sky.
-        # It's a THIRD-PERSON shooter. No traditional hit markers exist.
-        # The original v1 worked well despite "wrong" detectors because:
-        # - The broad color ranges catch real combat signals (explosions, flashes)
-        # - Simple scoring without penalties lets signals through
-        # Keep it simple — that's why it works.
         "detectors": {
-            "combat_flash": {
-                "label": "Combat / Muzzle Flash",
+            "kill_feed": {
+                "label": "Kill / Elimination",
                 "weight": 0.25,
-                # Muzzle flash + explosions: orange-yellow bursts
-                # Third-person: flash appears on character model (lower-center)
-                # Raised sat floor 100->130 to reduce false positives from
-                # warm ambient lighting (campfires, sunsets, indoor lamps)
-                "lower": np.array([10, 130, 180]),
-                "upper": np.array([35, 255, 255]),
-                "region": "full",
+                # Kill notifications: bright white/yellow text top-right
+                "lower": np.array([0, 0, 200]),
+                "upper": np.array([180, 50, 255]),
+                "region": [0.05, 0.25, 0.55, 0.95],
                 "multiplier": 6,
             },
             "damage": {
                 "label": "Taking Damage",
-                "weight": 0.15,
-                # Red directional damage indicators + vignette at screen edges
-                # Lowered sat floor to catch desaturated reds too
-                "lower": np.array([0, 80, 80]),
+                "weight": 0.20,
+                # Red vignette at screen edges
+                "lower": np.array([0, 120, 100]),
                 "upper": np.array([10, 255, 255]),
-                "lower2": np.array([170, 80, 80]),
+                "lower2": np.array([170, 120, 100]),
                 "upper2": np.array([180, 255, 255]),
                 "region": "edges",
-                "edge_size": 0.12,
-                "multiplier": 8,
+                "edge_size": 0.10,
+                "multiplier": 4,
             },
-            "health_bar": {
-                "label": "Health/Shield Drop",
+            "hit_marker": {
+                "label": "Landing Hits",
                 "weight": 0.15,
-                # White health bar + blue segmented shield boxes, bottom-left HUD
-                "region": "health_bar",
-                "bar_region": [0.88, 0.95, 0.02, 0.22],
-                "bar_colors": [
-                    # White health bar
-                    {"lower": np.array([0, 0, 160]), "upper": np.array([180, 50, 255])},
-                    # Blue shield segments
-                    {"lower": np.array([85, 40, 80]), "upper": np.array([135, 255, 255])},
-                ],
-                "depletion_threshold": 0.08,
-                "multiplier": 8,
-            },
-            "death_flare": {
-                "label": "Death / Kill",
-                "weight": 0.15,
-                # When a player dies, a bright RED FLARE shoots skyward
-                # Visible from across the map — the game's "kill notification"
-                # Lowered sat/val floors to catch distant or partially occluded flares
-                "lower": np.array([0, 100, 140]),
-                "upper": np.array([12, 255, 255]),
-                "lower2": np.array([168, 100, 140]),
-                "upper2": np.array([180, 255, 255]),
-                # Upper portion of screen where flares appear
-                "region": [0.0, 0.55, 0.05, 0.95],
-                "multiplier": 10,
-            },
-            "red_scanner": {
-                "label": "ARC Enemy Aggro",
-                "weight": 0.15,
-                # ARC scanner beams turn RED when attacking
-                # Universal across all ARC types (Wasps, Bastions, Turrets, etc.)
-                # Widened hue + lowered sat/val floors
-                "lower": np.array([0, 100, 120]),
-                "upper": np.array([10, 255, 255]),
-                "lower2": np.array([170, 100, 120]),
-                "upper2": np.array([180, 255, 255]),
-                "region": [0.05, 0.80, 0.05, 0.95],
-                "multiplier": 8,
+                # Bright white center crosshair flash
+                "lower": np.array([0, 0, 230]),
+                "upper": np.array([180, 30, 255]),
+                "region": [0.4, 0.6, 0.4, 0.6],
+                "multiplier": 5,
             },
             "explosion": {
-                "label": "Explosion",
+                "label": "Explosion / Combat",
                 "weight": 0.15,
-                # Bright explosions, grenade blasts, ARC self-destruct
-                # Widened hue range and lowered sat floor
-                "lower": np.array([3, 100, 150]),
-                "upper": np.array([30, 255, 255]),
-                "region": [0.10, 0.90, 0.05, 0.95],
-                "multiplier": 8,
+                # Orange-yellow muzzle flash / explosions
+                "lower": np.array([10, 100, 150]),
+                "upper": np.array([35, 255, 255]),
+                "region": "full",
+                "multiplier": 3,
+            },
+            "special": {
+                "label": "Arc Enemy Encounter",
+                "weight": 0.10,
+                # Blue glow from Arc enemies
+                "lower": np.array([90, 80, 100]),
+                "upper": np.array([130, 255, 255]),
+                "region": "full",
+                "multiplier": 4,
             },
         },
 
-        # Audio: stronger weight to compensate for uncertain CV
-        "audio_weight": 0.45,
-        "audio_threshold_db": -20,
+        # Audio: helpful but don't let it dominate
+        "audio_weight": 0.30,
+        "audio_threshold_db": -15,
         "audio_ceiling_db": -3,
 
         # Motion
-        "motion_weight": 0.12,
-        "motion_multiplier": 4,
+        "motion_weight": 0.10,
+        "motion_multiplier": 3,
 
         # Brightness spike
-        "brightness_weight": 0.06,
-        "brightness_threshold": 0.55,
-        "brightness_multiplier": 4,
+        "brightness_weight": 0.05,
+        "brightness_threshold": 0.6,
+        "brightness_multiplier": 3,
 
-        # Scoring — much more sensitive to catch more clips
-        "intensity_threshold": 0.15,
-        "fallback_threshold_ratio": 0.20,
-        "merge_gap": 10,
-        "min_clip_duration": 10,
+        # Scoring — original v1 values
+        "intensity_threshold": 0.35,
+        "fallback_threshold_ratio": 0.5,
+        "merge_gap": 8,
+        "min_clip_duration": 20,
         "max_clip_duration": 60,
-        "clip_extension": 12,
-        "pre_pad": 10,
+        "clip_extension": 10,
+        "pre_pad": 8,
 
         # AI prompt
         "ai_system_prompt": """You are an expert Arc Raiders gameplay analyst. You analyze screenshots from Arc Raiders streams to identify exciting moments worth clipping.
