@@ -914,8 +914,21 @@ section { padding: 100px 0; position: relative; }
   gap: 10px;
   margin-bottom: 22px;
 }
-.mode { position: relative; cursor: pointer; }
-.mode input { position: absolute; opacity: 0; pointer-events: none; }
+.mode { position: relative; cursor: pointer; display: block; }
+.mode input {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+  border: 0 !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+}
 .mode__card {
   padding: 16px 14px;
   background: rgba(0, 0, 0, 0.3);
