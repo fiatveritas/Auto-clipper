@@ -193,7 +193,15 @@ class ClipManager:
                 clip_path,
             ]
 
-            result = subprocess.run(cmd, capture_output=True, timeout=300)
+            try:
+                result = subprocess.run(cmd, capture_output=True, timeout=300)
+            except FileNotFoundError:
+                # ffmpeg not on PATH — surface a clear error once so the
+                # user can tell at a glance what's wrong, instead of a
+                # silent run of 'clip failed' for every highlight.
+                print(f"  [ClipManager] ffmpeg not found on PATH — clip extraction aborted.")
+                print(f"  [ClipManager] Install: brew install ffmpeg (Mac) or apt/dnf/pacman install ffmpeg (Linux).")
+                break  # No point trying more clips; they'll all fail identically
 
             if result.returncode != 0 or not os.path.exists(clip_path):
                 stderr_msg = result.stderr.decode("utf-8", errors="replace")[-200:] if result.stderr else ""
