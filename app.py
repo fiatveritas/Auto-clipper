@@ -114,6 +114,43 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/api/health")
+def health_check():
+    """Health check for debugging — tells the user what's wired up.
+
+    GET /api/health -> JSON with ffmpeg availability, YOLO weights status,
+    yt-dlp version, and Python version. Helps diagnose 'nothing works'.
+    """
+    import platform
+    import shutil
+
+    ffmpeg_path = shutil.which("ffmpeg")
+
+    weights_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "best.pt")
+    weights_info = None
+    if os.path.exists(weights_path):
+        weights_info = {
+            "path": weights_path,
+            "size_mb": round(os.path.getsize(weights_path) / (1024 * 1024), 1),
+        }
+
+    ytdlp_version = None
+    try:
+        import yt_dlp as _yd
+        ytdlp_version = _yd.version.__version__
+    except Exception:
+        pass
+
+    return jsonify({
+        "status": "ok",
+        "python_version": platform.python_version(),
+        "platform": platform.system(),
+        "ffmpeg": {"available": bool(ffmpeg_path), "path": ffmpeg_path},
+        "yolo_weights": weights_info,
+        "yt_dlp_version": ytdlp_version,
+    })
+
+
 @app.route("/api/games")
 def list_games():
     """Return list of supported games for the UI, including custom profiles."""
