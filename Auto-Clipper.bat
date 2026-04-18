@@ -18,6 +18,8 @@ if exist "venv\Scripts\python.exe" (
     echo  Starting Auto-Clipper...
     echo.
     call venv\Scripts\activate.bat
+    :: Preflight: keep yt-dlp fresh - Twitch breaks it monthly
+    python -m pip install --upgrade yt-dlp --quiet >nul 2>&1
     echo  Opening browser...
     timeout /t 2 /nobreak >nul
     start http://localhost:8080

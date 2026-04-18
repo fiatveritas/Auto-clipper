@@ -20,6 +20,13 @@ if [ -d "venv" ] && [ -f "venv/bin/python" ]; then
     echo ""
     source venv/bin/activate
 
+    # Preflight: keep yt-dlp fresh (Twitch breaks it monthly) + ffmpeg check
+    python -m pip install --upgrade yt-dlp --quiet 2>/dev/null || true
+    if ! command -v ffmpeg >/dev/null 2>&1; then
+        echo "  ⚠  ffmpeg missing from PATH. Running: brew install ffmpeg"
+        brew install ffmpeg 2>/dev/null || echo "     (brew install failed — install ffmpeg manually)"
+    fi
+
     # Open browser after short delay
     (sleep 2 && open http://localhost:8080 2>/dev/null) &
 
@@ -102,6 +109,9 @@ if [ $? -ne 0 ]; then
     read -p "  Press Enter to close..."
     exit 1
 fi
+# Always upgrade yt-dlp — Twitch breaks its parsing monthly; stale
+# yt-dlp is the #1 cause of 'my VOD download fails'.
+pip install --upgrade yt-dlp --quiet
 # Optional: install inference-sdk for Roboflow features (requires Python <3.13)
 pip install inference-sdk --quiet 2>/dev/null && echo "  Roboflow SDK installed." || echo "  Note: Roboflow SDK skipped (requires Python <3.13). Other detection methods work fine."
 echo "  OK"
