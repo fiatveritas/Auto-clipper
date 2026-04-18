@@ -19,17 +19,26 @@
 
 ## One-Command Install
 
-### macOS / Linux
+### macOS / Linux — recommended (bypasses macOS Gatekeeper)
 ```bash
-git clone https://github.com/bendawg2010/Auto-clipper.git && cd Auto-clipper && ./install.sh && ./run.sh
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/bendawg2010/Auto-clipper/claude/twitch-clip-analyzer-MPT08/install-remote.sh)"
 ```
 
-### Windows (Command Prompt)
+Same pattern Homebrew uses. `curl`-downloaded files never get the macOS quarantine flag, so there's no "cannot verify" dialog ever. The script handles everything: installs Xcode CLI tools + Homebrew if missing, clones the repo, installs Python + FFmpeg + deps, launches the app.
+
+**Re-run it anytime to reinstall clean** — wipes old code + venv + caches, keeps your VODs + clips + library + YOLO weights.
+
+### Windows (Command Prompt / PowerShell)
 ```cmd
 git clone https://github.com/bendawg2010/Auto-clipper.git && cd Auto-clipper && install.bat && run.bat
 ```
 
-First run installs Homebrew / Python / FFmpeg automatically. Every run after is just `./run.sh` (or `run.bat`). Your browser opens at **http://localhost:8080**.
+### Manual (any OS — if curl-pipe is blocked by your org)
+```bash
+git clone https://github.com/bendawg2010/Auto-clipper.git && cd Auto-clipper && ./install.sh && ./run.sh
+```
+
+First run installs Homebrew / Python / FFmpeg automatically. Your browser opens at **http://localhost:8080**.
 
 > **Mac security note:** If macOS blocks the file, open Terminal and run
 > `xattr -d com.apple.quarantine ~/Downloads/Auto-clipper-*/Auto-Clipper.command`
