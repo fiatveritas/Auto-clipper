@@ -158,6 +158,16 @@ def test_models_best_pt_bundled():
     assert size_mb > 2, f"best.pt seems truncated at {size_mb:.1f} MB"
 
 
+def test_time_parser_edge_cases():
+    """_parse_time_to_seconds handles common formats + invalid input."""
+    from clip_manager import _parse_time_to_seconds
+    assert _parse_time_to_seconds("0:30") == 30.0
+    assert _parse_time_to_seconds("1:30:00") == 5400.0
+    assert _parse_time_to_seconds("90") == 90.0
+    assert _parse_time_to_seconds("invalid") is None
+    assert _parse_time_to_seconds("") is None
+
+
 if __name__ == "__main__":
     # Run all test_* functions and print a summary.
     import traceback
