@@ -1936,7 +1936,22 @@ def _run_analysis(job_id, url, api_key="", time_start="", time_end="", game_id="
         _run_analysis_on_file(job_id, video_path, api_key, time_start, time_end, game_id, detection_method, sensitivity, detection_overrides)
 
     except Exception as e:
-        job["error"] = str(e)
+        # Translate common yt-dlp messages into actionable user errors.
+        msg = str(e)
+        low = msg.lower()
+        if "does not exist" in low or "404" in low:
+            friendly = "VOD not found. It may have been deleted, made private, or the URL might be wrong."
+        elif "geo" in low or "not available in your country" in low:
+            friendly = "VOD is geo-blocked in your region — try a VPN."
+        elif "subscriber" in low or "members-only" in low:
+            friendly = "VOD is subscriber-only and can't be downloaded."
+        elif "timeout" in low or "timed out" in low:
+            friendly = "Network timeout — check your internet connection and try again."
+        elif "ffmpeg" in low and "not found" in low:
+            friendly = "FFmpeg isn't installed. Install it with `brew install ffmpeg` (Mac) or your distro's package manager (Linux), then try again."
+        else:
+            friendly = msg
+        job["error"] = friendly
         update("error", 0, str(e))
 
 
