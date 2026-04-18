@@ -1313,7 +1313,7 @@ function onDetectionMethodChange(method) {
         ai_vision: "AI analyzes screenshots of your gameplay. Most accurate but requires xAI API key and costs per use.",
         roboflow_workflow: "Roboflow AI workflow for Arc Raiders — streams video through a detect-and-classify pipeline. Requires Roboflow API key.",
         roboflow_model: "Sends frames directly to your Roboflow model for object detection. Simpler setup — just needs a Roboflow API key.",
-        yolo_local: "Runs a trained YOLO model (best.pt) on each frame. You MUST have a trained model file in the models/ folder. Without it, this will fail. Train your own model on Roboflow or use CV Pipeline instead.",
+        yolo_local: "Runs YOLO object detection on each frame using models/best.pt (bundled — Arc Raiders-trained weights ship with the repo). If weights are missing or incompatible, it falls back to the CV pipeline automatically.",
         arc_cv_pipeline: "Reads HUD elements (health bar, ammo, XP), detects VFX (muzzle flash, fire, explosions, damage vignette), and tracks frame-to-frame changes. No model file or API key needed — works offline out of the box. Best for Arc Raiders, decent for other shooters.",
     };
     document.getElementById("detection-hint").textContent = hints[method] || "";
