@@ -1,197 +1,225 @@
-# Auto-Clipper (Beta)
+# Auto-Clipper
 
-Automatically find the best moments in your Twitch or YouTube VODs — kills, combat, explosions, and more. Paste a link or upload a file, get highlight clips.
+**Auto-find the best moments in your Twitch or YouTube VODs** — kills, combat, explosions, and more. Paste a link or upload a file, get highlight clips. Free, open-source, runs 100% on your machine.
 
-**Supports:** Arc Raiders, War Thunder (more coming)
-
----
-
-## What It Does
-
-1. **Pick** your game from the menu
-2. **Paste** a Twitch/YouTube VOD link — or **upload** a video file from your computer
-3. **Wait** while it analyzes the video
-4. **Review** detected highlights with preview thumbnails
-5. **Download** the clips you want — or convert them to TikTok vertical format
-
-Downloaded VODs are saved to a **library** so you can re-analyze them without re-downloading.
+🌐 **[auto-clipper.pages.dev](https://auto-clipper.pages.dev)** — landing page + one-line install guide
+⭐ **[github.com/bendawg2010/Auto-clipper](https://github.com/bendawg2010/Auto-clipper)** — source
+🎮 **Supports:** Arc Raiders (YOLO, 13+ entity classes), War Thunder (pixel analysis). More games: just drop in a profile.
 
 ---
 
-## Install & Run
+## What's New
 
-### Windows
+- 🎤 **Clip It** — say *"clip it"*, *"clip that"*, *"clip this"*, *"save that"*, or *"save clip"* and the last 30 seconds gets saved as a clip. Then you can trim, extend, or re-cut it in the editor.
+- 🧠 **Clipping mode selector** — pick **CV** (pixel analysis, no weights needed), **YOLO** (neural object detection), **Clip It** (voice triggers), or **Hybrid** (everything on at once).
+- ⚡ **CV pipeline rewrite** — numpy-direct YOLO inference, `cap.grab()` frame-skip, device autodetect (CUDA / MPS / CPU), safer fps handling. ~28× realtime on the smoke test in pixel-only mode.
+- 🛠️ **Manual clip** — click any library VOD + enter a timestamp to instantly extract the previous 30s.
 
-1. Download this project: green **"<> Code"** button → **"Download ZIP"**
+---
+
+## One-Command Install
+
+### macOS / Linux
+```bash
+git clone https://github.com/bendawg2010/Auto-clipper.git && cd Auto-clipper && ./install.sh && ./run.sh
+```
+
+### Windows (Command Prompt)
+```cmd
+git clone https://github.com/bendawg2010/Auto-clipper.git && cd Auto-clipper && install.bat && run.bat
+```
+
+First run installs Homebrew / Python / FFmpeg automatically. Every run after is just `./run.sh` (or `run.bat`). Your browser opens at **http://localhost:8080**.
+
+> **Mac security note:** If macOS blocks the file, open Terminal and run
+> `xattr -d com.apple.quarantine ~/Downloads/Auto-clipper-*/Auto-Clipper.command`
+> Only needed once.
+
+Don't like command lines? Use the ZIP fallback:
+1. Green **"<> Code"** button → **"Download ZIP"**
 2. Unzip it, open the folder
-3. Double-click **`Auto-Clipper.bat`**
-
-That's it. First time it installs everything (Python required — it'll tell you if you need it). Every time after, just double-click the same file.
-
-### Mac
-
-1. Download this project: green **"<> Code"** button → **"Download ZIP"**
-2. Double-click the ZIP to unzip it
-3. Open the folder and double-click **`Auto-Clipper.command`**
-
-That's it. First time it installs Homebrew, Python, FFmpeg, and all dependencies automatically. It will ask for your Mac password once (you won't see characters as you type — that's normal). Every time after, just double-click the same file.
-
-> **Mac security note:** If macOS blocks the file, open Terminal and run:
-> ```
-> xattr -d com.apple.quarantine ~/Downloads/Auto-clipper-*/Auto-Clipper.command
-> ```
-> Then double-click it again. You only need to do this once.
-
-Your browser opens to **http://localhost:8080** — that's the app.
+3. Double-click **`Auto-Clipper.bat`** (Windows) or **`Auto-Clipper.command`** (Mac)
 
 ---
 
-## How to Use Auto-Clipper
+## How to Use
 
-Once the app is running and you see it in your browser:
+Once the app is running in your browser:
 
-### 1. Select Your Game
+### 1. Pick your game
+Top of the page — **Arc Raiders** or **War Thunder**. Each game has its own detection profile (different kill feeds, UI zones, colors). The selection is remembered next session.
 
-At the top of the page you'll see game buttons — **Arc Raiders** and **War Thunder**. Click the one you're playing. This tells the app what to look for (each game has different kill feeds, explosions, UI elements, etc).
+### 2. Pick your clipping mode
 
-Your selection is saved automatically. Next time you open the app, it remembers.
+| Mode | What it does | When to use |
+|------|-------------|-------------|
+| **CV** | Pixel analysis only — muzzle flash, damage vignette, audio peaks, HUD zones | Fastest, works on any machine, no model weights required |
+| **YOLO** | Neural object detection (raiders, turrets, bosses, 13+ classes) | Most precise. Needs `.pt` weights + GPU recommended |
+| **Clip It** | Voice-triggered only — scans audio for *"clip it"* / *"clip that"* | Streamers who want a shout-it-and-save workflow |
+| **Hybrid** | CV + YOLO + voice triggers firing in parallel | Best recall, widest net, no missed moments |
 
-### 2. Paste a Twitch VOD Link
+Mode selection is per-session and lives in the Detection Settings panel.
 
-Go to [twitch.tv](https://www.twitch.tv/) and find the VOD you want to clip. Copy the URL from the address bar — it looks something like:
+### 3. Give it a VOD
+Either:
+- **Paste a Twitch / YouTube URL** (optionally limit to a start/end time to save download time)
+- **Upload a local file** from your computer
+- **Drop files into the library** and scan existing VODs on demand
 
-```
-https://www.twitch.tv/videos/2720880233
-```
+### 4. Wait for analysis
+1. VOD downloads (progress bar shows %)
+2. Pipeline samples frames and runs the selected mode(s)
+3. Clips get extracted + clustered
 
-Paste it into the input box and click **Analyze** (or press Enter).
+A 1-hour VOD runs in ~3-5 minutes on pixel-only mode. YOLO mode depends on your GPU.
 
-### 3. (Optional) Only Analyze Part of the VOD
+### 5. Review & edit
+Each highlight has:
+- Thumbnail, label, timestamp, confidence bar
+- **Trim** — ±1s / ±5s buttons, then **Re-cut Clip**
+- **Download** — raw MP4
+- **Make TikTok** — convert to 9:16 vertical
 
-If the stream is really long (like 5+ hours), you can save time by only analyzing a specific part:
+### 6. "Clip It" voice mode
+With mode set to **Clip It** or **Hybrid**, the app scans the VOD's audio track via Whisper (`faster-whisper` preferred, `openai-whisper` fallback) and tags every occurrence of the trigger phrases. Each trigger creates a clip covering the **preceding 30 seconds** — the actual moment of action, not the reaction.
 
-1. Click **"+ Download specific part (faster)"**
-2. Type a start time like `1:30:00` (1 hour 30 minutes in)
-3. Type an end time like `2:00:00`
-4. Now it will only download and analyze that 30-minute section
+Default triggers: `clip it`, `clip that`, `clip this`, `save that`, `save clip`. Edit the list in the Detection Settings panel.
 
-### 4. Wait for Analysis
-
-The app will:
-1. **Download** the VOD from Twitch (progress bar shows %)
-2. **Analyze** every frame looking for exciting moments
-3. **Extract** highlight clips automatically
-
-This takes a few minutes depending on VOD length. A 1-hour VOD takes roughly 3-5 minutes.
-
-### 5. Review Your Clips
-
-When analysis is done, you'll see a grid of clips with:
-- **Thumbnail preview** of each highlight
-- **Label** describing what happened (e.g. "Kill / Elimination", "Explosion / Combat")
-- **Timestamp** showing where in the VOD it happened
-- **Confidence bar** showing how sure the detector is
-
-### 6. Preview and Trim
-
-Click any clip to open a preview player. From here you can:
-
-- **Watch** the clip to see if it's actually good
-- **Trim** it — use the -5s / -1s / +1s / +5s buttons to adjust the start and end points, then click **Re-cut Clip**
-- **Download** the clip
-- **Make TikTok** — convert it to vertical 9:16 format (see below)
-
-### 7. TikTok / Vertical Video
-
-Click **Make TikTok** to open the TikTok editor:
-
-1. Pick a **preset layout** — most common is "Cam: Top-Right" which puts gameplay on top (70%) and webcam on bottom (30%)
-2. If you don't have a webcam, click **No Webcam** for full-screen gameplay
-3. For custom layouts, click **Custom** and drag on the frame to draw your own gameplay and webcam regions
-4. Check the **Preview** on the right to see how it'll look
-5. Click **Export TikTok Video** — it'll process and auto-download the vertical clip
-
-### 8. Delete Clips You Don't Want
-
-Click **Remove** on any clip card to delete it. This just removes it from the current session — it doesn't affect your Twitch VOD.
+### 7. Manual clip (any timestamp)
+In the library view, click **Clip** on any VOD and enter a timestamp — Auto-Clipper extracts the 30 seconds ending at that moment. Also available mid-session via the **Manual Clip** button in the clips toolbar.
 
 ---
 
-## iPhone / iPad
+## TikTok / Vertical Video
 
-The app runs on your computer — you just view it on your phone through Safari.
+Click **Make TikTok** on any clip:
 
-1. Get Auto-Clipper running on your computer first (see above)
-2. Find your computer's IP: on Mac run `ipconfig getifaddr en0` in Terminal, on Windows run `ipconfig` and look for "IPv4 Address" — it's something like `192.168.1.42`
-3. On your iPhone (same Wi-Fi), open Safari and go to `http://YOUR_IP:8080`
-4. Optional: tap Share → "Add to Home Screen" to save it as an app icon
+1. Pick a **preset layout** — "Cam: Top-Right" puts gameplay on top (70%), webcam on bottom (30%)
+2. No webcam? Click **No Webcam** for full-screen gameplay
+3. Custom layouts: drag on the frame to draw your own gameplay / webcam regions
+4. Preview on the right
+5. Click **Export TikTok Video** — processes and auto-downloads the vertical MP4
+
+---
+
+## iPhone / iPad Access
+
+The app runs on your computer; view it from your phone:
+
+1. Get Auto-Clipper running on your computer first
+2. Find your computer's IP:
+   - Mac: `ipconfig getifaddr en0` in Terminal
+   - Windows: `ipconfig` → look for "IPv4 Address"
+   - Usually something like `192.168.1.42`
+3. On your iPhone (same Wi-Fi), open Safari → `http://YOUR_IP:8080`
+4. Optional: Share → "Add to Home Screen" for an app icon
 
 ---
 
 ## Supported Games
 
-| Game | What It Detects |
-|------|----------------|
-| **Arc Raiders** | Kill feed text, damage indicators (red vignette), hit markers (crosshair flash), explosions / muzzle flash, Arc enemy glow (blue), combat chaos |
-| **War Thunder** | "Target Destroyed" messages, critical hits, bomb / rocket hits, vehicle fires, explosions, air combat, damage indicators |
+| Game | YOLO classes | Pixel signals |
+|------|-------------|--------------|
+| **Arc Raiders** | `raider`, `raider-down`, `rocketeer`, `bastion`, `leaper`, `bombardier`, `hornet`, `wasp`, `snitch`, `pop`, `fireball`, `tick`, `turret`, `probe`, `queen`, `sentinel` | Red damage vignette, muzzle flash, blue Arc enemy glow, HUD zones, kill-feed colors, audio peaks |
+| **War Thunder** | (pixel-only profile) | "Target Destroyed" banner, critical-hit flash, bomb/rocket hit colors, vehicle fires, explosions, damage vignette |
 
-Each game has its own detection profile tuned for that game's specific colors, UI layout, and visual effects. Adding a new game is just adding a new profile — the detection engine is the same.
+Adding a new game = dropping a new profile into `games/`. The detection engine is the same.
 
 ---
 
-## Optional: AI-Powered Analysis
+## AI Mode (optional)
 
-By default Auto-Clipper uses computer vision (color detection + motion analysis) to find highlights. It works without any accounts or API keys.
+By default Auto-Clipper uses pure computer vision (pixel + YOLO). No accounts, no API keys.
 
-For smarter detection that actually **understands** what's happening in the gameplay:
+For smarter semantic analysis:
 
-1. Click **"+ AI Mode (xAI Grok Vision)"** in the app
-2. Get a free API key from [x.ai](https://x.ai/)
+1. Click **"+ AI Mode (xAI Grok Vision)"**
+2. Get a free API key at [x.ai](https://x.ai/)
 3. Paste your key into the field
 
-The AI knows the difference between "walking around doing nothing" and "intense firefight with a kill" — computer vision only sees colors and motion. AI mode finds better clips but uses API credits.
+The AI knows the difference between "walking around doing nothing" and "intense firefight with a kill" — CV only sees colors and motion. AI mode finds better clips but uses API credits. Your key is stored locally only.
 
-Your API key is saved in the app so you only enter it once.
+---
+
+## YOLO Weights (optional but recommended)
+
+YOLO and Hybrid modes need a `.pt` weights file. If none is found, Auto-Clipper automatically falls back to pixel-only mode and tells you so.
+
+Arc Raiders weights: [Roboflow Universe — Arc Raiders Object Detection v13](https://universe.roboflow.com/valorantai/arc-raiders-8tjh4/model/11) — export YOLOv11 format and drop the `.pt` file in the repo root (or `models/` or `weights/`). The detector auto-discovers it.
+
+---
+
+## Under the Hood
+
+- **Python** (Flask web app, no frontend framework — vanilla JS)
+- **OpenCV** for pixel analysis + video I/O
+- **Ultralytics YOLO** (v11) for neural detection
+- **FFmpeg** for VOD downloads + clip extraction + TikTok conversion
+- **faster-whisper** / **openai-whisper** for voice trigger transcription
+- **yt-dlp** for Twitch / YouTube downloads
+
+The `analysis/` module is the core:
+- `arc_clip_detector.py` — main orchestrator, CV + YOLO fusion
+- `clip_modes.py` — `ClipMode` enum (CV / YOLO / VOICE / HYBRID / ALL)
+- `clip_trigger_detector.py` — voice trigger / Whisper-based scanner
+- Per-game profiles in `games/`
 
 ---
 
 ## Troubleshooting
 
 **"python is not recognized" (Windows)**
-You didn't check "Add python.exe to PATH" during installation. Uninstall Python, download it again, and this time **check that box** at the bottom of the very first installer screen.
+You didn't check "Add python.exe to PATH" during installation. Uninstall Python, reinstall, and **check the box** on the very first installer screen.
 
 **"git is not recognized" (Windows)**
-Close your Command Prompt and open a new one. If it still doesn't work, reinstall Git from [git-scm.com](https://git-scm.com/download/win).
+Close + reopen Command Prompt. Still broken? Reinstall from [git-scm.com](https://git-scm.com/download/win).
 
 **"ffmpeg is not recognized"**
-Run `install.bat` (Windows) or `./install.sh` (Mac) again — it will install FFmpeg for you automatically.
+Re-run `install.bat` (Windows) or `./install.sh` (Mac). It installs FFmpeg automatically.
 
 **"brew: command not found" (Mac)**
-Run `./install.sh` again — it will install Homebrew for you.
+Re-run `./install.sh`. It installs Homebrew automatically.
 
-**The installer says it worked but `run.bat` doesn't do anything**
-Open Command Prompt manually and type:
-```
+**Installer says it worked but `run.bat` does nothing**
+Open Command Prompt manually:
+```cmd
 cd Auto-clipper
 venv\Scripts\activate
 python app.py
 ```
-This will show you any error messages.
+You'll see the actual error.
 
 **Clips won't download from Twitch**
-Make sure the VOD is **public** (not subscriber-only or deleted). Some streamers delete their VODs after a few days.
+Make sure the VOD is **public**. Some streamers delete VODs after a few days, and subscriber-only VODs can't be downloaded without auth.
 
-**Can't connect from iPhone**
-- Are both devices on the **same Wi-Fi network**?
-- Is Auto-Clipper actually running on your computer? (You need to keep `run.bat` / `run.sh` open)
+**iPhone can't connect**
+- Same Wi-Fi network on both devices?
+- Is Auto-Clipper actually running? (`run.bat` / `run.sh` must stay open)
 - Try turning off VPN on both devices
-- Windows: Your firewall might be blocking port 8080 — try temporarily disabling it
+- Windows firewall may block port 8080 — try temporarily disabling it
 
 **Port 8080 already in use**
-Something else is using that port. Close other apps, or edit `app.py` and change `port=8080` to `port=8081` (then use `http://localhost:8081` in your browser).
+Something else has it. Close other apps, or edit `app.py` and change `port=8080` to `port=8081` (then use `http://localhost:8081`).
 
-**Analysis found clips but they're all boring / nothing happening**
-Try using AI mode — computer vision sometimes picks up false positives. AI mode is much better at understanding what's actually exciting.
+**Analysis found boring clips**
+Switch to **Hybrid** mode for best recall, or drop `best.pt` in the repo root to enable YOLO. AI mode finds the best clips but costs API credits.
 
 **Analysis takes forever**
-Use the "Download specific part" option to only analyze a portion of the VOD instead of the whole thing. A 30-minute section analyzes much faster than a 5-hour stream.
+Use **"Download specific part"** to analyze just a portion of a long VOD. A 30-minute section runs way faster than a 5-hour stream. For YOLO on CPU, sample at a lower FPS or switch to CV-only mode.
+
+**"no microphone" on Clip It mode**
+Voice triggers currently scan the VOD's **audio track** (post-recording). True live mic listening is on the roadmap — use OBS to record your mic into the stream for now.
+
+---
+
+## Contributing
+
+PRs welcome. New game profile = new file in `games/`. Bug reports: [GitHub Issues](https://github.com/bendawg2010/Auto-clipper/issues).
+
+## License
+
+MIT — do whatever you want with it. Attribution appreciated, not required.
+
+---
+
+*Made for streamers who'd rather play than scrub through 5 hours of VOD.*
