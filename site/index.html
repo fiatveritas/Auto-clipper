@@ -21,7 +21,7 @@
 
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' x2='1' y1='0' y2='1'><stop offset='0' stop-color='%239147ff'/><stop offset='1' stop-color='%23ff3e7f'/></linearGradient></defs><rect width='32' height='32' rx='8' fill='url(%23g)'/><path d='M11 10l10 6-10 6z' fill='white'/></svg>" />
 
-  <link rel="stylesheet" href="styles.css?v=7" />
+  <link rel="stylesheet" href="styles.css?v=8" />
 </head>
 <body>
 
@@ -557,7 +557,16 @@
       <div class="dl__note">
         Latest: <strong>v0.12.0</strong> · direct links from the
         <a href="https://github.com/bendawg2010/Auto-clipper/releases" target="_blank" rel="noopener">GitHub Releases page</a>.
-        Mac .dmg opens to a drag-to-Applications window. Windows ZIP extracts → double-click <code>Auto-Clipper.bat</code>. No terminal needed.
+        Mac DMG contains <code>Install Auto-Clipper.command</code>. Windows ZIP extracts → double-click <code>Auto-Clipper.bat</code>. No terminal needed.
+      </div>
+
+      <div class="dl__gatekeeper">
+        <div class="dl__gk-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+        </div>
+        <div class="dl__gk-body">
+          <strong>Mac blocks it on first launch?</strong> That's normal for unsigned apps — we don't pay Apple's $99/yr Developer tax. Right-click <code>Install Auto-Clipper.command</code> → <strong>Open</strong>. On macOS Sonoma+, if it still blocks: <em>System Settings → Privacy &amp; Security → "Open Anyway"</em>. You only do this once. Full source: <a href="https://github.com/bendawg2010/Auto-clipper" target="_blank" rel="noopener">github.com/bendawg2010/Auto-clipper</a>.
+        </div>
       </div>
     </div>
 
