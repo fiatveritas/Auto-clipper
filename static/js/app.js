@@ -152,13 +152,7 @@ function renderGameOptions() {
 
 function getGameTag(game) {
     const id = game.id.toLowerCase();
-    const desc = (game.description || "").toLowerCase();
-    if (desc.includes("recommended") || id === "arc_raiders") return { label: "Recommended", cls: "recommended" };
-    if (desc.includes("aggressive") || desc.includes("wide-net")) return { label: "Aggressive", cls: "aggressive" };
-    if (desc.includes("audio")) return { label: "Audio-Heavy", cls: "audio" };
-    if (desc.includes("motion")) return { label: "Motion-Based", cls: "motion" };
-    if (desc.includes("precision") || desc.includes("conservative")) return { label: "Precision", cls: "precision" };
-    if (desc.includes("pvpve") || id.includes("v7")) return { label: "PvPvE", cls: "pvpve" };
+    if (id === "arc_raiders") return { label: "Recommended", cls: "recommended" };
     return null;
 }
 
