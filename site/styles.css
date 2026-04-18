@@ -1399,6 +1399,163 @@ section { padding: 100px 0; position: relative; }
   font-size: 0.85rem;
 }
 
+/* ============ INSTALL — DIRECT DOWNLOADS ============ */
+.dl {
+  max-width: 880px;
+  margin: 0 auto 28px;
+}
+.dl__head {
+  text-align: center;
+  margin-bottom: 18px;
+}
+.dl__eyebrow {
+  display: inline-block;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, rgba(0, 230, 195, 0.15), rgba(145, 71, 255, 0.1));
+  border: 1px solid rgba(0, 230, 195, 0.3);
+  border-radius: 999px;
+  color: var(--accent);
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.dl__sub {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.dl__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.dl__card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, rgba(145, 71, 255, 0.12), rgba(255, 62, 127, 0.06));
+  border: 1px solid rgba(145, 71, 255, 0.35);
+  border-radius: 14px;
+  color: var(--text);
+  text-decoration: none;
+  transition: all 220ms var(--ease);
+  overflow: hidden;
+}
+.dl__card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 80% 0%, rgba(255, 62, 127, 0.15), transparent 60%);
+  opacity: 0;
+  transition: opacity 220ms var(--ease);
+}
+.dl__card:hover {
+  transform: translateY(-3px);
+  border-color: var(--primary-hi);
+  box-shadow: 0 18px 50px -20px rgba(145, 71, 255, 0.6), 0 0 0 1px rgba(145, 71, 255, 0.2) inset;
+  color: var(--text);
+}
+.dl__card:hover::before { opacity: 1; }
+
+.dl__logo {
+  width: 42px; height: 42px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--primary-hi);
+  z-index: 1;
+}
+.dl__logo svg { width: 22px; height: 22px; }
+
+.dl__meta {
+  flex: 1;
+  z-index: 1;
+}
+.dl__label {
+  font-family: 'Chakra Petch', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.dl__ext {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.dl__arrow {
+  width: 30px; height: 30px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--primary-hi);
+  transition: transform 220ms var(--ease);
+  z-index: 1;
+}
+.dl__card:hover .dl__arrow {
+  transform: translateY(2px);
+  background: var(--primary);
+  color: #fff;
+}
+.dl__arrow svg { width: 16px; height: 16px; }
+
+.dl__card--recommended {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, rgba(0, 230, 195, 0.15), rgba(145, 71, 255, 0.08));
+  box-shadow: 0 0 0 1px rgba(0, 230, 195, 0.4) inset, 0 12px 40px -16px rgba(0, 230, 195, 0.4);
+}
+.dl__card--recommended::after {
+  content: "For your OS";
+  position: absolute;
+  top: -9px;
+  right: 16px;
+  padding: 2px 8px;
+  background: var(--accent);
+  color: #00201b;
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  border-radius: 4px;
+  z-index: 2;
+  box-shadow: 0 0 10px rgba(0, 230, 195, 0.5);
+}
+.dl__card--recommended .dl__logo {
+  background: rgba(0, 230, 195, 0.12);
+  color: var(--accent);
+}
+
+.dl__note {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  margin-top: 14px;
+  padding: 0 8px;
+}
+.dl__note a {
+  color: var(--primary-hi);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 720px) {
+  .dl__grid { grid-template-columns: 1fr; }
+}
+
 /* ============ INSTALL v2 — DMG-easy ============ */
 .install2 {
   max-width: 880px;

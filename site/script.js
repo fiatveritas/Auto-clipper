@@ -101,6 +101,14 @@
         activate(t.getAttribute('data-os'));
       });
     });
+
+    // Highlight the detected-OS download card with a "recommended" badge
+    var dlCards = document.querySelectorAll('.dl__card');
+    dlCards.forEach(function (card) {
+      if (card.getAttribute('data-os') === detected) {
+        card.classList.add('dl__card--recommended');
+      }
+    });
   })();
 
   // Copy-to-clipboard for install snippets
