@@ -119,8 +119,11 @@ class GameDetector:
             raise Exception(f"Cannot open video: {video_path}")
 
         fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        duration = total_frames / fps if fps > 0 else 0
+        # NaN-safe: OpenCV returns NaN on some codecs; NaN != NaN is the idiom.
+        if not fps or fps != fps or fps <= 0:
+            fps = 30.0
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        duration = total_frames / fps if total_frames > 0 else 0
 
         frame_interval = max(1, int(fps / self.sample_fps))
         frames_to_analyze = total_frames // frame_interval

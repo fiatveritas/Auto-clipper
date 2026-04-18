@@ -152,9 +152,12 @@ class HybridDetector:
             raise Exception(f"Cannot open video: {video_path}")
 
         fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        frame_interval = max(1, int(fps / self.sample_fps))
-        frames_to_analyze = total_frames // frame_interval
+        # NaN-safe: OpenCV returns NaN on some codecs; NaN != NaN is the idiom.
+        if not fps or fps != fps or fps <= 0:
+            fps = 30.0
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        frame_interval = max(1, int(fps / max(1, self.sample_fps)))
+        frames_to_analyze = total_frames // frame_interval if frame_interval > 0 else 0
 
         prev_gray = None
         prev_hists = None

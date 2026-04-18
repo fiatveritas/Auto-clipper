@@ -1,4 +1,5 @@
 import cv2
+import math
 import numpy as np
 
 from analysis.game_profiles import get_profile
@@ -31,12 +32,16 @@ class MotionDetector:
         if not cap.isOpened():
             raise Exception(f"Cannot open video: {video_path}")
 
+        # NaN-safe fps fallback — default OpenCV returns NaN on some codecs,
+        # which is truthy and slips past `if fps > 0`.
         fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        duration = total_frames / fps if fps > 0 else 0
+        if not fps or math.isnan(fps) or fps <= 0:
+            fps = 30.0
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        duration = total_frames / fps if total_frames > 0 else 0
 
-        frame_interval = max(1, int(fps / self.sample_fps))
-        frames_to_analyze = total_frames // frame_interval
+        frame_interval = max(1, int(fps / max(1, self.sample_fps)))
+        frames_to_analyze = total_frames // frame_interval if frame_interval > 0 else 0
 
         scores = []
         prev_gray = None
