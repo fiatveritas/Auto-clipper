@@ -120,9 +120,10 @@ ENTITY_PROFILES = {
     "queen":        {"base": 95, "multi": 1.2, "count_bonus": 0,  "cat": "boss_fight",        "boss": True},
     "raider":       {"base": 5,  "multi": 3.0, "count_bonus": 10, "cat": "pvp_encounter",     "boss": False},
     "raider-down":  {"base": 35, "multi": 1.5, "count_bonus": 20, "cat": "death_fail",        "boss": False},
-    "0": {"base": 5, "multi": 1.0, "count_bonus": 2, "cat": "routine", "boss": False},
-    "1": {"base": 5, "multi": 1.0, "count_bonus": 2, "cat": "routine", "boss": False},
-    "5": {"base": 5, "multi": 1.0, "count_bonus": 2, "cat": "routine", "boss": False},
+    # Classes 0/1/5 are HUD digit artifacts in the v0.11 dataset — no scoring weight.
+    "0": {"base": 0, "multi": 1.0, "count_bonus": 0, "cat": "routine", "boss": False},
+    "1": {"base": 0, "multi": 1.0, "count_bonus": 0, "cat": "routine", "boss": False},
+    "5": {"base": 0, "multi": 1.0, "count_bonus": 0, "cat": "routine", "boss": False},
 }
 
 COMBINATION_RULES = [
@@ -1194,21 +1195,35 @@ class YOLODetector:
     def __init__(self, logger, weights=None, conf=0.25, device=""):
         self.logger = logger; self.conf = conf
         if not YOLO: raise RuntimeError("pip install ultralytics")
+        # Autodetect CUDA > MPS (Apple Silicon) > CPU when caller didn't pin a device.
+        if not device:
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    device = "cuda"
+                elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                    device = "mps"
+            except Exception:
+                pass
         paths = [weights] if weights else []
         paths += ["best.pt", "arc_raiders_best.pt", "runs/segment/train/weights/best.pt", "weights/best.pt"]
         for p in paths:
             if p and Path(p).exists():
-                logger.info(f"YOLO weights: {p}"); self.model = YOLO(p)
-                if device: self.model.to(device)
+                logger.info(f"YOLO weights: {p} (device={device or 'cpu'})"); self.model = YOLO(p)
+                if device:
+                    try: self.model.to(device)
+                    except Exception as e: logger.warning(f"YOLO .to({device}) failed, CPU: {e}")
                 return
         raise FileNotFoundError(
             "No YOLO weights. Download from Roboflow:\n"
             "  https://universe.roboflow.com/valorantai/arc-raiders-8tjh4/model/11\n"
             "  Export YOLOv11 weights -> place best.pt in current directory")
 
-    def detect(self, image_path):
+    def detect(self, image):
+        # image: path (str/Path) or BGR numpy ndarray from cv2.
+        # Ultralytics accepts both; ndarray skips a disk round-trip.
         try:
-            results = self.model(image_path, conf=self.conf, verbose=False)
+            results = self.model(image, conf=self.conf, verbose=False)
         except Exception as e:
             self.logger.warning(f"YOLO failed: {e}"); return []
         dets = []
@@ -1257,7 +1272,12 @@ class ScoringEngine:
         return min(100, s), dict(counts), rules
 
     def combine(self, yolo, pixel, boss):
-        f = yolo * 0.65 + pixel * 0.35
+        # Primary blend — YOLO-dominant when both signals agree.
+        blended = yolo * 0.65 + pixel * 0.35
+        # Safety floor: if pixel strongly signals combat (muzzle flash, fire,
+        # damage vignette) but YOLO missed the entities, don't let the blend
+        # bury a real highlight. Keeps 80% of the pixel score as a floor.
+        f = max(blended, pixel * 0.8) if pixel >= 60 else blended
         if boss: f = max(f, 85)
         return min(100, f)
 
@@ -1333,13 +1353,22 @@ class ArcClipDetectorAdapter:
 
     def __init__(self, game_id="arc_raiders", weights_path=None,
                  confidence=0.25, device="", threshold=None,
-                 scoring_version="v3_temporal", detection_overrides=None):
+                 scoring_version="v3_temporal", detection_overrides=None,
+                 clip_mode=None):
         self.game_id = game_id
         self.weights_path = weights_path
         self.confidence = confidence
         self.device = device
         self.scoring_version = scoring_version
         self.overrides = detection_overrides or {}
+        # Clipping mode — gates CV / YOLO / voice paths.
+        # Deferred import so legacy callers that don't pass a mode still work
+        # if clip_modes.py is missing (won't happen, but defensive).
+        try:
+            from .clip_modes import ClipMode
+            self.clip_mode = ClipMode.parse(clip_mode)
+        except Exception:
+            self.clip_mode = None
         # Use version-specific threshold if not explicitly set
         if "intensity_threshold" in self.overrides:
             # Detection settings panel override takes priority
@@ -1383,20 +1412,30 @@ class ArcClipDetectorAdapter:
             handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)-8s %(message)s", datefmt="%H:%M:%S"))
             logger.addHandler(handler)
 
-        # Initialize components
+        # Initialize components — gated by clip mode.
+        # If caller picked "cv" mode, skip YOLO even if weights exist.
+        # If caller picked "yolo" mode, skip pixel-only fallback messaging.
+        mode = self.clip_mode
+        want_yolo = (mode is None) or mode.uses_yolo
+        want_cv = (mode is None) or mode.uses_cv
+
         detector = None
-        if self.has_yolo and YOLO is not None:
+        if want_yolo and self.has_yolo and YOLO is not None:
             try:
                 detector = YOLODetector(
                     logger, weights=self.weights_path,
                     conf=self.confidence, device=self.device)
-                print("  [ArcClipDetector] YOLO + OpenCV pixel analysis mode")
+                print(f"  [ArcClipDetector] mode={mode.value if mode else 'auto'} — YOLO + pixel analysis")
             except Exception as e:
                 print(f"  [ArcClipDetector] YOLO init failed ({e}), falling back to pixel-only")
                 detector = None
 
         if detector is None:
-            print("  [ArcClipDetector] Pure OpenCV pixel analysis mode (no YOLO weights needed)")
+            if want_cv:
+                print(f"  [ArcClipDetector] mode={mode.value if mode else 'auto'} — pixel analysis only")
+            else:
+                # YOLO-only mode with no weights — warn but keep pixel as safety net.
+                print(f"  [ArcClipDetector] mode=yolo requested but no weights — falling back to pixel")
 
         pixel = PixelAnalyzer(logger)
         # Apply menu_suppress override to pixel analyzer
@@ -1431,9 +1470,11 @@ class ArcClipDetectorAdapter:
         if not cap.isOpened():
             raise RuntimeError(f"Cannot open video: {video_path}")
 
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        duration = total_frames / fps
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if not fps or math.isnan(fps) or fps <= 0:
+            fps = 30.0
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        duration = total_frames / fps if total_frames > 0 else 0.0
         # sample_fps override: convert FPS to interval (e.g., 2 fps = 0.5s interval)
         sample_interval = self.SAMPLE_INTERVAL
         if "sample_fps" in ov:
@@ -1448,94 +1489,100 @@ class ArcClipDetectorAdapter:
 
         try:
             while True:
+                # Fast-skip non-sampled frames: grab() maintains stream state but
+                # avoids the cvtColor + numpy copy that read() performs.
+                if frame_idx % frame_skip != 0:
+                    if not cap.grab():
+                        break
+                    if progress_callback and total_frames > 0:
+                        progress_callback(min(frame_idx / total_frames, 1.0))
+                    frame_idx += 1
+                    continue
+
                 ret, frame = cap.read()
                 if not ret:
                     break
 
-                if frame_idx % frame_skip == 0:
-                    timestamp = frame_idx / fps
+                timestamp = frame_idx / fps
 
-                    # YOLO detection (if available)
-                    dets = []
-                    yolo_score = 0.0
-                    counts = {}
-                    rules = []
+                # YOLO detection (if available)
+                dets = []
+                yolo_score = 0.0
+                counts = {}
+                rules = []
 
-                    if detector is not None:
-                        import tempfile
-                        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-                            tmp_path = tmp.name
-                            cv2.imwrite(tmp_path, frame)
-                        try:
-                            dets = detector.detect(tmp_path)
-                            yolo_score, counts, rules = scorer.score_yolo(dets)
-                        finally:
-                            os.unlink(tmp_path)
+                if detector is not None:
+                    dets = detector.detect(frame)
+                    yolo_score, counts, rules = scorer.score_yolo(dets)
 
-                    # Pixel analysis (always runs)
+                # Pixel analysis — skipped in YOLO-only mode (saves ~30% wall time
+                # when YOLO is the sole signal). Always runs otherwise, including
+                # as the fallback when YOLO is unavailable.
+                if want_cv or detector is None:
                     px = pixel.analyze(frame)
                     px_score = pixel.score(px, version=version)
+                else:
+                    px = {}
+                    px_score = 0.0
 
-                    # Category
-                    cat = "routine"
-                    if rules:
-                        best = max(
-                            (r for r in COMBINATION_RULES if r["name"] in rules),
-                            key=lambda r: r["bonus"], default=None)
-                        if best:
-                            cat = best["cat"]
-                    elif counts:
-                        best_e = max(counts, key=lambda e: ENTITY_PROFILES.get(e, {}).get("base", 0))
-                        cat = ENTITY_PROFILES.get(best_e, {}).get("cat", "routine")
+                # Category
+                cat = "routine"
+                if rules:
+                    best = max(
+                        (r for r in COMBINATION_RULES if r["name"] in rules),
+                        key=lambda r: r["bonus"], default=None)
+                    if best:
+                        cat = best["cat"]
+                elif counts:
+                    best_e = max(counts, key=lambda e: ENTITY_PROFILES.get(e, {}).get("base", 0))
+                    cat = ENTITY_PROFILES.get(best_e, {}).get("cat", "routine")
 
-                    # Pixel-only category detection
-                    if px.get("screen_state") == "death_screen":
-                        cat = "death_fail"
-                    elif px.get("screen_state") == "inventory":
-                        cat = "downtime"
-                    elif not counts:
-                        # Pixel-only mode: determine category from pixel signals
-                        if px.get("has_fire") or px.get("has_muzzle_flash"):
-                            cat = "combat_highlight"
-                        elif px.get("has_damage_vignette"):
-                            cat = "close_call"
-                        elif px.get("screen_state") == "screen_flash":
-                            cat = "epic_moment"
-                        elif px.get("has_tracers"):
-                            cat = "combat_highlight"
-                        elif px.get("health") == "critical":
-                            cat = "close_call"
+                # Pixel-only category detection
+                if px.get("screen_state") == "death_screen":
+                    cat = "death_fail"
+                elif px.get("screen_state") == "inventory":
+                    cat = "downtime"
+                elif not counts:
+                    if px.get("has_fire") or px.get("has_muzzle_flash"):
+                        cat = "combat_highlight"
+                    elif px.get("has_damage_vignette"):
+                        cat = "close_call"
+                    elif px.get("screen_state") == "screen_flash":
+                        cat = "epic_moment"
+                    elif px.get("has_tracers"):
+                        cat = "combat_highlight"
+                    elif px.get("health") == "critical":
+                        cat = "close_call"
 
-                    # Score: use pixel-only if no YOLO, otherwise combine
-                    if detector is not None:
-                        final_score = scorer.combine(yolo_score, px_score,
-                                                     counts.get("queen", 0) > 0)
+                # Score: use pixel-only if no YOLO, otherwise combine
+                if detector is not None:
+                    final_score = scorer.combine(yolo_score, px_score,
+                                                 counts.get("queen", 0) > 0)
+                else:
+                    final_score = px_score
+
+                analyses.append(FrameAnalysis(
+                    frame_number=int(timestamp * fps),
+                    timestamp_seconds=timestamp,
+                    timestamp_str=str(timedelta(seconds=int(timestamp))),
+                    detections=dets, entity_counts=counts,
+                    yolo_score=yolo_score, pixel_score=px_score,
+                    pixel_data=px, final_score=final_score,
+                    final_category=cat, triggered_rules=rules,
+                ))
+
+                if frame_idx % (frame_skip * 30) == 0:
+                    if detector and counts:
+                        entities = ", ".join(f"{k}({v})" for k, v in counts.items())
+                        print(f"  [ArcClipDetector] {timestamp:.1f}s - "
+                              f"yolo:{yolo_score:.1f} px:{px_score:.1f} "
+                              f"final:{final_score:.1f} [{cat}] {entities}")
                     else:
-                        # Pixel-only: score is just the pixel score
-                        final_score = px_score
-
-                    analyses.append(FrameAnalysis(
-                        frame_number=int(timestamp * fps),
-                        timestamp_seconds=timestamp,
-                        timestamp_str=str(timedelta(seconds=int(timestamp))),
-                        detections=dets, entity_counts=counts,
-                        yolo_score=yolo_score, pixel_score=px_score,
-                        pixel_data=px, final_score=final_score,
-                        final_category=cat, triggered_rules=rules,
-                    ))
-
-                    if frame_idx % (frame_skip * 30) == 0:
-                        if detector and counts:
-                            entities = ", ".join(f"{k}({v})" for k, v in counts.items())
-                            print(f"  [ArcClipDetector] {timestamp:.1f}s - "
-                                  f"yolo:{yolo_score:.1f} px:{px_score:.1f} "
-                                  f"final:{final_score:.1f} [{cat}] {entities}")
-                        else:
-                            print(f"  [ArcClipDetector] {timestamp:.1f}s - "
-                                  f"px:{px_score:.1f} [{cat}] "
-                                  f"health:{px.get('health','')} "
-                                  f"fire:{px.get('has_fire','')} "
-                                  f"vignette:{px.get('has_damage_vignette','')}")
+                        print(f"  [ArcClipDetector] {timestamp:.1f}s - "
+                              f"px:{px_score:.1f} [{cat}] "
+                              f"health:{px.get('health','')} "
+                              f"fire:{px.get('has_fire','')} "
+                              f"vignette:{px.get('has_damage_vignette','')}")
 
                 if progress_callback and total_frames > 0:
                     progress_callback(min(frame_idx / total_frames, 1.0))
