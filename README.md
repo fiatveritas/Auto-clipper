@@ -234,6 +234,14 @@ Voice triggers currently scan the VOD's **audio track** (post-recording). True l
 
 PRs welcome. New game profile = new entry in `analysis/game_profiles.py`. Bug reports: [GitHub Issues](https://github.com/bendawg2010/Auto-clipper/issues).
 
+Run the smoke tests before opening a PR:
+
+```bash
+python tests/test_smoke.py
+```
+
+Fast — runs in ~2 seconds. Covers the import chain, ClipMode enum, scoring engine, game profiles, clip trigger phrases, shell-script syntax, and bundled weights presence. See [CONTRIBUTING.md](CONTRIBUTING.md) for more.
+
 ## License
 
 MIT — do whatever you want with it. Attribution appreciated, not required.
