@@ -1702,7 +1702,10 @@ function toggleTheme() {
     document.body.classList.toggle("light-theme");
     const isLight = document.body.classList.contains("light-theme");
     localStorage.setItem("autoclipper_theme", isLight ? "light" : "dark");
-    document.getElementById("theme-toggle").textContent = isLight ? "\u263E" : "\u2606";
+    // Theme toggles use SVG icons (class-based), not textContent.
+    // Guarded in case an older template still has id="theme-toggle".
+    const el = document.getElementById("theme-toggle");
+    if (el) el.textContent = isLight ? "\u263E" : "\u2606";
 }
 
 (function initTheme() {
