@@ -132,6 +132,22 @@ def test_all_shell_scripts_parse():
         assert result.returncode == 0, f"{s} has syntax errors: {result.stderr.decode()}"
 
 
+def test_url_validation():
+    """_is_valid_stream_url accepts VOD URLs, rejects live-channel URLs."""
+    import app
+    # Should accept — VOD patterns
+    assert app._is_valid_stream_url("https://www.twitch.tv/videos/123456789")
+    assert app._is_valid_stream_url("https://m.twitch.tv/videos/123456789")
+    assert app._is_valid_stream_url("https://www.youtube.com/watch?v=abc123")
+    assert app._is_valid_stream_url("https://youtu.be/abc123")
+    assert app._is_valid_stream_url("https://www.youtube.com/live/xyz")
+    assert app._is_valid_stream_url("https://www.youtube.com/shorts/xyz")
+    # Should reject — live channel, not a VOD
+    assert not app._is_valid_stream_url("https://www.twitch.tv/shroud")
+    assert not app._is_valid_stream_url("https://example.com/random")
+    assert not app._is_valid_stream_url("")
+
+
 def test_models_best_pt_bundled():
     """The 21 MB YOLO weights must be present in the repo."""
     weights = os.path.join(ROOT, "models", "best.pt")
