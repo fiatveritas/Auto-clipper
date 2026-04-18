@@ -563,7 +563,15 @@
           Do I need a GPU?
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         </summary>
-        <div class="faq__a">No. The default detector is CPU-friendly HSV color + motion analysis — a modern laptop handles a 1-hour VOD in ~3–5 minutes. If you enable optional YOLO object detection, a GPU makes it significantly faster.</div>
+        <div class="faq__a">No. The default detector is CPU-friendly HSV color + motion analysis — a modern laptop handles a 1-hour VOD in ~3–5 minutes. YOLO object detection also runs on CPU, but Apple Silicon (MPS) or CUDA makes it significantly faster. Device is autodetected.</div>
+      </details>
+
+      <details class="faq__item reveal">
+        <summary class="faq__q">
+          Do I need to train a YOLO model first?
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        </summary>
+        <div class="faq__a">No. Auto-Clipper ships with a pre-trained Arc Raiders YOLO model (<code>models/best.pt</code>, 21 MB) that detects 13 entity classes — raider, bombardier, leaper, turret, fireball, and more. YOLO mode works the moment you install. If you want to retrain on newer gameplay or a different game, just overwrite <code>models/best.pt</code> with your own weights.</div>
       </details>
 
       <details class="faq__item reveal">
