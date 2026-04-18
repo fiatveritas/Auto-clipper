@@ -529,12 +529,12 @@
         <div class="curl-install__step"><span>3</span> Browser opens at localhost:8080</div>
       </div>
       <div class="curl-install__windows">
-        <strong>On Windows?</strong> Open PowerShell and paste:
+        <strong>On Windows?</strong> Open Command Prompt (<kbd>Win</kbd>+<kbd>R</kbd> → <code>cmd</code>) and paste:
         <div class="curl-install__code curl-install__code--small">
           <button class="copy-btn" type="button">Copy</button>
-          <code>git clone https://github.com/bendawg2010/Auto-clipper.git; cd Auto-clipper; .\install.bat; .\run.bat</code>
+          <code>git clone https://github.com/bendawg2010/Auto-clipper.git 2&gt;nul || git -C Auto-clipper pull &amp;&amp; cd Auto-clipper &amp;&amp; install.bat &amp;&amp; run.bat</code>
         </div>
-        Git + Python 3.11 required — see <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a> (check "Add to PATH").
+        Same idempotent trick: clones if new, pulls if already there. Re-run anytime for a clean reinstall. Git + Python 3.11 required — see <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a> (check "Add to PATH").
       </div>
     </div>
 
