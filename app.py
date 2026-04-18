@@ -2213,5 +2213,38 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
         update("error", 0, str(e))
 
 
+def _startup_banner():
+    """Friendly startup banner with environment info — cheap to compute,
+    surfaces the most common root causes ('where are my weights', 'is
+    ffmpeg there', 'what's my Python version') right at launch."""
+    import platform
+    import shutil
+    print()
+    print("  =============================================")
+    print("    Auto-Clipper — running at http://localhost:8080")
+    print("  =============================================")
+    print(f"   Python     : {platform.python_version()} ({platform.system()})")
+    ffmpeg_path = shutil.which("ffmpeg")
+    print(f"   ffmpeg     : {ffmpeg_path or '  ⚠ NOT ON PATH (install ffmpeg to enable downloads + clipping)'}")
+
+    # YOLO weights quick check
+    base = os.path.dirname(os.path.abspath(__file__))
+    weights = os.path.join(base, "models", "best.pt")
+    if os.path.exists(weights):
+        size = os.path.getsize(weights) / (1024 * 1024)
+        print(f"   YOLO       : models/best.pt ({size:.1f} MB) ready")
+    else:
+        print(f"   YOLO       : no weights found (ok — pixel pipeline still works)")
+
+    # yt-dlp
+    try:
+        import yt_dlp
+        print(f"   yt-dlp     : {yt_dlp.version.__version__}")
+    except Exception:
+        print(f"   yt-dlp     : ⚠ not installed")
+    print()
+
+
 if __name__ == "__main__":
+    _startup_banner()
     app.run(debug=True, host="0.0.0.0", port=8080)
