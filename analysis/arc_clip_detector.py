@@ -54,7 +54,6 @@ import math
 import os
 import subprocess
 import sys
-import time
 from collections import defaultdict
 from dataclasses import dataclass, field, asdict
 from datetime import timedelta
