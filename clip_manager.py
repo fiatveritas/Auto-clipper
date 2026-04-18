@@ -149,16 +149,23 @@ class ClipManager:
         return path if os.path.exists(path) else None
 
     def get_vod_duration(self, video_path):
-        """Get the duration of a video file in seconds."""
+        """Get the duration of a video file in seconds. Returns 0 if ffprobe
+        is missing or the file can't be probed."""
         cmd = [
             "ffprobe", "-v", "error",
             "-show_entries", "format=duration",
             "-of", "default=noprint_wrappers=1:nokey=1",
             video_path,
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return 0
         if result.returncode == 0 and result.stdout.strip():
-            return float(result.stdout.strip())
+            try:
+                return float(result.stdout.strip())
+            except ValueError:
+                return 0
         return 0
 
     def extract_clips(self, video_path, highlights, job_id, progress_callback=None):
