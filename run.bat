@@ -15,6 +15,17 @@ if not exist "venv\Scripts\activate.bat" (
 :: Activate and run
 call venv\Scripts\activate.bat
 
+:: Preflight: ffmpeg check (silent pass if present)
+where ffmpeg >nul 2>&1
+if %errorlevel% neq 0 (
+    echo   [!] ffmpeg not found on PATH. VOD download + clip extraction will fail.
+    echo       Run install.bat again to auto-install it.
+    echo.
+)
+
+:: Keep yt-dlp fresh - Twitch breaks its parsing monthly
+python -m pip install --upgrade yt-dlp --quiet >nul 2>&1
+
 :: Start server in background
 start /B python app.py
 

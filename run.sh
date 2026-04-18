@@ -16,6 +16,22 @@ fi
 # Activate and run
 source venv/bin/activate
 
+# ── Preflight (common 'nothing works' root causes) ────────────────────
+if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "  ⚠  ffmpeg not found on PATH."
+    echo "     VOD download + clip extraction will silently fail without it."
+    if [[ "$(uname)" == "Darwin" ]]; then
+        echo "     Install: brew install ffmpeg"
+    else
+        echo "     Install: sudo apt install ffmpeg   # or dnf / pacman equivalent"
+    fi
+    echo ""
+fi
+
+# Keep yt-dlp fresh — Twitch breaks its parsing monthly and a stale
+# yt-dlp is the #1 reason 'my VOD download fails'.
+python -m pip install --upgrade yt-dlp --quiet 2>/dev/null || true
+
 # Start server in background
 python app.py &
 SERVER_PID=$!
