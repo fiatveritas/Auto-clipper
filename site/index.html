@@ -21,7 +21,7 @@
 
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' x2='1' y1='0' y2='1'><stop offset='0' stop-color='%239147ff'/><stop offset='1' stop-color='%23ff3e7f'/></linearGradient></defs><rect width='32' height='32' rx='8' fill='url(%23g)'/><path d='M11 10l10 6-10 6z' fill='white'/></svg>" />
 
-  <link rel="stylesheet" href="styles.css?v=10" />
+  <link rel="stylesheet" href="styles.css?v=11" />
 </head>
 <body>
 
@@ -504,8 +504,8 @@
   <div class="container">
     <div class="section__head">
       <span class="section__eyebrow">Install</span>
-      <h2>One command. 60 seconds. Done.</h2>
-      <p>Paste the line for your OS — we handle the clone, the deps, and launch the app.</p>
+      <h2>One command. Paste. Done.</h2>
+      <p>Open Terminal, paste the line below, hit Enter. No warnings, no installers, no Gatekeeper dialogs.</p>
     </div>
 
     <!-- PRIMARY: curl-pipe one-liner — bypasses Gatekeeper entirely -->
@@ -513,10 +513,10 @@
       <div class="curl-install__head">
         <div class="curl-install__badge">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
-          Recommended · No Gatekeeper warnings
+          The way to install · Mac &amp; Linux
         </div>
         <h3>Paste one line in Terminal</h3>
-        <p>Same trick Homebrew uses. Files fetched via <code>curl</code> skip the macOS quarantine flag, so there's no "cannot verify" dialog — ever. Works on Mac + Linux.</p>
+        <p>Same pattern Homebrew uses. Files fetched via <code>curl</code> skip the macOS quarantine flag, so there's <strong>no "cannot verify" dialog — ever</strong>. The script clones the repo, installs Python + FFmpeg + deps, and launches the app.</p>
       </div>
       <div class="curl-install__code">
         <button class="copy-btn" type="button">Copy</button>
@@ -527,10 +527,24 @@
         <div class="curl-install__step"><span>2</span> Paste the line above, hit Enter</div>
         <div class="curl-install__step"><span>3</span> Browser opens at localhost:8080</div>
       </div>
+      <div class="curl-install__windows">
+        <strong>On Windows?</strong> Open PowerShell and paste:
+        <div class="curl-install__code curl-install__code--small">
+          <button class="copy-btn" type="button">Copy</button>
+          <code>git clone https://github.com/bendawg2010/Auto-clipper.git; cd Auto-clipper; .\install.bat; .\run.bat</code>
+        </div>
+        Git + Python 3.11 required — see <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a> (check "Add to PATH").
+      </div>
     </div>
 
-    <!-- Direct installer downloads -->
-    <div class="dl reveal">
+    <!-- Direct installer downloads (collapsed — alternate flow) -->
+    <details class="dl-alt reveal">
+      <summary class="dl-alt__summary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Prefer a click-to-download installer? <span class="dl-alt__note">(not recommended — macOS shows a scary warning)</span></span>
+        <svg class="dl-alt__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </summary>
+      <div class="dl reveal">
       <div class="dl__head">
         <div class="dl__eyebrow">One-click installer</div>
         <div class="dl__sub">No terminal needed. Double-click, drag to Applications, done.</div>
@@ -586,12 +600,20 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
         </div>
         <div class="dl__gk-body">
-          <strong>Mac blocks the .pkg on first launch?</strong> It's ad-hoc signed but not Apple-notarized (we don't pay the $99/yr Developer tax). When macOS shows <em>"Apple could not verify…"</em>: click <strong>Done</strong>, then open <strong>System Settings → Privacy &amp; Security</strong>, scroll to the "Auto-Clipper was blocked" message, and click <strong>"Open Anyway"</strong>. You only do this once. Full source: <a href="https://github.com/bendawg2010/Auto-clipper" target="_blank" rel="noopener">github.com/bendawg2010/Auto-clipper</a>.
+          <strong>Mac blocks the .pkg on first launch?</strong> It's ad-hoc signed but not Apple-notarized (we don't pay the $99/yr Developer tax). When macOS shows <em>"Apple could not verify…"</em>: click <strong>Done</strong>, then open <strong>System Settings → Privacy &amp; Security</strong>, scroll to the "Auto-Clipper was blocked" message, and click <strong>"Open Anyway"</strong>. You only do this once. Or just <strong>use the Terminal command above</strong> and skip the dance entirely. Full source: <a href="https://github.com/bendawg2010/Auto-clipper" target="_blank" rel="noopener">github.com/bendawg2010/Auto-clipper</a>.
         </div>
       </div>
     </div>
+    </details>
 
-    <!-- Platform tabs -->
+    <!-- Platform tabs (also an alternate — collapsed) -->
+    <details class="install2-alt">
+      <summary class="dl-alt__summary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/></svg>
+        <span>Advanced: per-OS terminal tabs, git clone variants, reinstall script</span>
+        <svg class="dl-alt__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </summary>
+    <div class="install2 reveal">
     <div class="install2 reveal">
       <div class="install2__tabs" role="tablist">
         <button class="install2__tab is-active" data-os="mac" role="tab">
@@ -699,6 +721,7 @@ cd Auto-clipper &amp;&amp; reinstall.bat</code>
         </div>
       </div>
     </div>
+    </details>
   </div>
 </section>
 

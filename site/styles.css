@@ -1510,6 +1510,95 @@ section { padding: 100px 0; position: relative; }
   .curl-install__code .copy-btn { position: static; display: block; margin-bottom: 10px; }
 }
 
+.curl-install__windows {
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  position: relative;
+}
+.curl-install__windows strong { color: var(--text); }
+.curl-install__windows a { color: var(--primary-hi); text-decoration: underline; text-underline-offset: 3px; }
+.curl-install__code--small {
+  margin: 10px 0 10px;
+  padding: 14px 18px;
+  padding-right: 80px;
+  font-size: 0.78rem;
+}
+
+/* ============ INSTALL — COLLAPSED ALTERNATES ============ */
+.dl-alt,
+.install2-alt {
+  max-width: 880px;
+  margin: 24px auto 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0;
+  overflow: hidden;
+  transition: border-color 180ms var(--ease);
+}
+.dl-alt[open],
+.install2-alt[open] {
+  border-color: var(--border-strong);
+}
+.dl-alt__summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--text-muted);
+  font-family: 'Chakra Petch', sans-serif;
+  font-weight: 600;
+  font-size: 0.92rem;
+  transition: color 180ms var(--ease), background 180ms var(--ease);
+}
+.dl-alt__summary::-webkit-details-marker { display: none; }
+.dl-alt__summary:hover {
+  color: var(--text);
+  background: rgba(145, 71, 255, 0.04);
+}
+.dl-alt__summary > svg:first-child {
+  width: 18px; height: 18px;
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+.dl-alt__summary > span {
+  flex: 1;
+}
+.dl-alt__note {
+  color: var(--text-dim);
+  font-weight: 400;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  margin-left: 4px;
+}
+.dl-alt__chev {
+  width: 16px; height: 16px;
+  flex-shrink: 0;
+  color: var(--text-dim);
+  transition: transform 220ms var(--ease);
+}
+.dl-alt[open] .dl-alt__chev,
+.install2-alt[open] .dl-alt__chev {
+  transform: rotate(180deg);
+}
+.dl-alt .dl,
+.install2-alt .install2 {
+  padding: 20px 24px 24px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  border-top: 1px dashed var(--border);
+  border-radius: 0;
+  max-width: none;
+  margin: 0;
+}
+
 /* ============ INSTALL — DIRECT DOWNLOADS ============ */
 .dl {
   max-width: 880px;
