@@ -141,11 +141,20 @@ The AI knows the difference between "walking around doing nothing" and "intense 
 
 ---
 
-## YOLO Weights (optional but recommended)
+## YOLO Weights
 
-YOLO and Hybrid modes need a `.pt` weights file. If none is found, Auto-Clipper automatically falls back to pixel-only mode and tells you so.
+**Bundled out of the box:** `models/best.pt` ships with the repo — a 5.4 MB YOLOv11n COCO-pretrained model. That means YOLO mode loads + runs the moment you install. It detects generic objects (person / car / etc.) rather than Arc Raiders entities, but the pixel + audio pipeline still catches real highlights on top of it.
 
-Arc Raiders weights: [Roboflow Universe — Arc Raiders Object Detection v13](https://universe.roboflow.com/valorantai/arc-raiders-8tjh4/model/11) — export YOLOv11 format and drop the `.pt` file in the repo root (or `models/` or `weights/`). The detector auto-discovers it.
+**Upgrade to a real Arc Raiders model:**
+1. Get the dataset → [Roboflow Universe — Arc Raiders Object Detection v13](https://universe.roboflow.com/valorantai/arc-raiders-8tjh4/model/11)
+2. Train with ultralytics:
+   ```bash
+   yolo detect train model=yolo11n.pt data=path/to/arc-raiders/data.yaml \
+       epochs=50 imgsz=640 device=mps  # or cuda / cpu
+   ```
+3. Overwrite `models/best.pt` with your `runs/detect/train/weights/best.pt`
+
+The detector also auto-discovers `.pt` files in `weights/`, the repo root, and `runs/detect/train/weights/` — drop them wherever is convenient.
 
 ---
 
