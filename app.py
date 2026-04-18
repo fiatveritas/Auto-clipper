@@ -1436,10 +1436,24 @@ def delete_highlight_rule(rule_id):
 
 
 def _is_valid_stream_url(url):
-    """Check if the URL is a valid Twitch or YouTube VOD link."""
+    """Check if the URL is a recorded VOD Auto-Clipper can download.
+
+    Rejects Twitch live-channel URLs (twitch.tv/<name>) since those are
+    live streams, not VODs, and yt-dlp can't grab them as clip sources.
+    Accepts VOD URLs only.
+    """
     url_lower = url.lower()
-    patterns = ["twitch.tv/videos/", "twitch.tv/", "youtube.com/watch", "youtu.be/", "youtube.com/live/"]
-    return any(p in url_lower for p in patterns)
+    # Accept explicit VOD patterns
+    vod_patterns = [
+        "twitch.tv/videos/",       # Twitch VODs
+        "youtube.com/watch",       # YouTube regular videos
+        "youtu.be/",               # YouTube short links
+        "youtube.com/live/",       # YouTube stream-replay URLs
+        "youtube.com/shorts/",     # YouTube Shorts
+        "m.youtube.com/watch",     # Mobile YouTube
+        "m.twitch.tv/videos/",     # Mobile Twitch VODs
+    ]
+    return any(p in url_lower for p in vod_patterns)
 
 
 def _get_platform_name(url):
