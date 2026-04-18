@@ -4,13 +4,9 @@ This folder holds the YOLO `.pt` weights file that Auto-Clipper's YOLO detection
 
 ## `best.pt` — bundled with the repo
 
-The bundled `best.pt` is the **YOLOv11n base model** pretrained on COCO (80 generic classes: person, car, dog, etc.). It ships so that:
+The bundled `best.pt` is a **YOLOv11n fine-tuned on the Arc Raiders v0.11 Roboflow dataset** (2880 training frames, 13 entity classes: raider, raider-down, rocketeer, bastion, leaper, bombardier, hornet, wasp, snitch, pop, fireball, probe, turret). Ships at ~5 MB (stripped-optimizer, inference-only) and detects game-specific entities out of the box.
 
-1. `YOLO Local Model` detection mode loads without crashing
-2. Users can smoke-test the YOLO pipeline immediately after install
-3. The app's graceful-fallback path is never exercised for missing weights
-
-Because COCO classes don't map to Arc Raiders entities (raider / turret / fireball / etc.), the bundled model won't produce game-specific highlights. Auto-Clipper's pixel analysis + audio detection still work on top of it, so you'll still get reasonable clips — just without the extra precision a game-trained model would give.
+YOLO detection mode loads without any setup — no API keys, no manual weight download, no "requires .pt" friction.
 
 ## Upgrading to a real Arc Raiders model
 

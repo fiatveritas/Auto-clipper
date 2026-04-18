@@ -152,7 +152,7 @@ The AI knows the difference between "walking around doing nothing" and "intense 
 
 ## YOLO Weights
 
-**Bundled out of the box:** `models/best.pt` ships with the repo — a 5.4 MB YOLOv11n COCO-pretrained model. That means YOLO mode loads + runs the moment you install. It detects generic objects (person / car / etc.) rather than Arc Raiders entities, but the pixel + audio pipeline still catches real highlights on top of it.
+**Bundled out of the box:** `models/best.pt` ships with the repo — a **YOLOv11n fine-tuned on the Arc Raiders Roboflow dataset** (~5 MB stripped-optimizer checkpoint). Detects 13 game-specific classes (raider, raider-down, rocketeer, bastion, leaper, bombardier, hornet, wasp, snitch, pop, fireball, probe, turret). YOLO mode runs the moment you install — no API keys, no manual weight download.
 
 **Upgrade to a real Arc Raiders model:**
 1. Get the dataset → [Roboflow Universe — Arc Raiders Object Detection v13](https://universe.roboflow.com/valorantai/arc-raiders-8tjh4/model/11)
