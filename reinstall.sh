@@ -89,7 +89,10 @@ fi
 # Step 3: Fresh clone
 # ──────────────────────────────────────────────
 echo "[3/5] Cloning fresh copy from $REPO_URL (branch: $BRANCH)"
-git clone --branch "$BRANCH" "$REPO_URL" "$TARGET"
+# --depth=1 keeps the clone small (the repo now includes a 21 MB
+# best.pt); user can `git fetch --unshallow` later if they need
+# the full history.
+git clone --branch "$BRANCH" --depth=1 "$REPO_URL" "$TARGET"
 
 # ──────────────────────────────────────────────
 # Step 4: Restore user data
