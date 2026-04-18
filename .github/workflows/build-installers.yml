@@ -1,0 +1,229 @@
+name: Build installers
+
+# Triggers on release tag (v*.*.*) — builds Mac .dmg, Windows .exe, and
+# a cross-platform source.tar.gz, then attaches them to the release.
+
+on:
+  release:
+    types: [created, published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build (e.g. v0.12.0)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  # ==========================================================================
+  # macOS — Auto-Clipper.dmg wrapping an .app that runs install.sh + run.sh
+  # ==========================================================================
+  build-mac:
+    name: Build macOS .dmg
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine tag
+        id: tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          TAG="${RELEASE_TAG:-${INPUT_TAG:-$REF_NAME}}"
+          # Tag names come from the git ref validator — safe for filenames/vars.
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Auto-Clipper.app wrapper
+        env:
+          APP_VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -e
+          APP=build/Auto-Clipper.app
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+
+          cat > "$APP/Contents/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleDisplayName</key><string>Auto-Clipper</string>
+            <key>CFBundleExecutable</key><string>launch</string>
+            <key>CFBundleIdentifier</key><string>dev.bendawg.auto-clipper</string>
+            <key>CFBundleName</key><string>Auto-Clipper</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>${APP_VERSION}</string>
+            <key>CFBundleVersion</key><string>${APP_VERSION}</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict>
+          </plist>
+          PLIST
+
+          cat > "$APP/Contents/MacOS/launch" <<'LAUNCH'
+          #!/bin/bash
+          REPO="$HOME/Library/Application Support/Auto-Clipper"
+          mkdir -p "$REPO"
+          if [ ! -d "$REPO/Auto-clipper/.git" ]; then
+              /usr/bin/osascript -e 'tell app "Terminal" to do script "git clone https://github.com/bendawg2010/Auto-clipper.git ~/Library/Application\\ Support/Auto-Clipper/Auto-clipper && cd ~/Library/Application\\ Support/Auto-Clipper/Auto-clipper && ./install.sh && ./run.sh"'
+          else
+              /usr/bin/osascript -e 'tell app "Terminal" to do script "cd ~/Library/Application\\ Support/Auto-Clipper/Auto-clipper && git pull && ./run.sh"'
+          fi
+          LAUNCH
+          chmod +x "$APP/Contents/MacOS/launch"
+
+          # Bundle the source so users can inspect it.
+          mkdir -p "$APP/Contents/Resources/source"
+          rsync -a --exclude='.git' --exclude='build' --exclude='site' \
+                --exclude='venv' --exclude='__pycache__' \
+                --exclude='downloads' --exclude='library' \
+                --exclude='sessions' --exclude='uploads' \
+                --exclude='static/clips' --exclude='static/thumbnails' \
+                ./ "$APP/Contents/Resources/source/"
+
+      - name: Create DMG
+        env:
+          DMG_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          brew install create-dmg
+          cd build
+          DMG_NAME="Auto-Clipper-${DMG_TAG}.dmg"
+          create-dmg \
+            --volname "Auto-Clipper ${DMG_TAG}" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "Auto-Clipper.app" 175 190 \
+            --hide-extension "Auto-Clipper.app" \
+            --app-drop-link 425 190 \
+            "${DMG_NAME}" \
+            "Auto-Clipper.app" || true
+          ls -la *.dmg || (echo "DMG build failed" && exit 1)
+          echo "DMG_PATH=build/${DMG_NAME}" >> "$GITHUB_ENV"
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.DMG_PATH }}
+          tag_name: ${{ steps.tag.outputs.tag }}
+
+  # ==========================================================================
+  # Windows — Auto-Clipper-Setup.exe via Inno Setup
+  # ==========================================================================
+  build-windows:
+    name: Build Windows .exe
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine tag
+        id: tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          TAG="${RELEASE_TAG:-${INPUT_TAG:-$REF_NAME}}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Write Inno Setup script
+        shell: bash
+        env:
+          APP_VERSION: ${{ steps.tag.outputs.version }}
+          APP_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          mkdir -p build
+          cat > build/auto-clipper.iss <<ISS
+          [Setup]
+          AppName=Auto-Clipper
+          AppVersion=${APP_VERSION}
+          AppPublisher=bendawg2010
+          AppPublisherURL=https://auto-clipper.pages.dev
+          DefaultDirName={autopf}\\Auto-Clipper
+          DefaultGroupName=Auto-Clipper
+          OutputDir=..\\dist
+          OutputBaseFilename=Auto-Clipper-${APP_TAG}-Setup
+          Compression=lzma2
+          SolidCompression=yes
+          ArchitecturesInstallIn64BitMode=x64
+          WizardStyle=modern
+          PrivilegesRequired=lowest
+
+          [Files]
+          Source: "..\\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion; \\
+            Excludes: "\\.git\\*,venv\\*,build\\*,site\\*,downloads\\*,library\\*,sessions\\*,uploads\\*,static\\clips\\*,static\\thumbnails\\*,__pycache__\\*"
+
+          [Icons]
+          Name: "{group}\\Auto-Clipper"; Filename: "{app}\\Auto-Clipper.bat"; WorkingDir: "{app}"
+          Name: "{group}\\Reinstall Auto-Clipper"; Filename: "{app}\\reinstall.bat"; WorkingDir: "{app}"
+          Name: "{commondesktop}\\Auto-Clipper"; Filename: "{app}\\Auto-Clipper.bat"; WorkingDir: "{app}"; Tasks: desktopicon
+
+          [Tasks]
+          Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons"
+
+          [Run]
+          Filename: "{app}\\install.bat"; WorkingDir: "{app}"; Description: "Install Python deps + FFmpeg"; Flags: waituntilterminated
+          Filename: "{app}\\run.bat"; WorkingDir: "{app}"; Description: "Launch Auto-Clipper"; Flags: postinstall nowait skipifsilent
+
+          [UninstallDelete]
+          Type: filesandordirs; Name: "{app}\\venv"
+          Type: filesandordirs; Name: "{app}\\__pycache__"
+          ISS
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress
+
+      - name: Compile installer
+        shell: cmd
+        run: |
+          mkdir dist
+          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" build\auto-clipper.iss
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Auto-Clipper-${{ steps.tag.outputs.tag }}-Setup.exe
+          tag_name: ${{ steps.tag.outputs.tag }}
+
+  # ==========================================================================
+  # Linux — clean source tarball
+  # ==========================================================================
+  build-source:
+    name: Build source tarball
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine tag
+        id: tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          TAG="${RELEASE_TAG:-${INPUT_TAG:-$REF_NAME}}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Create tarball
+        env:
+          TAR_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          mkdir -p dist
+          tar --exclude='.git' --exclude='venv' --exclude='build' \
+              --exclude='downloads' --exclude='library' \
+              --exclude='sessions' --exclude='uploads' \
+              --exclude='static/clips' --exclude='static/thumbnails' \
+              --exclude='__pycache__' --exclude='dist' \
+              -czf "dist/Auto-Clipper-${TAR_TAG}-source.tar.gz" \
+              --transform "s,^,Auto-Clipper/," \
+              *
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Auto-Clipper-${{ steps.tag.outputs.tag }}-source.tar.gz
+          tag_name: ${{ steps.tag.outputs.tag }}
