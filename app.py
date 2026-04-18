@@ -174,7 +174,7 @@ def list_games():
 
 @app.route("/api/analyze", methods=["POST"])
 def start_analysis():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}  # None if body isn't valid JSON
     url = data.get("url", "").strip()
     library_file = data.get("library_file", "").strip()
     api_key = data.get("api_key", "").strip()
@@ -182,8 +182,11 @@ def start_analysis():
     time_end = data.get("time_end", "").strip()
     game_id = data.get("game", "arc_raiders").strip()
     detection_method = data.get("detection_method", "audio_cv").strip()
-    sensitivity = int(data.get("sensitivity", 50))
-    detection_overrides = data.get("detection_overrides", {})
+    try:
+        sensitivity = int(data.get("sensitivity", 50))
+    except (TypeError, ValueError):
+        sensitivity = 50  # Graceful fallback for malformed sensitivity
+    detection_overrides = data.get("detection_overrides", {}) or {}
 
     # Option 1: Re-analyze a saved VOD from the library
     if library_file:
