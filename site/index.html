@@ -21,7 +21,7 @@
 
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' x2='1' y1='0' y2='1'><stop offset='0' stop-color='%239147ff'/><stop offset='1' stop-color='%23ff3e7f'/></linearGradient></defs><rect width='32' height='32' rx='8' fill='url(%23g)'/><path d='M11 10l10 6-10 6z' fill='white'/></svg>" />
 
-  <link rel="stylesheet" href="styles.css?v=3" />
+  <link rel="stylesheet" href="styles.css?v=4" />
 </head>
 <body>
 
@@ -360,6 +360,107 @@
   </div>
 </section>
 
+<!-- ============ PERFORMANCE ============ -->
+<section id="perf">
+  <div class="container">
+    <div class="section__head">
+      <span class="section__eyebrow">Performance</span>
+      <h2>Fast. Measured, not marketed.</h2>
+      <p>Real numbers from the 0.12 release on a 10-second smoke test and a 1-hour Twitch VOD. Your mileage depends on GPU / CPU — MPS and CUDA are autodetected.</p>
+    </div>
+
+    <div class="perf">
+      <div class="perf__card reveal">
+        <div class="perf__label">Pixel-only mode</div>
+        <div class="perf__metric"><span class="perf__num">28.6×</span><span class="perf__unit">realtime</span></div>
+        <div class="perf__desc">CPU only. 10s smoke test → 0.35s wall time. No weights, no GPU, no accounts.</div>
+        <div class="perf__bar"><div class="perf__fill" style="width:95%; background:linear-gradient(90deg,var(--accent),#4ef0c9)"></div></div>
+      </div>
+      <div class="perf__card reveal">
+        <div class="perf__label">YOLO on Apple Silicon MPS</div>
+        <div class="perf__metric"><span class="perf__num">~6–8×</span><span class="perf__unit">realtime</span></div>
+        <div class="perf__desc">1-hr VOD → ~8 min end-to-end including download. Autodetects MPS / CUDA / CPU.</div>
+        <div class="perf__bar"><div class="perf__fill" style="width:55%; background:linear-gradient(90deg,var(--primary),var(--primary-hi))"></div></div>
+      </div>
+      <div class="perf__card reveal">
+        <div class="perf__label">Clip It voice scan</div>
+        <div class="perf__metric"><span class="perf__num">~5–10×</span><span class="perf__unit">realtime</span></div>
+        <div class="perf__desc">Whisper audio-only transcription (faster-whisper backend). Each trigger → 30s clip.</div>
+        <div class="perf__bar"><div class="perf__fill" style="width:45%; background:linear-gradient(90deg,var(--cta),var(--cta-hi))"></div></div>
+      </div>
+    </div>
+
+    <div class="perf__details reveal">
+      <div class="perf__detail">
+        <div class="perf__detail-num">-100%</div>
+        <div class="perf__detail-desc">Temp-JPEG writes removed. Numpy frames go straight to YOLO.</div>
+      </div>
+      <div class="perf__detail">
+        <div class="perf__detail-num">-30%</div>
+        <div class="perf__detail-desc">Wall time in YOLO-only mode — pixel analysis skipped when not needed.</div>
+      </div>
+      <div class="perf__detail">
+        <div class="perf__detail-num">~60%</div>
+        <div class="perf__detail-desc">Decoder cycles saved — `cap.grab()` skips cvtColor + memcpy on non-sampled frames.</div>
+      </div>
+      <div class="perf__detail">
+        <div class="perf__detail-num">0</div>
+        <div class="perf__detail-desc">Network calls required for default detection. 100% on-device.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ USE CASES ============ -->
+<section id="usecases">
+  <div class="container">
+    <div class="section__head">
+      <span class="section__eyebrow">Who it's for</span>
+      <h2>Built for the grind.</h2>
+      <p>If you've ever finished a 4-hour stream and faced the scrub bar, this is for you.</p>
+    </div>
+
+    <div class="usecases">
+      <div class="usecase reveal">
+        <div class="usecase__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l5 5-5 5"/><path d="M4 4h7a7 7 0 0 1 7 7v9"/></svg>
+        </div>
+        <h3>Twitch streamers</h3>
+        <p>End your stream. Drop the VOD link. Get a 30-clip reel before you finish your water. Say "clip that" mid-stream for instant highlights.</p>
+        <ul>
+          <li>Twitch / YouTube VOD URLs</li>
+          <li>Auto-export TikTok 9:16 vertical</li>
+          <li>Rolling 30s buffer via voice</li>
+        </ul>
+      </div>
+      <div class="usecase reveal">
+        <div class="usecase__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <h3>Content creators</h3>
+        <p>Short-form pipelines that used to take hours: paste, wait, trim, post. Stack multiple VODs into a batch and grab the best moments across sessions.</p>
+        <ul>
+          <li>Batch analyze via library</li>
+          <li>Cut + trim without re-encoding</li>
+          <li>Preview before you commit</li>
+        </ul>
+      </div>
+      <div class="usecase reveal">
+        <div class="usecase__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>
+        </div>
+        <h3>Competitive / coaching</h3>
+        <p>Pull every kill + death + close-call from a scrim. YOLO classes tag raiders, turrets, and bosses so you can filter your review to specific encounter types.</p>
+        <ul>
+          <li>Per-entity clip filters</li>
+          <li>Confidence-ranked library</li>
+          <li>Share links to specific timestamps</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ============ GAMES ============ -->
 <section id="games">
   <div class="container">
@@ -427,15 +528,16 @@
       <div class="install2__panels">
         <!-- macOS -->
         <div class="install2__panel is-active" data-panel="mac">
-          <div class="install2__hint">First time on Mac? <a href="https://brew.sh" target="_blank" rel="noopener">Install Homebrew</a> — that's it. Everything else is automatic.</div>
+          <div class="install2__hint">First time on Mac? <a href="https://brew.sh" target="_blank" rel="noopener">Install Homebrew</a> — that's it. Everything else is automatic. <strong>Already cloned?</strong> This command updates + runs.</div>
           <div class="install2__code">
             <button class="copy-btn" type="button">Copy</button>
-            <code><span class="c"># paste into Terminal</span>
-git clone https://github.com/bendawg2010/<span class="v">Auto-clipper</span>.git &amp;&amp; cd Auto-clipper &amp;&amp; ./install.sh &amp;&amp; ./run.sh</code>
+            <code><span class="c"># paste into Terminal — safe to re-run</span>
+git clone https://github.com/bendawg2010/<span class="v">Auto-clipper</span>.git 2&gt;/dev/null || git -C Auto-clipper pull &amp;&amp; cd Auto-clipper &amp;&amp; ./install.sh &amp;&amp; ./run.sh</code>
           </div>
           <ul class="install2__bullets">
-            <li>Installs Homebrew, Python 3.11, FFmpeg — anything missing, auto-fetched.</li>
-            <li>Creates a local venv in the repo — nothing pollutes your system Python.</li>
+            <li>First run: installs Homebrew, Python 3.11, FFmpeg — anything missing, auto-fetched.</li>
+            <li>Re-run: pulls the latest code and relaunches. No duplicate clone, no errors.</li>
+            <li>Local venv in the repo — nothing pollutes your system Python.</li>
             <li>Launches Auto-Clipper at <code>http://localhost:8080</code>.</li>
           </ul>
         </div>
@@ -445,12 +547,13 @@ git clone https://github.com/bendawg2010/<span class="v">Auto-clipper</span>.git
           <div class="install2__hint">First time on Windows? Install <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python 3.11</a> with "Add to PATH" checked. FFmpeg auto-installs.</div>
           <div class="install2__code">
             <button class="copy-btn" type="button">Copy</button>
-            <code><span class="c">REM paste into Command Prompt</span>
-git clone https://github.com/bendawg2010/<span class="v">Auto-clipper</span>.git &amp;&amp; cd Auto-clipper &amp;&amp; install.bat &amp;&amp; run.bat</code>
+            <code><span class="c">REM paste into Command Prompt — safe to re-run</span>
+git clone https://github.com/bendawg2010/<span class="v">Auto-clipper</span>.git || git -C Auto-clipper pull &amp;&amp; cd Auto-clipper &amp;&amp; install.bat &amp;&amp; run.bat</code>
           </div>
           <ul class="install2__bullets">
-            <li>Downloads FFmpeg automatically to the repo's <code>bin/</code> folder.</li>
-            <li>Creates a local venv — zero AppData footprint.</li>
+            <li>First run: downloads FFmpeg automatically to the repo's <code>bin/</code> folder.</li>
+            <li>Re-run: pulls latest and relaunches without duplicate-clone errors.</li>
+            <li>Local venv — zero AppData footprint.</li>
             <li>Launches in your default browser at <code>http://localhost:8080</code>.</li>
           </ul>
         </div>
@@ -460,9 +563,8 @@ git clone https://github.com/bendawg2010/<span class="v">Auto-clipper</span>.git
           <div class="install2__hint">Works on Ubuntu, Fedora, Arch, Debian. Needs <code>python3</code>, <code>git</code>, <code>ffmpeg</code> via your package manager.</div>
           <div class="install2__code">
             <button class="copy-btn" type="button">Copy</button>
-            <code><span class="c"># ubuntu / debian</span>
-sudo apt install -y python3 python3-venv git ffmpeg &amp;&amp; \
-git clone https://github.com/bendawg2010/<span class="v">Auto-clipper</span>.git &amp;&amp; cd Auto-clipper &amp;&amp; ./install.sh &amp;&amp; ./run.sh</code>
+            <code><span class="c"># ubuntu / debian — safe to re-run</span>
+sudo apt install -y python3 python3-venv git ffmpeg &amp;&amp; (git clone https://github.com/bendawg2010/<span class="v">Auto-clipper</span>.git 2&gt;/dev/null || git -C Auto-clipper pull) &amp;&amp; cd Auto-clipper &amp;&amp; ./install.sh &amp;&amp; ./run.sh</code>
           </div>
           <ul class="install2__bullets">
             <li>Arch: <code>sudo pacman -S python git ffmpeg</code></li>
@@ -471,6 +573,32 @@ git clone https://github.com/bendawg2010/<span class="v">Auto-clipper</span>.git
           </ul>
         </div>
       </div>
+
+      <!-- Reinstall block -->
+      <details class="install2__reinstall">
+        <summary>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          <span>Already installed? Clean reinstall — keeps your VODs + clips</span>
+        </summary>
+        <div class="install2__reinstall-body">
+          <p>Runs a full wipe of the code + venv, then restores your <code>downloads/</code>, <code>library/</code>, <code>sessions/</code>, <code>uploads/</code>, <code>static/clips/</code>, <code>static/thumbnails/</code>, and any YOLO weights. Safe to run anytime something breaks.</p>
+          <div class="install2__code">
+            <button class="copy-btn" type="button">Copy</button>
+            <code><span class="c"># macOS / Linux — run from anywhere</span>
+cd Auto-clipper &amp;&amp; ./reinstall.sh</code>
+          </div>
+          <div class="install2__code">
+            <button class="copy-btn" type="button">Copy</button>
+            <code><span class="c">REM Windows — run from Command Prompt</span>
+cd Auto-clipper &amp;&amp; reinstall.bat</code>
+          </div>
+          <ul class="install2__bullets">
+            <li>Auto-backs up your data to <code>../.autoclipper-preserve-TIMESTAMP/</code> before deleting anything.</li>
+            <li>If something fails mid-reinstall, your backup stays put — nothing is lost.</li>
+            <li>Clones the latest code and re-runs the installer + launcher.</li>
+          </ul>
+        </div>
+      </details>
 
       <!-- Trust row -->
       <div class="install2__trust">
@@ -484,7 +612,7 @@ git clone https://github.com/bendawg2010/<span class="v">Auto-clipper</span>.git
         </div>
         <div class="install2__trust-item">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6m5 0V4a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v2"/></svg>
-          Uninstall = <code>rm -rf Auto-clipper/</code>. No leftovers.
+          Reinstall preserves your library. Real uninstall = <code>rm -rf Auto-clipper/</code>.
         </div>
       </div>
     </div>
@@ -593,7 +721,7 @@ git clone https://github.com/bendawg2010/<span class="v">Auto-clipper</span>.git
   </div>
 </footer>
 
-<script src="script.js?v=3"></script>
+<script src="script.js?v=4"></script>
 
 </body>
 </html>
