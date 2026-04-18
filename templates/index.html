@@ -6,7 +6,8 @@
     <title>Auto-Clipper</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Russo+One&family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <!-- Loading overlay -->
@@ -186,21 +187,27 @@
                     <div class="detection-method-section">
                         <label class="field-label" for="detection-method">Detection Method</label>
                         <select id="detection-method" class="select-field" onchange="onDetectionMethodChange(this.value)">
-                            <option value="audio_cv" selected>Audio + Vision (Recommended)</option>
-                            <option value="audio_only">Audio Only (fastest)</option>
-                            <option value="cv_only">Computer Vision Only</option>
-                            <option value="motion">Motion Detection</option>
-                            <option value="scene_change">Scene Change Detection</option>
-                            <option value="hybrid">Hybrid (all signals combined)</option>
-                            <option value="clip_triggers">Clip Triggers ("clip that!" voice detection)</option>
-                            <option value="chat_spikes">Chat Spikes (Twitch only)</option>
-                            <option value="ai_vision">AI Vision (xAI Grok)</option>
-                            <option value="roboflow_workflow">Roboflow AI Workflow</option>
-                            <option value="roboflow_model">Roboflow Model</option>
-                            <option value="yolo_local">YOLO Local Model (requires best.pt)</option>
-                            <option value="arc_cv_pipeline">CV Pipeline &mdash; HUD + VFX Analysis</option>
+                            <optgroup label="Works out of the box — no setup">
+                                <option value="arc_cv_pipeline" selected>Auto-Clipper CV &mdash; HUD + VFX analysis (recommended)</option>
+                                <option value="audio_cv">Audio + Vision &mdash; audio spikes + color detection</option>
+                                <option value="clip_triggers">Voice Triggers &mdash; "clip it" / "clip that"</option>
+                                <option value="audio_only">Audio Only &mdash; fastest</option>
+                            </optgroup>
+                            <optgroup label="Advanced / alternate">
+                                <option value="cv_only">Computer Vision Only</option>
+                                <option value="motion">Motion Detection</option>
+                                <option value="scene_change">Scene Change Detection</option>
+                                <option value="hybrid">Hybrid &mdash; all signals combined</option>
+                                <option value="chat_spikes">Chat Spikes (Twitch only)</option>
+                            </optgroup>
+                            <optgroup label="Needs external API key / weights">
+                                <option value="ai_vision">AI Vision &mdash; xAI Grok (needs API key)</option>
+                                <option value="roboflow_workflow">Roboflow Workflow (needs API key)</option>
+                                <option value="roboflow_model">Roboflow Model (needs API key)</option>
+                                <option value="yolo_local">YOLO Local (needs best.pt in models/)</option>
+                            </optgroup>
                         </select>
-                        <p class="hint-text" id="detection-hint">Uses audio spikes combined with visual detection. Best for most games.</p>
+                        <p class="hint-text" id="detection-hint">Auto-Clipper's own CV pipeline — kill-feed, damage, muzzle flash, audio peaks. No weights or accounts needed.</p>
                     </div>
 
                     <!-- Sensitivity Slider -->

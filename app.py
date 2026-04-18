@@ -2079,7 +2079,9 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
                 update("error", 0, f"Roboflow model error: {error_msg}")
                 return
         elif detection_method == "yolo_local":
-            # Standalone YOLO model — requires best.pt
+            # Standalone YOLO model — requires best.pt. When weights are
+            # missing, transparently fall back to the CV pipeline so the
+            # user still gets clips instead of a hard error.
             update("analyzing", 42, "Loading YOLO model...")
             try:
                 analyzer = YoloLocalAnalyzer(game_id=game_id)
@@ -2091,11 +2093,23 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
                     )
                 )
             except RuntimeError as yolo_err:
-                error_msg = str(yolo_err)
-                print(f"  [YoloLocal] Error: {error_msg}")
-                job["error"] = error_msg
-                update("error", 0, error_msg)
-                return
+                msg = str(yolo_err)
+                print(f"  [YoloLocal] {msg}")
+                if "not found" in msg.lower() or "not installed" in msg.lower():
+                    print("  [YoloLocal] Falling back to Auto-Clipper CV pipeline.")
+                    update("analyzing", 42, "No YOLO weights — falling back to CV pipeline...")
+                    adapter = ArcClipDetectorAdapter(game_id=game_id, scoring_version="v3_temporal")
+                    highlights = adapter.analyze_video(
+                        video_path,
+                        progress_callback=lambda p: update(
+                            "analyzing", 42 + int(p * 38),
+                            f"CV analyzing... {int(p * 100)}%"
+                        )
+                    )
+                else:
+                    job["error"] = msg
+                    update("error", 0, msg)
+                    return
         elif detection_method == "arc_cv_pipeline":
             # Map sensitivity slider to scoring version:
             # 0-19: v1_strict (fewest clips, highest quality)

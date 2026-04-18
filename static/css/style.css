@@ -2,23 +2,28 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 /* ===== CSS VARIABLES ===== */
+/* Theme aligned with auto-clipper.pages.dev landing page:
+   Twitch purple primary + hot-pink CTA + mint accent on OLED black. */
 :root {
-    --bg: #0a0a0f;
-    --bg-elevated: #0f0f17;
-    --surface: #13131d;
-    --surface-hover: #1a1a28;
-    --surface-active: #222235;
-    --border: #252538;
-    --border-subtle: #1c1c2e;
-    --text: #eeeef0;
-    --text-dim: #8888a0;
-    --text-muted: #555570;
-    --accent: #7c3aed;
-    --accent-hover: #6d28d9;
-    --accent-light: #a78bfa;
-    --accent-glow: rgba(124, 58, 237, 0.3);
-    --accent-soft: rgba(124, 58, 237, 0.08);
-    --accent-subtle: rgba(124, 58, 237, 0.04);
+    --bg: #05050a;
+    --bg-elevated: #0a0a12;
+    --surface: #0e0e18;
+    --surface-hover: #12121e;
+    --surface-active: #181828;
+    --border: #1b1b2c;
+    --border-subtle: #14141f;
+    --text: #ebeaf4;
+    --text-dim: #8a8aa5;
+    --text-muted: #505070;
+    --accent: #9147ff;           /* Twitch purple (matches landing --primary) */
+    --accent-hover: #7d30f0;
+    --accent-light: #b380ff;     /* matches landing --primary-hi */
+    --accent-glow: rgba(145, 71, 255, 0.35);
+    --accent-soft: rgba(145, 71, 255, 0.08);
+    --accent-subtle: rgba(145, 71, 255, 0.04);
+    --cta: #ff3e7f;              /* matches landing --cta */
+    --cta-hi: #ff6ea0;
+    --mint: #00e6c3;             /* matches landing --accent */
     --danger: #ef4444;
     --success: #22c55e;
     --warning: #f59e0b;
@@ -39,6 +44,24 @@
     --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-spring: 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
     --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --font-display: 'Russo One', 'Inter', sans-serif;
+    --font-ui: 'Chakra Petch', 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+}
+
+/* Display headings match the landing page */
+h1, h2, .brand-title, .loading-content h2 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+}
+/* Chakra Petch for small caps / labels / buttons — matches landing UI accents */
+.field-label, .btn, .pill, .tag, .badge,
+button[class*="btn"], .nav-item, .tab, .chip {
+    font-family: var(--font-ui);
+}
+/* JetBrains Mono for code and monospace elements */
+code, pre, kbd, .mono, .timestamp, .code-block {
+    font-family: var(--font-mono);
 }
 
 body {
@@ -48,8 +71,9 @@ body {
     min-height: 100vh;
     overflow-x: hidden;
     background-image:
-        radial-gradient(ellipse 80% 50% at 20% -10%, rgba(124, 58, 237, 0.07), transparent),
-        radial-gradient(ellipse 50% 40% at 80% 110%, rgba(88, 28, 200, 0.05), transparent);
+        radial-gradient(ellipse 80% 50% at 20% -10%, rgba(145, 71, 255, 0.09), transparent),
+        radial-gradient(ellipse 50% 40% at 80% 110%, rgba(255, 62, 127, 0.05), transparent),
+        radial-gradient(ellipse 40% 30% at 50% 50%, rgba(0, 230, 195, 0.03), transparent);
 }
 
 /* Scrollbar */

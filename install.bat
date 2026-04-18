@@ -108,6 +108,9 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
+:: Always upgrade yt-dlp: Twitch ships API changes constantly and stale
+:: yt-dlp is the #1 cause of "can't download VOD" reports.
+pip install --upgrade yt-dlp --quiet
 echo  Core dependencies installed
 
 :: ──────────────────────────────────────────────

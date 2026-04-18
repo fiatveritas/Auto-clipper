@@ -119,6 +119,9 @@ if [ $? -ne 0 ]; then
     echo "  Failed to install core dependencies."
     exit 1
 fi
+# Always upgrade yt-dlp: Twitch ships API changes constantly and stale
+# yt-dlp is the #1 cause of "can't download VOD" reports.
+pip install --upgrade yt-dlp --quiet
 echo "  Core dependencies installed"
 
 # ──────────────────────────────────────────────
