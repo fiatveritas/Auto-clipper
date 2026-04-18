@@ -146,7 +146,9 @@ mkdir -p "$PARENT"
 if [ ! -d "$TARGET/.git" ]; then
     echo "→ First install — cloning Auto-clipper to:"
     echo "    $TARGET"
-    git clone --branch "$BRANCH" "$REPO_URL" "$TARGET"
+    # --depth=1 skips the git history (~6 commits now, but will grow).
+    # If user wants full history later, they can `git fetch --unshallow`.
+    git clone --branch "$BRANCH" --depth=1 "$REPO_URL" "$TARGET"
 else
     BACKUP="$PARENT/.autoclipper-preserve-$(date +%s)"
     echo "→ Existing install detected — doing a CLEAN reinstall."
@@ -160,7 +162,9 @@ else
     rm -rf "$TARGET"
 
     echo "[3/4] Cloning fresh copy from $REPO_URL (branch $BRANCH)…"
-    git clone --branch "$BRANCH" "$REPO_URL" "$TARGET"
+    # --depth=1 skips the git history (~6 commits now, but will grow).
+    # If user wants full history later, they can `git fetch --unshallow`.
+    git clone --branch "$BRANCH" --depth=1 "$REPO_URL" "$TARGET"
 
     echo "[4/4] Restoring your data…"
     restore_user_data "$BACKUP"
