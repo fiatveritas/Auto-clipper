@@ -1,5 +1,4 @@
 import cv2
-import numpy as np
 
 from analysis.game_profiles import get_profile
 

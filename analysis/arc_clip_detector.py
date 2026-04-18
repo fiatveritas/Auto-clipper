@@ -1434,7 +1434,7 @@ class ArcClipDetectorAdapter:
                 print(f"  [ArcClipDetector] mode={mode.value if mode else 'auto'} — pixel analysis only")
             else:
                 # YOLO-only mode with no weights — warn but keep pixel as safety net.
-                print(f"  [ArcClipDetector] mode=yolo requested but no weights — falling back to pixel")
+                print("  [ArcClipDetector] mode=yolo requested but no weights — falling back to pixel")
 
         pixel = PixelAnalyzer(logger)
         # Apply menu_suppress override to pixel analyzer

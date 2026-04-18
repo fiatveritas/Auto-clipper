@@ -143,7 +143,6 @@ class MotionDetector:
             return []
 
         window_size = 3  # seconds
-        sample_interval = 1.0 / self.sample_fps
 
         # Sliding window average
         window_scores = []
