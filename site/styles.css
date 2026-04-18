@@ -1455,6 +1455,17 @@ section { padding: 100px 0; position: relative; }
   border-radius: 3px;
   font-size: 0.85em;
 }
+.curl-install__note {
+  position: relative;
+  margin-top: 12px !important;
+  padding: 10px 14px;
+  background: rgba(0, 230, 195, 0.05);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  font-size: 0.88rem !important;
+  color: var(--text-muted);
+}
+.curl-install__note strong { color: var(--accent); }
 .curl-install__code {
   position: relative;
   background: linear-gradient(180deg, #06060c 0%, #050509 100%);

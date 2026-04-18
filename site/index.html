@@ -21,7 +21,7 @@
 
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' x2='1' y1='0' y2='1'><stop offset='0' stop-color='%239147ff'/><stop offset='1' stop-color='%23ff3e7f'/></linearGradient></defs><rect width='32' height='32' rx='8' fill='url(%23g)'/><path d='M11 10l10 6-10 6z' fill='white'/></svg>" />
 
-  <link rel="stylesheet" href="styles.css?v=12" />
+  <link rel="stylesheet" href="styles.css?v=13" />
 </head>
 <body>
 
@@ -517,6 +517,7 @@
         </div>
         <h3>Paste one line in Terminal</h3>
         <p>Same pattern Homebrew uses. Files fetched via <code>curl</code> skip the macOS quarantine flag, so there's <strong>no "cannot verify" dialog — ever</strong>. The script clones the repo, installs Python + FFmpeg + deps, and launches the app.</p>
+        <p class="curl-install__note"><strong>Re-run it anytime to reinstall clean</strong> — wipes the old code, venv, and caches; keeps your VODs, clips, library, and YOLO weights untouched.</p>
       </div>
       <div class="curl-install__code">
         <button class="copy-btn" type="button">Copy</button>
