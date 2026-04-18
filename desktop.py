@@ -1,6 +1,6 @@
 """
-Standalone desktop launcher for Arc Raiders Auto-Clipper.
-Opens the app in a native window instead of a browser tab.
+Standalone desktop launcher for Auto-Clipper.
+Opens the app in a native pywebview window instead of a browser tab.
 """
 import sys
 import threading
@@ -25,10 +25,10 @@ def main():
         import webview
         # Open in a native OS window
         webview.create_window(
-            "Arc Raiders Auto-Clipper",
+            "Auto-Clipper",
             "http://127.0.0.1:8080",
-            width=1100,
-            height=800,
+            width=1200,
+            height=860,
             min_size=(800, 600),
         )
         webview.start()
