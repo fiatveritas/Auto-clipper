@@ -132,7 +132,7 @@ The app runs on your computer; view it from your phone:
 | **Arc Raiders** | `raider`, `raider-down`, `rocketeer`, `bastion`, `leaper`, `bombardier`, `hornet`, `wasp`, `snitch`, `pop`, `fireball`, `tick`, `turret`, `probe`, `queen`, `sentinel` | Red damage vignette, muzzle flash, blue Arc enemy glow, HUD zones, kill-feed colors, audio peaks |
 | **War Thunder** | (pixel-only profile) | "Target Destroyed" banner, critical-hit flash, bomb/rocket hit colors, vehicle fires, explosions, damage vignette |
 
-Adding a new game = dropping a new profile into `games/`. The detection engine is the same.
+Adding a new game = a new entry in `analysis/game_profiles.py` (plus optional `custom_profiles.json` for runtime additions). The detection engine stays the same.
 
 ---
 
@@ -180,7 +180,7 @@ The `analysis/` module is the core:
 - `arc_clip_detector.py` — main orchestrator, CV + YOLO fusion
 - `clip_modes.py` — `ClipMode` enum (CV / YOLO / VOICE / HYBRID / ALL)
 - `clip_trigger_detector.py` — voice trigger / Whisper-based scanner
-- Per-game profiles in `games/`
+- Per-game profiles defined in `analysis/game_profiles.py`
 
 ---
 
@@ -232,7 +232,7 @@ Voice triggers currently scan the VOD's **audio track** (post-recording). True l
 
 ## Contributing
 
-PRs welcome. New game profile = new file in `games/`. Bug reports: [GitHub Issues](https://github.com/bendawg2010/Auto-clipper/issues).
+PRs welcome. New game profile = new entry in `analysis/game_profiles.py`. Bug reports: [GitHub Issues](https://github.com/bendawg2010/Auto-clipper/issues).
 
 ## License
 
