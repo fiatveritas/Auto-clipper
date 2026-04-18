@@ -422,7 +422,7 @@ def trim_clip(job_id, clip_id):
     if not vod_path or not os.path.exists(vod_path):
         return jsonify({"error": "VOD no longer available. Re-analyze to trim clips."}), 400
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     new_start = data.get("start")
     new_end = data.get("end")
 
@@ -467,7 +467,7 @@ def make_tiktok(job_id, clip_id):
     if not job:
         return jsonify({"error": "Job not found"}), 404
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     gameplay_region = data.get("gameplay")
     webcam_region = data.get("webcam")
     layout = data.get("layout", "stacked")
@@ -499,7 +499,7 @@ def edit_clip_route(job_id, clip_id):
     if not job:
         return jsonify({"error": "Job not found"}), 404
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     crop = data.get("crop")  # {x, y, w, h} as 0-1 ratios
     speed = float(data.get("speed", 1.0))
     brightness = float(data.get("brightness", 0.0))
@@ -551,7 +551,7 @@ def make_youtube_short(job_id, clip_id):
     if not job:
         return jsonify({"error": "Job not found"}), 404
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     gameplay_region = data.get("gameplay")
     webcam_region = data.get("webcam")
     layout = data.get("layout", "stacked")
@@ -586,7 +586,7 @@ def make_gif(job_id, clip_id):
     if not job:
         return jsonify({"error": "Job not found"}), 404
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     start_offset = float(data.get("start_offset", 0))
     duration = float(data.get("duration", 10))
     fps = int(data.get("fps", 15))
@@ -625,7 +625,7 @@ def add_watermark(job_id, clip_id):
     if not job:
         return jsonify({"error": "Job not found"}), 404
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     watermark_filename = data.get("watermark_filename", "")
     position = data.get("position", "bottom_right")
     opacity = float(data.get("opacity", 0.5))
@@ -702,7 +702,7 @@ def split_clip(job_id, clip_id):
     if not job:
         return jsonify({"error": "Job not found"}), 404
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     split_time = data.get("split_time")
     if split_time is None:
         return jsonify({"error": "split_time is required"}), 400
@@ -747,7 +747,7 @@ def extend_clip(job_id, clip_id):
     if not vod_path or not os.path.exists(vod_path):
         return jsonify({"error": "VOD no longer available. Re-analyze to extend clips."}), 400
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     new_start = data.get("start")
     new_end = data.get("end")
 
@@ -789,7 +789,7 @@ def merge_clips(job_id):
     if not job:
         return jsonify({"error": "Job not found"}), 404
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     clip_ids = data.get("clip_ids", [])
     transition = data.get("transition", "none")
     transition_duration = float(data.get("transition_duration", 0.5))
@@ -831,7 +831,7 @@ def add_captions(job_id, clip_id):
     if not job:
         return jsonify({"error": "Job not found"}), 404
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     text = data.get("text", "")
     position = data.get("position", "bottom")
     font_size = int(data.get("font_size", 24))
@@ -870,7 +870,7 @@ def add_zoom_pan(job_id, clip_id):
     if not job:
         return jsonify({"error": "Job not found"}), 404
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     zoom_start = float(data.get("zoom_start", 1.0))
     zoom_end = float(data.get("zoom_end", 1.5))
     pan_x = float(data.get("pan_x", 0.5))
@@ -905,7 +905,7 @@ def add_sfx(job_id, clip_id):
     if not job:
         return jsonify({"error": "Job not found"}), 404
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     sfx_filename = data.get("sfx_filename", "")
     timestamp = float(data.get("timestamp", 0))
     volume = float(data.get("volume", 1.0))
@@ -1031,7 +1031,7 @@ def batch_tiktok(job_id):
     if not job:
         return jsonify({"error": "Job not found"}), 404
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     clip_ids = data.get("clip_ids", [])
     gameplay_region = data.get("gameplay")
     webcam_region = data.get("webcam")
@@ -1079,7 +1079,7 @@ def update_clip_metadata(job_id, clip_id):
     if not job:
         return jsonify({"error": "Job not found"}), 404
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     tags = data.get("tags")
     notes = data.get("notes")
     review_status = data.get("review_status")
@@ -1126,7 +1126,7 @@ def get_presets():
 @app.route("/api/presets", methods=["POST"])
 def create_preset():
     """Create a new export preset."""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     name = data.get("name", "").strip()
     preset_type = data.get("type", "tiktok")
     settings = data.get("settings", {})
@@ -1182,7 +1182,7 @@ def get_analytics():
 @app.route("/api/analytics/track", methods=["POST"])
 def track_analytics():
     """Track an analytics event (export, download, etc.)."""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     event_type = data.get("event", "")
     event_data = data.get("data", {})
 
@@ -1402,7 +1402,7 @@ def highlight_rules():
     if request.method == "GET":
         return jsonify({"rules": _load_highlight_rules()})
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     name = data.get("name", "").strip()
     rule_type = data.get("type", "volume_spike")
     params = data.get("params", {})
@@ -1498,7 +1498,7 @@ CUSTOM_PROFILES_FILE = os.path.join(BASE_DIR, "custom_profiles.json")
 @app.route("/api/batch-analyze", methods=["POST"])
 def batch_analyze():
     """Queue multiple URLs for sequential analysis."""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     urls = data.get("urls", [])
     if not urls:
         return jsonify({"error": "No URLs provided"}), 400
@@ -1546,7 +1546,7 @@ def batch_analyze():
 @app.route("/api/clips/<job_id>/highlight-reel", methods=["POST"])
 def highlight_reel(job_id):
     """Stitch all clips into one highlight reel video."""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     clip_ids = data.get("clip_ids", [])
     transition = data.get("transition", "none")
     resolution = data.get("resolution", "source")
@@ -1615,7 +1615,7 @@ def highlight_reel(job_id):
 @app.route("/api/custom-profiles", methods=["POST"])
 def save_custom_profile():
     """Save a custom game profile."""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     profile_id = data.get("id", "").strip()
     name = data.get("name", "").strip()
 
@@ -1676,7 +1676,7 @@ def manual_clip():
     Expects JSON: {library_file, timestamp, duration (optional, default 30)}
     The clip covers [timestamp - duration, timestamp].
     """
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     library_file = data.get("library_file", "").strip()
     timestamp = data.get("timestamp")
     duration = float(data.get("duration", 30))
@@ -1748,7 +1748,7 @@ def manual_clip_to_session(job_id):
     if not vod_path or not os.path.exists(vod_path):
         return jsonify({"error": "VOD no longer available"}), 400
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     timestamp = data.get("timestamp")
     duration = float(data.get("duration", 30))
 
@@ -1793,7 +1793,7 @@ def clip_trigger_scan():
                    model_size (optional, default 'base')}
     Runs Whisper transcription to find trigger phrases and auto-clips them.
     """
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     library_file = data.get("library_file", "").strip()
     clip_duration = int(data.get("clip_duration", 30))
     custom_triggers = data.get("custom_triggers")  # list of strings or None
