@@ -114,18 +114,18 @@ def index():
     return render_template("index.html")
 
 
-@app.route("/api/health")
-def health_check():
-    """Health check for debugging — tells the user what's wired up.
+import platform
+import shutil
 
-    GET /api/health -> JSON with ffmpeg availability, YOLO weights status,
-    yt-dlp version, and Python version. Helps diagnose 'nothing works'.
+
+def _collect_env_info():
+    """Gather ffmpeg / YOLO / yt-dlp / Python info in one shape.
+
+    Used by both the startup banner (stdout) and /api/health (JSON) so the
+    two can't drift. Computed once at import time to avoid a shutil.which
+    scan + yt_dlp import on every /api/health poll.
     """
-    import platform
-    import shutil
-
     ffmpeg_path = shutil.which("ffmpeg")
-
     weights_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "best.pt")
     weights_info = None
     if os.path.exists(weights_path):
@@ -133,22 +133,34 @@ def health_check():
             "path": weights_path,
             "size_mb": round(os.path.getsize(weights_path) / (1024 * 1024), 1),
         }
-
     ytdlp_version = None
     try:
         import yt_dlp as _yd
         ytdlp_version = _yd.version.__version__
     except Exception:
         pass
-
-    return jsonify({
-        "status": "ok",
+    return {
         "python_version": platform.python_version(),
         "platform": platform.system(),
         "ffmpeg": {"available": bool(ffmpeg_path), "path": ffmpeg_path},
         "yolo_weights": weights_info,
         "yt_dlp_version": ytdlp_version,
-    })
+    }
+
+
+# Snapshot at import — these values don't change for the lifetime of the
+# process, and /api/health shouldn't pay the cost on every poll.
+_ENV_INFO = _collect_env_info()
+
+
+@app.route("/api/health")
+def health_check():
+    """Health check for debugging — tells the user what's wired up.
+
+    GET /api/health -> JSON with ffmpeg availability, YOLO weights status,
+    yt-dlp version, and Python version. Helps diagnose 'nothing works'.
+    """
+    return jsonify({"status": "ok", **_ENV_INFO})
 
 
 @app.route("/api/games")
@@ -1438,6 +1450,36 @@ def delete_highlight_rule(rule_id):
     return jsonify({"success": True})
 
 
+_FRIENDLY_DOWNLOAD_ERRORS = [
+    (("does not exist", "404"),
+     "VOD not found. It may have been deleted, made private, or the URL might be wrong."),
+    (("geo", "not available in your country"),
+     "VOD is geo-blocked in your region — try a VPN."),
+    (("subscriber", "members-only"),
+     "VOD is subscriber-only and can't be downloaded."),
+    (("timeout", "timed out"),
+     "Network timeout — check your internet connection and try again."),
+    # ffmpeg messages vary; key on 'ffmpeg' + 'not found' together
+    (("ffmpeg",),
+     "FFmpeg isn't installed or isn't on PATH. Install with `brew install ffmpeg` (Mac) or your distro's package manager (Linux), then try again."),
+]
+
+
+def _friendly_download_error(raw_msg: str) -> str:
+    """Map raw yt-dlp / ffmpeg exceptions to actionable user messages.
+
+    Returns the original message verbatim if none of the patterns match.
+    """
+    low = raw_msg.lower()
+    for keywords, friendly in _FRIENDLY_DOWNLOAD_ERRORS:
+        # The ffmpeg rule requires both 'ffmpeg' and 'not found' — handle inline.
+        if keywords == ("ffmpeg",) and ("ffmpeg" not in low or "not found" not in low):
+            continue
+        if any(k in low for k in keywords):
+            return friendly
+    return raw_msg
+
+
 def _is_valid_stream_url(url):
     """Check if the URL is a recorded VOD Auto-Clipper can download.
 
@@ -1939,22 +1981,7 @@ def _run_analysis(job_id, url, api_key="", time_start="", time_end="", game_id="
         _run_analysis_on_file(job_id, video_path, api_key, time_start, time_end, game_id, detection_method, sensitivity, detection_overrides)
 
     except Exception as e:
-        # Translate common yt-dlp messages into actionable user errors.
-        msg = str(e)
-        low = msg.lower()
-        if "does not exist" in low or "404" in low:
-            friendly = "VOD not found. It may have been deleted, made private, or the URL might be wrong."
-        elif "geo" in low or "not available in your country" in low:
-            friendly = "VOD is geo-blocked in your region — try a VPN."
-        elif "subscriber" in low or "members-only" in low:
-            friendly = "VOD is subscriber-only and can't be downloaded."
-        elif "timeout" in low or "timed out" in low:
-            friendly = "Network timeout — check your internet connection and try again."
-        elif "ffmpeg" in low and "not found" in low:
-            friendly = "FFmpeg isn't installed. Install it with `brew install ffmpeg` (Mac) or your distro's package manager (Linux), then try again."
-        else:
-            friendly = msg
-        job["error"] = friendly
+        job["error"] = _friendly_download_error(str(e))
         update("error", 0, str(e))
 
 
@@ -2283,34 +2310,27 @@ def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_en
 
 
 def _startup_banner():
-    """Friendly startup banner with environment info — cheap to compute,
-    surfaces the most common root causes ('where are my weights', 'is
-    ffmpeg there', 'what's my Python version') right at launch."""
-    import platform
-    import shutil
+    """Friendly startup banner — formats the shared `_ENV_INFO` snapshot.
+
+    Same data source as /api/health so the two can't drift.
+    """
+    info = _ENV_INFO
     print()
     print("  =============================================")
     print("    Auto-Clipper — running at http://localhost:8080")
     print("  =============================================")
-    print(f"   Python     : {platform.python_version()} ({platform.system()})")
-    ffmpeg_path = shutil.which("ffmpeg")
-    print(f"   ffmpeg     : {ffmpeg_path or '  ⚠ NOT ON PATH (install ffmpeg to enable downloads + clipping)'}")
-
-    # YOLO weights quick check
-    base = os.path.dirname(os.path.abspath(__file__))
-    weights = os.path.join(base, "models", "best.pt")
-    if os.path.exists(weights):
-        size = os.path.getsize(weights) / (1024 * 1024)
-        print(f"   YOLO       : models/best.pt ({size:.1f} MB) ready")
+    print(f"   Python     : {info['python_version']} ({info['platform']})")
+    ffmpeg = info["ffmpeg"]
+    print(f"   ffmpeg     : {ffmpeg['path'] or '  ⚠ NOT ON PATH (install ffmpeg to enable downloads + clipping)'}")
+    weights = info["yolo_weights"]
+    if weights:
+        print(f"   YOLO       : models/best.pt ({weights['size_mb']} MB) ready")
     else:
-        print(f"   YOLO       : no weights found (ok — pixel pipeline still works)")
-
-    # yt-dlp
-    try:
-        import yt_dlp
-        print(f"   yt-dlp     : {yt_dlp.version.__version__}")
-    except Exception:
-        print(f"   yt-dlp     : ⚠ not installed")
+        print("   YOLO       : no weights found (ok — pixel pipeline still works)")
+    if info["yt_dlp_version"]:
+        print(f"   yt-dlp     : {info['yt_dlp_version']}")
+    else:
+        print("   yt-dlp     : ⚠ not installed")
     print()
 
 

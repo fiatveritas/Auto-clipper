@@ -23,8 +23,9 @@ if %errorlevel% neq 0 (
     echo.
 )
 
-:: Keep yt-dlp fresh - Twitch breaks its parsing monthly
-python -m pip install --upgrade yt-dlp --quiet >nul 2>&1
+:: Keep yt-dlp fresh (Twitch breaks its parsing monthly) — run in the
+:: background so we don't block startup on a pip round-trip.
+start /B "" python -m pip install --upgrade yt-dlp --quiet
 
 :: Start server in background
 start /B python app.py

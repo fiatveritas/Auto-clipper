@@ -99,23 +99,26 @@ def test_scoring_combine_floor():
 
 
 def test_match_trigger_phrases():
-    """Voice trigger phrase matcher is case-insensitive + substring-aware."""
+    """Voice trigger phrase matcher is case-insensitive + word-boundary aware.
+
+    Exercises the REAL `_find_triggers` path, not a re-implementation. If
+    the matcher's regex breaks, this test breaks with it.
+    """
     try:
         from analysis.clip_trigger_detector import ClipTriggerDetector
     except Exception:
         return  # backend import errors in this env are fine; skip
     detector = ClipTriggerDetector()
-    # internal match helper — mirror of the logic in the public API
-    samples = {
-        "let's push this compound and CLIP THAT": True,
-        "okay save clip for sure": True,
-        "just rotating, nothing special": False,
-    }
-    for text, should_match in samples.items():
-        found_any = any(
-            p.lower() in text.lower() for p in ["clip that", "save clip", "clip this", "clip it"]
-        )
-        assert found_any == should_match, f"text={text!r}"
+    samples = [
+        # (transcript_segment, expected_trigger_count)
+        ({"text": "let's push this compound and CLIP THAT", "end": 5.0}, 1),
+        ({"text": "okay save clip for sure", "end": 10.0}, 1),
+        ({"text": "just rotating, nothing special", "end": 20.0}, 0),
+        ({"text": "nice clipping skills bro", "end": 30.0}, 0),  # 'clipping' shouldn't trigger
+    ]
+    for segment, expected in samples:
+        found = detector._find_triggers([segment])
+        assert len(found) == expected, f"{segment['text']!r} → got {len(found)}, want {expected}"
 
 
 def test_all_shell_scripts_parse():

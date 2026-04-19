@@ -225,15 +225,21 @@ class ClipManager:
                 "-q:v", "5",
                 thumb_path,
             ]
-            thumb_result = subprocess.run(thumb_cmd, capture_output=True, timeout=30)
-            if thumb_result.returncode != 0:
+            try:
+                thumb_result = subprocess.run(thumb_cmd, capture_output=True, timeout=30)
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                thumb_result = None
+            if thumb_result is None or thumb_result.returncode != 0:
                 print(f"  [ClipManager] Thumbnail failed for clip {clip_id}, using first frame")
                 # Fallback: grab first frame of the clip itself
                 fallback_cmd = [
                     "ffmpeg", "-y", "-i", clip_path,
                     "-frames:v", "1", "-q:v", "5", thumb_path,
                 ]
-                subprocess.run(fallback_cmd, capture_output=True, timeout=15)
+                try:
+                    subprocess.run(fallback_cmd, capture_output=True, timeout=15)
+                except (FileNotFoundError, subprocess.TimeoutExpired):
+                    pass  # Clip is still usable without a thumbnail
 
             clip_info = {
                 "id": clip_id,

@@ -28,9 +28,13 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
     echo ""
 fi
 
-# Keep yt-dlp fresh — Twitch breaks its parsing monthly and a stale
-# yt-dlp is the #1 reason 'my VOD download fails'.
-python -m pip install --upgrade yt-dlp --quiet 2>/dev/null || true
+# Keep yt-dlp fresh — but only once/week, and in the background so the
+# user doesn't wait on a pip round-trip to PyPI every single launch.
+# (Twitch breaks yt-dlp's parsing monthly; weekly checks are plenty.)
+STAMP=venv/.last-ytdlp-check
+if [ ! -f "$STAMP" ] || [ -n "$(find "$STAMP" -mtime +7 -print 2>/dev/null)" ]; then
+    (python -m pip install --upgrade yt-dlp --quiet 2>/dev/null && touch "$STAMP") &
+fi
 
 # Start server in background
 python app.py &
