@@ -62,6 +62,10 @@ def test_game_profiles_13_entity_classes_defined():
     }
     for c in expected_real_classes:
         assert c in ENTITY_PROFILES, f"{c} missing from ENTITY_PROFILES"
+    # Every real class must also appear in YOLO_CLASSES (id↔name roundtrip)
+    yolo_names = set(YOLO_CLASSES.values())
+    assert expected_real_classes.issubset(yolo_names), \
+        f"real classes not in YOLO_CLASSES: {expected_real_classes - yolo_names}"
 
 
 def test_hud_digit_classes_zeroed():
@@ -80,7 +84,10 @@ def test_arc_clip_detector_adapter_imports():
         PixelAnalyzer,
         Clusterer,
     )
-    # Shouldn't explode even without weights — has_yolo should be False gracefully
+    # All five names must resolve — the import itself is the test
+    assert all([ArcClipDetectorAdapter, YOLODetector, ScoringEngine,
+                PixelAnalyzer, Clusterer])
+    # Adapter shouldn't explode even without weights — has_yolo=False gracefully
     adapter = ArcClipDetectorAdapter(game_id="arc_raiders")
     assert adapter.game_id == "arc_raiders"
 

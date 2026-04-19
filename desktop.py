@@ -2,7 +2,6 @@
 Standalone desktop launcher for Auto-Clipper.
 Opens the app in a native pywebview window instead of a browser tab.
 """
-import sys
 import threading
 import time
 
