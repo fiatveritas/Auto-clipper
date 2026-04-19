@@ -1204,59 +1204,6 @@ section { padding: 100px 0; position: relative; }
   .usecases { grid-template-columns: 1fr; }
 }
 
-/* ============ INSTALL — REINSTALL TOGGLE ============ */
-.install2__reinstall {
-  margin-top: 22px;
-  padding: 16px 18px;
-  background: linear-gradient(135deg, rgba(0, 230, 195, 0.06), rgba(145, 71, 255, 0.04));
-  border: 1px solid rgba(0, 230, 195, 0.22);
-  border-radius: 12px;
-  transition: border-color 180ms var(--ease);
-}
-.install2__reinstall[open] {
-  border-color: rgba(0, 230, 195, 0.5);
-}
-.install2__reinstall summary {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  cursor: pointer;
-  list-style: none;
-  color: var(--text);
-  font-family: 'Chakra Petch', sans-serif;
-  font-weight: 600;
-}
-.install2__reinstall summary::-webkit-details-marker { display: none; }
-.install2__reinstall summary svg {
-  width: 18px; height: 18px;
-  color: var(--accent);
-  flex-shrink: 0;
-  transition: transform 220ms var(--ease);
-}
-.install2__reinstall[open] summary svg {
-  transform: rotate(180deg);
-}
-.install2__reinstall-body {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px dashed rgba(0, 230, 195, 0.25);
-}
-.install2__reinstall-body p {
-  color: var(--text-muted);
-  font-size: 0.88rem;
-  line-height: 1.55;
-  margin-bottom: 12px;
-}
-.install2__reinstall-body code {
-  background: rgba(255, 255, 255, 0.06);
-  padding: 2px 5px;
-  border-radius: 3px;
-  font-size: 0.85em;
-}
-.install2__reinstall-body .install2__code {
-  margin-bottom: 10px;
-}
-
 /* ============ HOW IT WORKS ============ */
 .steps {
   display: grid;
@@ -1600,7 +1547,6 @@ section { padding: 100px 0; position: relative; }
   .bento { grid-template-columns: repeat(2, 1fr); }
   .bento__a, .bento__b, .bento__c, .bento__d, .bento__e, .bento__f, .bento__g { grid-column: span 2; }
   .steps { grid-template-columns: 1fr; }
-  .install { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 680px) {
@@ -1608,8 +1554,7 @@ section { padding: 100px 0; position: relative; }
   .nav__links { display: none; }
   .nav__burger { display: grid; place-items: center; }
   .nav__cta { padding: 8px 14px; font-size: 0.82rem; }
-  .nav__cta span, .nav__cta__label { display: none; }
-  .nav__cta .btn-label { display: none; }
+  .nav__cta span, .nav__cta .btn-label { display: none; }
   .nav.open .nav__links {
     display: flex;
     flex-direction: column;
