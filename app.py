@@ -5,8 +5,7 @@ import shutil
 import uuid
 import threading
 from datetime import datetime
-import glob as glob_mod
-from flask import Flask, render_template, request, jsonify, send_from_directory, send_file
+from flask import Flask, render_template, request, jsonify, send_from_directory
 
 from analysis.detector import GameDetector
 from analysis.ai_analyzer import GrokVisionAnalyzer
@@ -115,7 +114,6 @@ def index():
 
 
 import platform
-import shutil
 
 
 def _collect_env_info():
@@ -1301,7 +1299,8 @@ def _watch_folder_loop(api_key, game_id, detection_method="audio_cv"):
     Supports all detection methods including 'clip_triggers' for automatic
     voice trigger scanning on every new VOD.
     """
-    global watch_folder_running
+    # No `global` needed — we only read `watch_folder_running`. The flag is
+    # set/cleared from the caller's scope via `/api/watch-folder/stop`.
     import time
     seen = set(os.listdir(LIBRARY_DIR))
     while watch_folder_running:
@@ -1590,9 +1589,10 @@ def highlight_reel(job_id):
     """Stitch all clips into one highlight reel video."""
     data = request.get_json(silent=True) or {}
     clip_ids = data.get("clip_ids", [])
-    transition = data.get("transition", "none")
     resolution = data.get("resolution", "source")
     quality = data.get("quality", "medium")
+    # Note: client may send a `transition` field — accepted but not yet wired
+    # into the ffmpeg concat filter. Silently ignored for forward compat.
 
     if not clip_ids:
         return jsonify({"error": "No clips selected"}), 400

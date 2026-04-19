@@ -1,6 +1,5 @@
 import json
 import os
-import re
 import tempfile
 import uuid
 import subprocess
@@ -206,8 +205,8 @@ class ClipManager:
                 # ffmpeg not on PATH — surface a clear error once so the
                 # user can tell at a glance what's wrong, instead of a
                 # silent run of 'clip failed' for every highlight.
-                print(f"  [ClipManager] ffmpeg not found on PATH — clip extraction aborted.")
-                print(f"  [ClipManager] Install: brew install ffmpeg (Mac) or apt/dnf/pacman install ffmpeg (Linux).")
+                print("  [ClipManager] ffmpeg not found on PATH — clip extraction aborted.")
+                print("  [ClipManager] Install: brew install ffmpeg (Mac) or apt/dnf/pacman install ffmpeg (Linux).")
                 break  # No point trying more clips; they'll all fail identically
 
             if result.returncode != 0 or not os.path.exists(clip_path):
@@ -563,7 +562,7 @@ class ClipManager:
 
         try:
             src_w, src_h = [int(x) for x in probe.stdout.strip().split(",")]
-        except (ValueError, IndexError) as e:
+        except (ValueError, IndexError):
             print(f"  [YTShort] Failed to parse dimensions from ffprobe: {probe.stdout.strip()!r}")
             return None
 
