@@ -43,13 +43,9 @@ class RoboflowModelAnalyzer:
         if not cap.isOpened():
             raise RuntimeError(f"Cannot open video: {video_path}")
 
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        # NaN-safe: `or 30.0` misses NaN (NaN is truthy); use NaN != NaN idiom.
-        if not fps or fps != fps or fps <= 0:
-            fps = 30.0
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        duration = total_frames / fps if total_frames > 0 else 0.0
-        frame_skip = max(1, int(fps * self.SAMPLE_INTERVAL))
+        from analysis.video_utils import probe_video, frame_interval_for
+        fps, total_frames, duration = probe_video(cap)
+        frame_skip = frame_interval_for(fps, sample_interval_sec=self.SAMPLE_INTERVAL)
 
         print(f"  [RoboflowModel] Analyzing {video_path} ({duration:.0f}s, sampling every {self.SAMPLE_INTERVAL}s)")
 

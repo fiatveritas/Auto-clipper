@@ -133,8 +133,6 @@ class RoboflowWorkflowAnalyzer:
         # Classification predictions — look for action-related classes
         cls_preds = data.get("classification_predictions", {})
         if isinstance(cls_preds, dict):
-            # Could be a single classification result with top class + confidence
-            cls_preds.get("top", cls_preds.get("class", ""))
             top_conf = cls_preds.get("confidence", 0)
             if isinstance(top_conf, (int, float)) and top_conf > 0:
                 score = max(score, float(top_conf))

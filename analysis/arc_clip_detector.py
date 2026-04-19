@@ -1469,11 +1469,8 @@ class ArcClipDetectorAdapter:
         if not cap.isOpened():
             raise RuntimeError(f"Cannot open video: {video_path}")
 
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        if not fps or math.isnan(fps) or fps <= 0:
-            fps = 30.0
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        duration = total_frames / fps if total_frames > 0 else 0.0
+        from analysis.video_utils import probe_video
+        fps, total_frames, duration = probe_video(cap)
         # sample_fps override: convert FPS to interval (e.g., 2 fps = 0.5s interval)
         sample_interval = self.SAMPLE_INTERVAL
         if "sample_fps" in ov:

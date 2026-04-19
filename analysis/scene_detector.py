@@ -35,12 +35,8 @@ class SceneChangeDetector:
         if not cap.isOpened():
             raise Exception(f"Cannot open video: {video_path}")
 
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        # NaN-safe: OpenCV returns NaN on some codecs; NaN != NaN is the idiom.
-        if not fps or fps != fps or fps <= 0:
-            fps = 30.0
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        duration = total_frames / fps if total_frames > 0 else 0
+        from analysis.video_utils import probe_video
+        fps, total_frames, duration = probe_video(cap)
 
         frame_interval = max(1, int(fps / self.sample_fps))
         frames_to_analyze = total_frames // frame_interval

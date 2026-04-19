@@ -84,15 +84,10 @@ class GrokVisionAnalyzer:
         if not cap.isOpened():
             raise Exception(f"Cannot open video: {video_path}")
 
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        # NaN-safe: OpenCV returns NaN on some codecs; NaN != NaN is the idiom.
-        if not fps or fps != fps or fps <= 0:
-            fps = 30.0
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        duration = total_frames / fps if total_frames > 0 else 0
-
-        frame_interval = max(1, int(fps * sample_interval_sec))
-        total_samples = total_frames // frame_interval if frame_interval > 0 else 0
+        from analysis.video_utils import probe_video, frame_interval_for
+        fps, total_frames, duration = probe_video(cap)
+        frame_interval = frame_interval_for(fps, sample_interval_sec=sample_interval_sec)
+        total_samples = total_frames // frame_interval
 
         print(f"  [AI] Sampling {total_samples} frames from {duration:.0f}s video (every {sample_interval_sec}s)")
 
