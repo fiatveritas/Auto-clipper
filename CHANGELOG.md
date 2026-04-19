@@ -5,7 +5,13 @@ All notable changes to Auto-Clipper.
 ## [Unreleased]
 
 ### Added
-- **Bundled YOLO weights** (`models/best.pt`, ~21 MB) — fine-tuned YOLOv11n on the Arc Raiders v0.11 Roboflow dataset. Detects 13 entity classes (raider, bombardier, leaper, turret, fireball, pop, probe, hornet, wasp, snitch, rocketeer, bastion, raider-down). YOLO detection mode works out of the box — no more "requires a .pt".
+- **Bundled YOLO weights** (`models/best.pt`, ~5 MB stripped-optimizer checkpoint) — YOLOv11n fine-tuned across two training runs (MPS then CPU) on the Arc Raiders v0.11 Roboflow dataset (2880 training frames). Detects 13 entity classes (raider, bombardier, leaper, turret, fireball, pop, probe, hornet, wasp, snitch, rocketeer, bastion, raider-down). YOLO detection mode works out of the box — no more "requires a .pt".
+- **`analysis/video_utils.py`** — shared `safe_fps()`, `probe_video()`, `frame_interval_for()` helpers. Replaces the 8 copies of the NaN-safe fps guard that were drifting apart across detectors (two used `math.isnan`, six used `fps != fps`, one missed NaN entirely with `or 30.0`).
+- **`_collect_env_info()`** helper in `app.py` shared by `_startup_banner()` and `/api/health` — same environment snapshot, no drift, cached at module import so the health endpoint is a cheap dict copy.
+- **`_FRIENDLY_DOWNLOAD_ERRORS` lookup table** — yt-dlp error → user message mapping is now one tuple per pattern instead of a 5-arm if/elif chain.
+- **`tests/` directory** — 13-test pytest smoke suite (`test_smoke.py`), `conftest.py` for path injection, `__init__.py` for pytest discovery. Includes URL validation, time parsing, ClipMode property matrix, HUD digit class zero-check, YOLO class roundtrip, signal-blend safety floor, shell-script syntax, bundled-weights size check, and live trigger-phrase matcher test.
+- **`Makefile`** with `make install/run/reinstall/test/lint/clean/deploy-site` — auto-detects Python (venv → python3 → python).
+- **`CONTRIBUTING.md` + `LICENSE` (MIT)** — explicit project policies.
 - **Curl-pipe installer** (`install-remote.sh`) — Homebrew-style one-line install that bypasses macOS Gatekeeper entirely by pulling the repo via `curl` in Terminal (curl-downloaded files never get the quarantine flag). Re-running does a clean reinstall, preserving VODs/clips/library/weights.
 - **`/api/health` endpoint** — returns ffmpeg availability, YOLO weights status, yt-dlp version, and Python version. Useful for debugging "nothing works".
 - **Startup banner** — `python app.py` now prints the URL + environment details (Python, ffmpeg path, YOLO weights size, yt-dlp version) before starting.
