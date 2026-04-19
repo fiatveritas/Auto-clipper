@@ -142,6 +142,41 @@ def test_all_shell_scripts_parse():
         assert result.returncode == 0, f"{s} has syntax errors: {result.stderr.decode()}"
 
 
+def test_friendly_download_error():
+    """Raw yt-dlp errors map to actionable user messages."""
+    import app
+    assert "not found" in app._friendly_download_error("ERROR: Video 123 does not exist").lower()
+    assert "geo-blocked" in app._friendly_download_error("this is geo-blocked").lower()
+    assert "subscriber-only" in app._friendly_download_error("Video is subscriber-only").lower()
+    assert "timeout" in app._friendly_download_error("Connection timed out").lower()
+    assert "ffmpeg" in app._friendly_download_error("ffmpeg was not found").lower()
+    # Unrecognized → verbatim passthrough
+    assert app._friendly_download_error("random thing") == "random thing"
+
+
+def test_collect_env_info_shape():
+    """_ENV_INFO snapshot has the keys both banner and /api/health expect."""
+    import app
+    info = app._ENV_INFO
+    assert isinstance(info, dict)
+    assert set(info.keys()) == {"python_version", "platform", "ffmpeg", "yolo_weights", "yt_dlp_version"}
+    assert "available" in info["ffmpeg"] and "path" in info["ffmpeg"]
+
+
+def test_video_utils_safe_fps():
+    """safe_fps() guards against NaN, zero, and negative fps."""
+    from analysis.video_utils import safe_fps
+    class FakeCap:
+        def __init__(self, fps): self._fps = fps
+        def get(self, prop): return self._fps
+    assert safe_fps(FakeCap(30.0)) == 30.0
+    assert safe_fps(FakeCap(0)) == 30.0               # zero → default
+    assert safe_fps(FakeCap(-1)) == 30.0              # negative → default
+    assert safe_fps(FakeCap(float("nan"))) == 30.0    # NaN → default
+    assert safe_fps(FakeCap(None)) == 30.0            # None → default
+    assert safe_fps(FakeCap(30.0), default=60.0) == 30.0  # default ignored if fps ok
+
+
 def test_url_validation():
     """_is_valid_stream_url accepts VOD URLs, rejects live-channel URLs."""
     import app
