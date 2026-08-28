@@ -21,9 +21,16 @@ from analysis.clip_trigger_detector import ClipTriggerDetector
 from analysis.game_profiles import get_all_games
 from clip_manager import ClipManager
 
+####
+#custom script
+from dataset.dataset_manager import DatasetManager
+from dataset.schema import (PRIMARY_EVENTS, TAG_GROUPS,)
+#
+####
+
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.urandom(24).hex()
-app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024 * 1024  # 10 GB for VOD uploads
+app.config["MAX_CONTENT_LENGTH"] = 1000 * 1024 * 1024 * 1024  # 10 GB for VOD uploads
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIPS_DIR = os.path.join(BASE_DIR, "static", "clips")
@@ -52,6 +59,11 @@ jobs = {}
 watch_folder_thread = None
 watch_folder_running = False
 clip_manager = ClipManager(CLIPS_DIR, THUMBNAILS_DIR, DOWNLOADS_DIR)
+dataset_manager = DatasetManager(os.path.join(BASE_DIR, "dataset"))
+
+from analysis.queue_manager import QueueManager
+
+queue_manager = QueueManager()
 
 
 def _save_session(job_id):
@@ -190,7 +202,7 @@ def start_analysis():
     api_key = data.get("api_key", "").strip()
     time_start = data.get("time_start", "").strip()
     time_end = data.get("time_end", "").strip()
-    game_id = data.get("game", "arc_raiders").strip()
+    game_id = data.get("game", "league_of_legends").strip()
     detection_method = data.get("detection_method", "audio_cv").strip()
     try:
         sensitivity = int(data.get("sensitivity", 50))
@@ -254,17 +266,51 @@ def start_analysis():
 def list_library():
     """List all saved VODs in the library."""
     vods = []
+
     for f in sorted(os.listdir(LIBRARY_DIR)):
+
         fpath = os.path.join(LIBRARY_DIR, f)
-        if os.path.isfile(fpath):
-            size = os.path.getsize(fpath)
-            duration = clip_manager.get_vod_duration(fpath)
-            vods.append({
-                "filename": f,
-                "size": size,
-                "duration": duration,
-            })
-    return jsonify({"vods": vods})
+
+        if not os.path.isfile(fpath):
+            continue
+
+        size = os.path.getsize(fpath)
+
+        duration = clip_manager.get_vod_duration(fpath)
+
+        #
+        # NEW
+        #
+
+        processed = False
+
+        for job in jobs.values():
+
+            url = job.get("url", "")
+
+            if url == f"library:{f}":
+
+                processed = True
+
+                break
+
+        vods.append({
+
+            "filename": f,
+
+            "size": size,
+
+            "duration": duration,
+
+            "processed": processed
+
+        })
+
+    return jsonify({
+
+        "vods": vods
+
+    })
 
 
 @app.route("/api/library/<filename>/delete", methods=["POST"])
@@ -335,7 +381,7 @@ def upload_vod():
     api_key = request.form.get("api_key", "").strip()
     time_start = request.form.get("time_start", "").strip()
     time_end = request.form.get("time_end", "").strip()
-    game_id = request.form.get("game", "arc_raiders").strip()
+    game_id = request.form.get("game", "league_of_legends").strip()
     detection_method = request.form.get("detection_method", "audio_cv").strip()
     sensitivity = int(request.form.get("sensitivity", 50))
     try:
@@ -398,10 +444,50 @@ def get_job(job_id):
 
 @app.route("/api/clips/<job_id>")
 def get_clips(job_id):
+
     job = jobs.get(job_id)
+
     if not job:
         return jsonify({"error": "Job not found"}), 404
-    return jsonify({"clips": job["clips"], "vod_duration": job.get("vod_duration", 0)})
+
+    clips = []
+
+    for clip in job["clips"]:
+
+        clip_copy = clip.copy()
+
+        label = dataset_manager.get_label(
+            clip["id"]
+        )
+
+        clip_copy["annotation"] = {
+
+            "exists": label is not None,
+
+            "is_highlight":
+
+                label["is_highlight"]
+
+                if label else None
+
+        }
+
+        clips.append(
+            clip_copy
+        )
+
+    return jsonify({
+
+        "clips": clips,
+
+        "vod_duration":
+
+            job.get(
+                "vod_duration",
+                0
+            )
+
+    })
 
 
 @app.route("/api/clips/<job_id>/<clip_id>/download")
@@ -1366,7 +1452,7 @@ def watch_folder_start():
 
     data = request.get_json() or {}
     api_key = data.get("api_key", "")
-    game_id = data.get("game", "arc_raiders")
+    game_id = data.get("game", "league_of_legends")
     detection_method = data.get("detection_method", "audio_cv")
 
     watch_folder_running = True
@@ -1545,7 +1631,7 @@ def batch_analyze():
         return jsonify({"error": "No URLs provided"}), 400
 
     api_key = data.get("api_key", "").strip()
-    game_id = data.get("game", "arc_raiders").strip()
+    game_id = data.get("game", "league_of_legends").strip()
     detection_method = data.get("detection_method", "audio_cv").strip()
     sensitivity = int(data.get("sensitivity", 50))
     detection_overrides = data.get("detection_overrides", {})
@@ -1636,7 +1722,8 @@ def highlight_reel(job_id):
         elif resolution == "480p":
             cmd += ["-vf", "scale=-2:480"]
 
-        cmd += ["-c:v", "libx264", "-crf", crf, "-c:a", "aac", "-b:a", "128k", reel_path]
+        # Hardware accelerated for AMD GPU:
+        cmd += ["-c:v", "h264_amf", "-quality", "speed", "-c:a", "aac", "-b:a", "128k", reel_path]
 
         import subprocess
         result = subprocess.run(cmd, capture_output=True, timeout=600)
@@ -1946,7 +2033,79 @@ def _run_clip_trigger_scan(job_id, vod_path, clip_duration=30,
         update("error", 0, str(e))
 
 
-def _run_analysis(job_id, url, api_key="", time_start="", time_end="", game_id="arc_raiders", detection_method="audio_cv", sensitivity=50, detection_overrides=None):
+
+# ---------------------------------------------------------------------------
+# Queue Worker
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Queue Helpers
+# ---------------------------------------------------------------------------
+
+def enqueue_analysis_job(job):
+
+    """
+    Add a job to the analysis queue.
+    """
+
+    queue_manager.enqueue(job)
+
+    return queue_manager.pending_count
+
+
+
+def queue_worker():
+    """
+    Process queued analysis jobs one at a time.
+    """
+
+    while True:
+
+        job = queue_manager.next_job()
+
+        if job is None:
+            break
+
+        try:
+
+            if job["type"] == "url":
+
+                _run_analysis(
+                    job["job_id"],
+                    job["url"],
+                    job["api_key"],
+                    job["time_start"],
+                    job["time_end"],
+                    job["game_id"],
+                    job["detection_method"],
+                    job["sensitivity"],
+                    job["detection_overrides"]
+                )
+
+            elif job["type"] == "library":
+
+                _run_analysis_on_file(
+                    job["job_id"],
+                    job["vod_path"],
+                    job["api_key"],
+                    job["time_start"],
+                    job["time_end"],
+                    job["game_id"],
+                    job["detection_method"],
+                    job["sensitivity"],
+                    job["detection_overrides"]
+                )
+
+        finally:
+
+            queue_manager.complete_current()
+
+
+
+
+
+def _run_analysis(job_id, url, api_key="", time_start="", time_end="", game_id="league_of_legends", detection_method="audio_cv", sensitivity=50, detection_overrides=None):
     job = jobs[job_id]
     platform = _get_platform_name(url)
 
@@ -1985,7 +2144,7 @@ def _run_analysis(job_id, url, api_key="", time_start="", time_end="", game_id="
         update("error", 0, str(e))
 
 
-def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_end="", game_id="arc_raiders", detection_method="audio_cv", sensitivity=50, detection_overrides=None):
+def _run_analysis_on_file(job_id, video_path, api_key="", time_start="", time_end="", game_id="league_of_legends", detection_method="audio_cv", sensitivity=50, detection_overrides=None):
     """Run analysis on a local video file (from library or download)."""
     job = jobs[job_id]
 
@@ -2332,6 +2491,234 @@ def _startup_banner():
     else:
         print("   yt-dlp     : ⚠ not installed")
     print()
+
+@app.route("/api/labels/<clip_id>", methods=["GET"])
+def get_label(clip_id):
+    """Return the annotation for a clip."""
+
+    label = dataset_manager.get_label(clip_id)
+
+    if label is None:
+        return jsonify({"label": None})
+
+    return jsonify(label)
+
+@app.route("/api/labels/<clip_id>", methods=["POST"])
+def save_label(clip_id):
+    """Save or update a clip annotation."""
+
+    data = request.get_json(silent=True) or {}
+
+    try:
+        dataset_manager.save_label(
+            clip_id=clip_id,
+            is_highlight=data.get("is_highlight", False),
+            primary_event=data.get("primary_event", "Not Relevant"),
+            tags=data.get("tags", []),
+            notes=data.get("notes", "")
+        )
+
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    return jsonify({"success": True})
+
+@app.route("/api/labels/statistics", methods=["GET"])
+def label_statistics():
+    """Return dataset statistics."""
+
+    return jsonify(dataset_manager.statistics())
+
+@app.route("/api/labels/<clip_id>", methods=["DELETE"])
+def delete_label(clip_id):
+    """Delete a clip annotation."""
+
+    dataset_manager.delete_label(clip_id)
+
+    return jsonify({"success": True})
+
+# ---------------------------------------------------------------------------
+# Dataset Schema
+# ---------------------------------------------------------------------------
+
+@app.route("/api/schema", methods=["GET"])
+def get_dataset_schema():
+    """Return the annotation schema."""
+
+    return jsonify({
+
+        "primary_events": PRIMARY_EVENTS,
+
+        "tag_groups": TAG_GROUPS
+
+    })
+
+@app.route("/api/dataset/stats")
+def dataset_stats():
+    """Return annotation statistics."""
+
+    total = 0
+    labeled = 0
+    highlights = 0
+    rejected = 0
+
+    for job in jobs.values():
+
+        for clip in job.get("clips", []):
+
+            total += 1
+
+            label = dataset_manager.get_label(
+                clip["id"]
+            )
+
+            if not label:
+                continue
+
+            labeled += 1
+
+            if label["is_highlight"]:
+                highlights += 1
+            else:
+                rejected += 1
+
+    return jsonify({
+
+        "total": total,
+
+        "labeled": labeled,
+
+        "unlabeled": total - labeled,
+
+        "highlights": highlights,
+
+        "rejected": rejected
+
+    })
+
+@app.route("/api/queue")
+def queue_status():
+
+    return jsonify(
+        queue_manager.status()
+    )
+
+
+
+@app.route("/api/queue/start", methods=["POST"])
+def start_queue():
+
+    thread = threading.Thread(
+        target=queue_worker,
+        daemon=True
+    )
+
+    thread.start()
+
+    return jsonify({
+        "success": True
+    })
+
+
+
+@app.route("/api/queue/add", methods=["POST"])
+def queue_add():
+
+    data = request.get_json(silent=True) or {}
+
+    files = data.get("files", [])
+
+    if not files:
+
+        return jsonify({
+            "error": "No files supplied."
+        }), 400
+
+    api_key = data.get("api_key", "")
+    game_id = data.get("game", "league_of_legends")
+    detection_method = data.get("detection_method", "audio_cv")
+    sensitivity = int(data.get("sensitivity", 50))
+    detection_overrides = data.get(
+        "detection_overrides",
+        {}
+    )
+
+    for filename in files:
+
+        safe_name = os.path.basename(filename)
+
+        vod_path = os.path.join(
+            LIBRARY_DIR,
+            safe_name
+        )
+
+        if not os.path.exists(vod_path):
+
+            continue
+
+        job_id = str(uuid.uuid4())[:8]
+
+        jobs[job_id] = {
+
+            "status": "queued",
+
+            "progress": 0,
+
+            "message": "Waiting in queue...",
+
+            "clips": [],
+
+            "error": None,
+
+            "url": f"library:{safe_name}",
+
+            "vod_path": vod_path,
+
+            "vod_duration": 0
+
+        }
+
+        enqueue_analysis_job({
+
+            "type": "library",
+
+            "job_id": job_id,
+
+            "vod_path": vod_path,
+
+            "api_key": api_key,
+
+            "time_start": "",
+
+            "time_end": "",
+
+            "game_id": game_id,
+
+            "detection_method": detection_method,
+
+            "sensitivity": sensitivity,
+
+            "detection_overrides": detection_overrides
+
+        })
+
+    threading.Thread(
+
+        target=queue_worker,
+
+        daemon=True
+
+    ).start()
+
+    return jsonify({
+
+        "success": True,
+
+        "queue": queue_manager.status()
+
+    })
+
+
 
 
 if __name__ == "__main__":

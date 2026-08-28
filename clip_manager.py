@@ -6,6 +6,7 @@ import subprocess
 import time
 import yt_dlp
 
+USE_STREAM_COPY = True
 
 class ClipManager:
     """Handles downloading VODs, extracting clips, and managing clip files."""
@@ -184,20 +185,49 @@ class ClipManager:
             # Extract clip with ffmpeg
             # -ss after -i = frame-accurate (decode from nearest keyframe)
             # -ss before -i = fast but can be off by 1-5 seconds
-            end_time = start_time + duration
-            cmd = [
-                "ffmpeg", "-y",
-                "-i", video_path,
-                "-ss", str(start_time),
-                "-to", str(end_time),
-                "-c:v", "libx264",
-                "-preset", "fast",
-                "-crf", "23",
-                "-c:a", "aac",
-                "-b:a", "128k",
-                "-movflags", "+faststart",
-                clip_path,
-            ]
+            #end_time = start_time + duration
+
+
+
+
+
+
+            if USE_STREAM_COPY:
+
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-ss", str(start_time),
+                    "-i", video_path,
+                    "-t", str(duration),
+                    "-c", "copy",
+                    "-avoid_negative_ts", "make_zero",
+                    "-movflags", "+faststart",
+                    clip_path,
+                ]
+
+            else:
+
+                end_time = start_time + duration
+
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-i", video_path,
+                    "-ss", str(start_time),
+                    "-to", str(end_time),
+                    "-c:v", "h264_amf",
+                    "-quality", "speed",
+                    "-c:a", "aac",
+                    "-b:a", "128k",
+                    "-movflags", "+faststart",
+                    clip_path,
+                ]
+
+
+
+
+
+
+
 
             try:
                 result = subprocess.run(cmd, capture_output=True, timeout=300)
@@ -278,9 +308,7 @@ class ClipManager:
             "-i", video_path,
             "-ss", str(new_start),
             "-to", str(new_end),
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "23",
+            "-c:v", "h264_amf", "-quality", "speed",
             "-c:a", "aac",
             "-b:a", "128k",
             "-movflags", "+faststart",
@@ -405,9 +433,7 @@ class ClipManager:
             cmd += ["-af", af_str]
 
         cmd += [
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "22",
+            "-c:v", "h264_amf", "-quality", "speed",
             "-c:a", "aac",
             "-b:a", "128k",
             "-movflags", "+faststart",
@@ -512,9 +538,7 @@ class ClipManager:
             "-filter_complex", filter_complex,
             "-map", "[out]",
             "-map", "0:a?",
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "20",
+            "-c:v", "h264_amf", "-quality", "speed",
             "-c:a", "aac",
             "-b:a", "128k",
             "-movflags", "+faststart",
@@ -624,9 +648,7 @@ class ClipManager:
             "-filter_complex", filter_complex,
             "-map", "[out]",
             "-map", "0:a?",
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "20",
+            "-c:v", "h264_amf", "-quality", "speed",
             "-c:a", "aac",
             "-b:a", "128k",
             "-movflags", "+faststart",
@@ -751,9 +773,7 @@ class ClipManager:
             "-filter_complex", filter_complex,
             "-map", "[out]",
             "-map", "0:a?",
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "22",
+            "-c:v", "h264_amf", "-quality", "speed",
             "-c:a", "aac",
             "-b:a", "128k",
             "-movflags", "+faststart",
@@ -794,9 +814,7 @@ class ClipManager:
             "ffmpeg", "-y",
             "-i", clip_path,
             "-t", str(split_time),
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "23",
+            "-c:v", "h264_amf", "-quality", "speed",
             "-c:a", "aac",
             "-b:a", "128k",
             "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
@@ -813,9 +831,7 @@ class ClipManager:
             "ffmpeg", "-y",
             "-ss", str(split_time),
             "-i", clip_path,
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "23",
+            "-c:v", "h264_amf", "-quality", "speed",
             "-c:a", "aac",
             "-b:a", "128k",
             "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
@@ -867,9 +883,7 @@ class ClipManager:
             "-ss", str(new_start),
             "-i", vod_path,
             "-t", str(duration),
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "23",
+            "-c:v", "h264_amf", "-quality", "speed",
             "-c:a", "aac",
             "-b:a", "128k",
             "-movflags", "+faststart",
@@ -937,9 +951,7 @@ class ClipManager:
                     "-f", "concat",
                     "-safe", "0",
                     "-i", concat_file,
-                    "-c:v", "libx264",
-                    "-preset", "fast",
-                    "-crf", "23",
+                    "-c:v", "h264_amf", "-quality", "speed",
                     "-c:a", "aac",
                     "-b:a", "128k",
                     "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
@@ -1014,9 +1026,7 @@ class ClipManager:
                 "-filter_complex", filter_complex,
                 "-map", "[outv]",
                 "-map", f"[{prev_a}]",
-                "-c:v", "libx264",
-                "-preset", "fast",
-                "-crf", "23",
+                "-c:v", "h264_amf", "-quality", "speed",
                 "-c:a", "aac",
                 "-b:a", "128k",
                 "-movflags", "+faststart",
@@ -1079,9 +1089,7 @@ class ClipManager:
             "ffmpeg", "-y",
             "-i", clip_path,
             "-vf", vf,
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "22",
+            "-c:v", "h264_amf", "-quality", "speed",
             "-c:a", "aac",
             "-b:a", "128k",
             "-movflags", "+faststart",
@@ -1167,9 +1175,7 @@ class ClipManager:
             "ffmpeg", "-y",
             "-i", clip_path,
             "-vf", vf,
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "22",
+            "-c:v", "h264_amf", "-quality", "speed",
             "-c:a", "aac",
             "-b:a", "128k",
             "-movflags", "+faststart",
@@ -1218,9 +1224,7 @@ class ClipManager:
             "-filter_complex", filter_complex,
             "-map", "0:v",
             "-map", "[outa]",
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "22",
+            "-c:v", "h264_amf", "-quality", "speed",
             "-c:a", "aac",
             "-b:a", "128k",
             "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
@@ -1499,3 +1503,4 @@ def _make_download_sections(start_str, end_str):
         return f"*0-{end_sec}"
 
     return None
+
