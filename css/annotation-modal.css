@@ -1,0 +1,136 @@
+.annotation-modal {
+
+    width: 700px;
+    max-width: 90vw;
+
+    border: none;
+    border-radius: 12px;
+
+    padding: 24px;
+
+    margin: auto;
+
+    background: #171722;
+    color: white;
+
+    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+
+}
+
+.annotation-modal::backdrop {
+
+    background: rgba(0,0,0,.65);
+
+    backdrop-filter: blur(3px);
+
+}
+
+.annotation-section {
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 10px;
+
+    margin-bottom: 18px;
+
+}
+
+.annotation-buttons {
+
+    display: flex;
+
+    justify-content: flex-end;
+
+    gap: 12px;
+
+    margin-top: 20px;
+
+}
+
+#tagContainer {
+
+    display: flex;
+
+    flex-wrap: wrap;
+
+    gap: 12px;
+
+}
+
+#tagContainer label {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 6px;
+
+    padding: 6px 10px;
+
+    border: 1px solid #383850;
+
+    border-radius: 8px;
+
+    cursor: pointer;
+
+}
+
+#annotationNotes {
+
+    width: 100%;
+
+    min-height: 90px;
+
+    resize: vertical;
+
+}
+
+/* -------------------------------------------------------------------------- */
+/* Dataset Statistics */
+/* -------------------------------------------------------------------------- */
+
+.dataset-stats {
+
+    display: flex;
+
+    gap: 24px;
+
+    margin-bottom: 20px;
+
+}
+
+.dataset-stat {
+
+    flex: 1;
+
+    text-align: center;
+
+    padding: 16px;
+
+    border-radius: 12px;
+
+    background: #1d1d2a;
+
+}
+
+.dataset-stat div {
+
+    font-size: 28px;
+
+    font-weight: bold;
+
+}
+
+.dataset-stat span {
+
+    display: block;
+
+    margin-top: 6px;
+
+    color: #b5b5c3;
+
+    font-size: 13px;
+
+}
