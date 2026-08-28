@@ -1181,8 +1181,9 @@ class VideoProcessor:
 
     def cut_clip(self, start, end, out_path, pad=2.0):
         s = max(0, start-pad); d = min(self.duration, end+pad) - s
+        # Hardware accelerated for AMD GPU:
         subprocess.run(["ffmpeg","-y","-v","quiet","-ss",str(s),"-i",str(self.path),
-            "-t",str(d),"-c:v","libx264","-preset","fast","-crf","22",
+            "-t",str(d),"-c:v","h264_amf","-quality","speed",
             "-c:a","aac","-b:a","128k",str(out_path)], check=True)
 
 
@@ -1195,23 +1196,31 @@ class YOLODetector:
         self.logger = logger; self.conf = conf
         if not YOLO: raise RuntimeError("pip install ultralytics")
         # Autodetect CUDA > MPS (Apple Silicon) > CPU when caller didn't pin a device.
+        # Autodetect DirectML (AMD 7900 XTX) > CUDA > MPS > CPU
         if not device:
             try:
-                import torch
-                if torch.cuda.is_available():
-                    device = "cuda"
-                elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                    device = "mps"
+                import onnxruntime as ort
+                _orig_session = ort.InferenceSession
+                def _dml_session(path_or_bytes, *args, **kwargs):
+                    kwargs["providers"] = ["DmlExecutionProvider", "CPUExecutionProvider"]
+                    kwargs["provider_options"] = [{"device_id": 0}, {}]
+                    return _orig_session(path_or_bytes, *args, **kwargs)
+                ort.InferenceSession = _dml_session
             except Exception:
                 pass
+
+        # After
         paths = [weights] if weights else []
-        paths += ["best.pt", "arc_raiders_best.pt", "runs/segment/train/weights/best.pt", "weights/best.pt"]
+        paths += ["models/best.onnx", "best.onnx", "models/best.pt", "best.pt", "arc_raiders_best.pt", "weights/best.pt"]
         for p in paths:
             if p and Path(p).exists():
-                logger.info(f"YOLO weights: {p} (device={device or 'cpu'})"); self.model = YOLO(p)
+                logger.info(f"YOLO weights: {p} (device={device or 'cpu'})")
+                self.model = YOLO(p)
                 if device:
-                    try: self.model.to(device)
-                    except Exception as e: logger.warning(f"YOLO .to({device}) failed, CPU: {e}")
+                    try:
+                        self.model.to(device)
+                    except Exception as e:
+                        logger.warning(f"YOLO .to({device}) failed, CPU: {e}")
                 return
         raise FileNotFoundError(
             "No YOLO weights. Download from Roboflow:\n"

@@ -1,6 +1,7 @@
 import cv2
 
 from analysis.game_profiles import get_profile
+from analysis.video_reader import VideoReader
 
 
 class RoboflowModelAnalyzer:
@@ -15,58 +16,152 @@ class RoboflowModelAnalyzer:
     DEFAULT_MODEL_ID = "arc-raiders-05arl-bgcvo/1"
     SAMPLE_INTERVAL = 1.0  # seconds between sampled frames
 
-    def __init__(self, api_key, game_id="arc_raiders", model_id=None):
+    def __init__(self, api_key, game_id="league_of_legends", model_id=None):
         self.api_key = api_key
         self.profile = get_profile(game_id)
         self.model_id = model_id or self.DEFAULT_MODEL_ID
 
     def analyze_video(self, video_path, progress_callback=None):
         """
-        Extract frames from video, run each through the Roboflow model,
-        and build highlights from detection results.
+        Extract sampled frames from video, run them through the Roboflow
+        model in bounded batches, and build highlights from detection
+        results.
 
-        Args:
-            video_path: Path to the video file
-            progress_callback: Callback with (0-1) progress
+        Uses:
+            - VideoReader.iter_sampled() to avoid decoding unused frames
+            - batched Roboflow inference
+            - bounded concurrent HTTP requests
 
         Returns:
             List of highlight dicts with timestamps, ready for clip extraction
         """
-        from inference_sdk import InferenceHTTPClient
+        from inference_sdk import (
+            InferenceHTTPClient,
+            InferenceConfiguration,
+        )
 
+        from analysis.video_utils import frame_interval_for
+
+        # --------------------------------------------------------------
+        # Roboflow client
+        #
+        # Hosted inference benefits from multiple concurrent requests.
+        # Keep this conservative so we do not create an excessive number
+        # of simultaneous HTTP requests.
+        # --------------------------------------------------------------
         client = InferenceHTTPClient(
             api_url="https://detect.roboflow.com",
             api_key=self.api_key,
         )
 
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            raise RuntimeError(f"Cannot open video: {video_path}")
+        configuration = InferenceConfiguration(
+            max_concurrent_requests=4,
+            max_batch_size=4,
+        )
 
-        from analysis.video_utils import probe_video, frame_interval_for
-        fps, total_frames, duration = probe_video(cap)
-        frame_skip = frame_interval_for(fps, sample_interval_sec=self.SAMPLE_INTERVAL)
+        client.configure(configuration)
 
-        print(f"  [RoboflowModel] Analyzing {video_path} ({duration:.0f}s, sampling every {self.SAMPLE_INTERVAL}s)")
+        # --------------------------------------------------------------
+        # Video setup
+        # --------------------------------------------------------------
+        reader = VideoReader(video_path)
+
+        fps = reader.fps
+        total_frames = reader.frame_count
+        duration = reader.duration
+
+        frame_skip = frame_interval_for(
+            fps,
+            sample_interval_sec=self.SAMPLE_INTERVAL
+        )
+
+        frames_to_analyze = max(
+            1,
+            total_frames // frame_skip
+        )
+
+        print(
+            f"  [RoboflowModel] Analyzing {video_path} "
+            f"({duration:.0f}s, sampling every "
+            f"{self.SAMPLE_INTERVAL}s)"
+        )
+
+        print(
+            "  [RoboflowModel] "
+            "Batched inference enabled "
+            "(batch=4, concurrent=4)"
+        )
 
         frame_results = []
-        frame_idx = 0
+        analyzed = 0
 
-        try:
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    break
+        # --------------------------------------------------------------
+        # Batch settings
+        #
+        # We intentionally keep only a small number of frames in memory.
+        # --------------------------------------------------------------
+        batch_size = 4
 
-                if frame_idx % frame_skip == 0:
-                    timestamp = frame_idx / fps
+        batch_frames = []
+        batch_timestamps = []
 
-                    try:
-                        result = client.infer(frame, model_id=self.model_id)
-                        score = self._score_result(result)
-                        label = self._label_result(result)
-                    except Exception as e:
-                        print(f"  [RoboflowModel] Inference error at {timestamp:.1f}s: {e}")
+        # --------------------------------------------------------------
+        # Helper used whenever a batch is ready.
+        # --------------------------------------------------------------
+        def process_batch():
+
+            nonlocal analyzed
+
+            if not batch_frames:
+                return
+
+            try:
+
+                results = client.infer(
+                    batch_frames,
+                    model_id=self.model_id
+                )
+
+                # A single-image response may be returned as a dict.
+                # Normalize everything to a list.
+                if isinstance(results, dict):
+                    results = [results]
+
+                if not isinstance(results, list):
+                    results = [results]
+
+                # ------------------------------------------------------
+                # Protect against an unexpected response count.
+                # ------------------------------------------------------
+                if len(results) != len(batch_frames):
+
+                    print(
+                        "  [RoboflowModel] Warning: "
+                        f"sent {len(batch_frames)} frames but "
+                        f"received {len(results)} result(s)"
+                    )
+
+                # ------------------------------------------------------
+                # Process every frame in this batch.
+                # ------------------------------------------------------
+                for i, timestamp in enumerate(
+                    batch_timestamps
+                ):
+
+                    if i < len(results):
+
+                        result = results[i]
+
+                        score = self._score_result(
+                            result
+                        )
+
+                        label = self._label_result(
+                            result
+                        )
+
+                    else:
+
                         score = 0.0
                         label = "error"
 
@@ -76,25 +171,116 @@ class RoboflowModelAnalyzer:
                         "label": label,
                     })
 
-                    if frame_idx % (frame_skip * 10) == 0:
-                        print(f"  [RoboflowModel] {timestamp:.1f}s - score:{score:.2f} label:{label}")
+                    analyzed += 1
 
-                if progress_callback and total_frames > 0:
-                    progress_callback(min(frame_idx / total_frames, 1.0))
+                    # ----------------------------------------------
+                    # Diagnostic cadence
+                    # ----------------------------------------------
+                    if analyzed % 10 == 0:
 
-                frame_idx += 1
-        finally:
-            cap.release()
+                        print(
+                            f"  [RoboflowModel] "
+                            f"{timestamp:.1f}s - "
+                            f"score:{score:.2f} "
+                            f"label:{label}"
+                        )
 
+                    # ----------------------------------------------
+                    # Progress
+                    # ----------------------------------------------
+                    if progress_callback:
+
+                        progress_callback(
+                            min(
+                                analyzed
+                                / frames_to_analyze,
+                                1.0
+                            )
+                        )
+
+            except Exception as e:
+
+                # ------------------------------------------------------
+                # If an entire batch fails, preserve timestamps and
+                # record errors rather than aborting the video.
+                # ------------------------------------------------------
+                print(
+                    "  [RoboflowModel] "
+                    f"Batch inference error: {e}"
+                )
+
+                for timestamp in batch_timestamps:
+
+                    frame_results.append({
+                        "timestamp": timestamp,
+                        "score": 0.0,
+                        "label": "error",
+                    })
+
+                    analyzed += 1
+
+                    if progress_callback:
+
+                        progress_callback(
+                            min(
+                                analyzed
+                                / frames_to_analyze,
+                                1.0
+                            )
+                        )
+
+            finally:
+
+                batch_frames.clear()
+                batch_timestamps.clear()
+
+        # --------------------------------------------------------------
+        # Sample video and submit batches.
+        # --------------------------------------------------------------
+        with reader:
+
+            for video_frame in reader.iter_sampled(
+                frame_skip
+            ):
+
+                frame = video_frame.image
+                frame_idx = video_frame.index
+
+                timestamp = (
+                    frame_idx / fps
+                )
+
+                batch_frames.append(frame)
+                batch_timestamps.append(timestamp)
+
+                # ------------------------------------------------------
+                # Send a batch as soon as it reaches the configured size.
+                # ------------------------------------------------------
+                if len(batch_frames) >= batch_size:
+                    process_batch()
+
+            # ----------------------------------------------------------
+            # Flush the final partial batch.
+            # ----------------------------------------------------------
+            process_batch()
+
+        # --------------------------------------------------------------
+        # Completion
+        # --------------------------------------------------------------
         if progress_callback:
             progress_callback(1.0)
 
-        print(f"  [RoboflowModel] Done: {len(frame_results)} frames analyzed")
+        print(
+            f"  [RoboflowModel] Done: "
+            f"{len(frame_results)} frames analyzed"
+        )
 
         if not frame_results:
             return []
 
-        return self._build_highlights(frame_results)
+        return self._build_highlights(
+            frame_results
+        )
 
     def _score_result(self, result):
         """Score a frame based on inference result. Higher = more exciting."""

@@ -3999,13 +3999,13 @@ def get_profile(game_id):
                 custom = json.load(f)
             if game_id in custom:
                 # Merge with arc_raiders defaults so all keys exist
-                base = dict(GAME_PROFILES["arc_raiders"])
+                base = dict(GAME_PROFILES["league_of_legends"])
                 base.update(custom[game_id])
                 return base
         except (json.JSONDecodeError, KeyError):
             pass
 
-    return GAME_PROFILES["arc_raiders"]
+    return GAME_PROFILES["league_of_legends"]
 
 
 def get_all_games():

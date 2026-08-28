@@ -17,7 +17,7 @@ class ChatSpikeDetector:
     Works only with Twitch VOD URLs.
     """
 
-    def __init__(self, game_id="arc_raiders"):
+    def __init__(self, game_id="league_of_legends"):
         self.profile = get_profile(game_id)
         self.intensity_threshold = self.profile.get("intensity_threshold", 0.35)
 

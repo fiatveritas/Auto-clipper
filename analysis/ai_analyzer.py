@@ -26,7 +26,7 @@ class GrokVisionAnalyzer:
         "grok-2-vision-1212",
     ]
 
-    def __init__(self, api_key, game_id="arc_raiders"):
+    def __init__(self, api_key, game_id="league_of_legends"):
         self.api_key = api_key
         self.profile = get_profile(game_id)
         self.session = requests.Session()

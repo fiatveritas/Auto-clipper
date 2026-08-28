@@ -11,7 +11,7 @@ class AudioDetector:
     and groups them into highlight clips.
     """
 
-    def __init__(self, game_id="arc_raiders", profile=None):
+    def __init__(self, game_id="league_of_legends", profile=None):
         if profile is None:
             from analysis.game_profiles import get_profile
             profile = self.profile = get_profile(game_id)
@@ -82,20 +82,33 @@ class AudioDetector:
     def _extract_audio_levels(self, video_path):
         """Extract per-second peak audio levels using ffmpeg astats."""
         cmd = [
-            "ffmpeg", "-i", video_path,
-            "-af", "astats=metadata=1:reset=48000,"
-                   "ametadata=print:key=lavfi.astats.Overall.Peak_level:file=-",
-            "-f", "null", "-",
+            "ffmpeg",
+            "-hide_banner",
+            "-i", video_path,
+            "-vn",
+            "-af",
+            "astats=metadata=1:reset=48000,"
+            "ametadata=print:file=-",
+            "-f", "null",
+            "-",
         ]
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=600
+            )
         except (subprocess.TimeoutExpired, FileNotFoundError) as e:
             print(f"  [Audio] ffmpeg failed: {e}")
             return {}
 
         if result.returncode != 0:
-            print(f"  [Audio] ffmpeg error: {result.stderr[:200]}")
+            print(
+                f"  [Audio] ffmpeg error: "
+                f"{result.stderr[:200]}"
+            )
             return {}
 
         levels = {}
@@ -103,17 +116,42 @@ class AudioDetector:
 
         for line in result.stdout.splitlines():
             line = line.strip()
-            if line.startswith("pts_time:"):
+
+            # FFmpeg outputs timestamp headers like:
+            # frame:123 pts:125952 pts_time:2.856054
+            if "pts_time:" in line:
                 try:
-                    current_time = float(line.split(":", 1)[1])
+                    time_part = (
+                        line
+                        .split("pts_time:", 1)[1]
+                        .split()[0]
+                    )
+                    current_time = float(time_part)
+
                 except (ValueError, IndexError):
                     pass
-            elif line.startswith("lavfi.astats.Overall.Peak_level="):
+
+            elif line.startswith(
+                "lavfi.astats.Overall.Peak_level="
+            ):
                 try:
-                    level = float(line.split("=", 1)[1])
+                    value = line.split("=", 1)[1]
+
+                    # FFmpeg reports complete silence as -inf.
+                    if value.lower() == "-inf":
+                        continue
+
+                    level = float(value)
                     sec = int(current_time)
-                    if sec not in levels or level > levels[sec]:
+
+                    # Multiple audio frames can occur within one second.
+                    # Keep the loudest measurement for that second.
+                    if (
+                        sec not in levels
+                        or level > levels[sec]
+                    ):
                         levels[sec] = level
+
                 except (ValueError, IndexError):
                     pass
 

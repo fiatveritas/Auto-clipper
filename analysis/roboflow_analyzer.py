@@ -3,13 +3,14 @@ import cv2
 from analysis.game_profiles import get_profile
 
 
+
 class RoboflowWorkflowAnalyzer:
     """
     Uses Roboflow's inference SDK WebRTC streaming to run a hosted workflow
     (detect-and-classify) on video frames and identify gameplay highlights.
     """
 
-    def __init__(self, api_key, game_id="arc_raiders",
+    def __init__(self, api_key, game_id="league_of_legends",
                  workspace="beanies-workspace",
                  workflow="detect-and-classify-3"):
         self.api_key = api_key

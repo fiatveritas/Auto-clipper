@@ -4,6 +4,9 @@ import numpy as np
 from analysis.game_profiles import get_profile
 from analysis.video_utils import probe_video, frame_interval_for
 
+from analysis.video_reader import VideoReader
+
+
 
 class MotionDetector:
     """
@@ -16,7 +19,7 @@ class MotionDetector:
     produce very little motion.
     """
 
-    def __init__(self, game_id="arc_raiders", sample_fps=4):
+    def __init__(self, game_id="league_of_legends", sample_fps=4):
         self.profile = get_profile(game_id)
         self.sample_fps = sample_fps
         self.intensity_threshold = self.profile.get("intensity_threshold", 0.35)
@@ -25,71 +28,145 @@ class MotionDetector:
         """
         Analyze video using frame-to-frame motion energy.
 
+        Frames are sampled efficiently with VideoReader.iter_sampled()
+        and downscaled to half resolution before motion calculations.
+
         Returns:
             List of highlight dicts with timestamp, duration, label, confidence.
         """
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            raise Exception(f"Cannot open video: {video_path}")
+        reader = VideoReader(video_path)
 
-        fps, total_frames, duration = probe_video(cap)
-        frame_interval = frame_interval_for(fps, sample_fps=self.sample_fps)
+        fps = reader.fps
+        total_frames = reader.frame_count
+        duration = reader.duration
+
+        frame_interval = frame_interval_for(
+            fps,
+            sample_fps=self.sample_fps
+        )
+
         frames_to_analyze = total_frames // frame_interval
 
         scores = []
         prev_gray = None
         prev_prev_gray = None
-        frame_idx = 0
         analyzed = 0
 
-        print(f"  [Motion] Analyzing {duration:.0f}s video at {self.sample_fps} fps sample rate...")
+        print(
+            f"  [Motion] Analyzing {duration:.0f}s video "
+            f"at {self.sample_fps} fps sample rate..."
+        )
 
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
+        with reader:
 
-            if frame_idx % frame_interval == 0:
+            # Skip unused source frames with grab() and decode only
+            # the frames MotionDetector actually analyzes.
+            for video_frame in reader.iter_sampled(frame_interval):
+
+                frame = video_frame.image
+                frame_idx = video_frame.index
                 timestamp = frame_idx / fps
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                # Slight blur to reduce noise
-                gray = cv2.GaussianBlur(gray, (5, 5), 0)
+
+                # ------------------------------------------------------
+                # Downscale before grayscale / blur / motion analysis.
+                #
+                # 1920x1080 -> 960x540
+                # 2560x1440 -> 1280x720
+                #
+                # This preserves the original aspect ratio.
+                # ------------------------------------------------------
+                h, w = frame.shape[:2]
+
+                small_frame = cv2.resize(
+                    frame,
+                    (w // 2, h // 2),
+                    interpolation=cv2.INTER_AREA
+                )
+
+                gray = cv2.cvtColor(
+                    small_frame,
+                    cv2.COLOR_BGR2GRAY
+                )
+
+                # Slight blur to reduce noise.
+                gray = cv2.GaussianBlur(
+                    gray,
+                    (5, 5),
+                    0
+                )
 
                 motion_score = 0.0
                 label = "Idle"
 
                 if prev_gray is not None:
-                    # Basic frame difference
-                    diff = cv2.absdiff(gray, prev_gray)
-                    motion_energy = np.mean(diff) / 255.0
 
-                    # Detect "shake" — high variance in the diff means
-                    # the whole frame is shifting (camera shake, explosions)
-                    diff_std = np.std(diff) / 255.0
+                    # Basic frame difference.
+                    diff = cv2.absdiff(
+                        gray,
+                        prev_gray
+                    )
 
-                    # Acceleration: compare current motion to previous motion
+                    motion_energy = (
+                        float(np.mean(diff)) / 255.0
+                    )
+
+                    # High variance in the difference image indicates
+                    # camera shake, explosions, or intense movement.
+                    diff_std = (
+                        float(np.std(diff)) / 255.0
+                    )
+
+                    # Acceleration: compare current motion with the
+                    # previous motion interval.
                     accel_bonus = 0.0
+
                     if prev_prev_gray is not None:
-                        prev_diff = cv2.absdiff(prev_gray, prev_prev_gray)
-                        prev_energy = np.mean(prev_diff) / 255.0
-                        # Sudden increase in motion = action start
-                        if motion_energy > prev_energy * 1.5 and motion_energy > 0.02:
-                            accel_bonus = min((motion_energy - prev_energy) * 5.0, 0.3)
 
-                    # Combine signals
-                    # motion_energy: raw pixel change (0-1 range but usually 0-0.15)
-                    # diff_std: shake/explosion indicator
-                    # accel_bonus: sudden motion increase
-                    raw_score = (motion_energy * 8.0) + (diff_std * 4.0) + accel_bonus
-                    motion_score = min(raw_score, 1.0)
+                        prev_diff = cv2.absdiff(
+                            prev_gray,
+                            prev_prev_gray
+                        )
 
-                    # Classify
+                        prev_energy = (
+                            float(np.mean(prev_diff)) / 255.0
+                        )
+
+                        # Sudden increase in motion = action start.
+                        if (
+                            motion_energy > prev_energy * 1.5
+                            and motion_energy > 0.02
+                        ):
+                            accel_bonus = min(
+                                (motion_energy - prev_energy) * 5.0,
+                                0.3
+                            )
+
+                    # --------------------------------------------------
+                    # Combine signals.
+                    #
+                    # Keep the existing scoring behavior unchanged.
+                    # --------------------------------------------------
+                    raw_score = (
+                        (motion_energy * 8.0)
+                        + (diff_std * 4.0)
+                        + accel_bonus
+                    )
+
+                    motion_score = min(
+                        raw_score,
+                        1.0
+                    )
+
+                    # Classify.
                     if motion_score >= 0.7:
                         label = "Intense Action"
+
                     elif motion_score >= 0.45:
                         label = "Combat Movement"
+
                     elif motion_score >= 0.25:
                         label = "Active Movement"
+
                     else:
                         label = "Idle"
 
@@ -100,33 +177,65 @@ class MotionDetector:
                 })
 
                 if motion_score >= self.intensity_threshold * 0.5:
+
                     mins = int(timestamp) // 60
                     secs = int(timestamp) % 60
-                    print(f"  [Motion] {mins}:{secs:02d} - score:{motion_score:.3f} - {label}")
 
+                    print(
+                        f"  [Motion] {mins}:{secs:02d} - "
+                        f"score:{motion_score:.3f} - {label}"
+                    )
+
+                # Keep only the downscaled grayscale buffers between
+                # iterations rather than full-resolution images.
                 prev_prev_gray = prev_gray
                 prev_gray = gray
+
                 analyzed += 1
 
                 if progress_callback and analyzed % 20 == 0:
-                    progress_callback(analyzed / max(frames_to_analyze, 1))
-
-            frame_idx += 1
-
-        cap.release()
+                    progress_callback(
+                        analyzed / max(frames_to_analyze, 1)
+                    )
 
         if progress_callback:
             progress_callback(1.0)
 
-        top = sorted(scores, key=lambda s: s["score"], reverse=True)[:5]
-        print(f"  [Motion] Analyzed {analyzed} frames over {duration:.0f}s")
-        score_strs = [f'{s["score"]:.3f}@{int(s["timestamp"])}s' for s in top]
-        print(f"  [Motion] Top: {score_strs}")
+        top = sorted(
+            scores,
+            key=lambda s: s["score"],
+            reverse=True
+        )[:5]
 
-        highlights = self._find_highlights(scores, duration)
-        print(f"  [Motion] Found {len(highlights)} highlights")
+        print(
+            f"  [Motion] Analyzed {analyzed} frames "
+            f"over {duration:.0f}s"
+        )
+
+        score_strs = [
+            f'{s["score"]:.3f}@{int(s["timestamp"])}s'
+            for s in top
+        ]
+
+        print(
+            f"  [Motion] Top: {score_strs}"
+        )
+
+        highlights = self._find_highlights(
+            scores,
+            duration
+        )
+
+        print(
+            f"  [Motion] Found {len(highlights)} highlights"
+        )
+
         for h in highlights:
-            print(f"  [Motion]   -> {h['label']} at {int(h['timestamp'])}s ({h['duration']}s)")
+            print(
+                f"  [Motion]   -> {h['label']} at "
+                f"{int(h['timestamp'])}s "
+                f"({h['duration']}s)"
+            )
 
         return highlights
 

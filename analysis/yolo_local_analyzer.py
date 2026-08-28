@@ -3,6 +3,8 @@ import os
 
 from analysis.game_profiles import get_profile
 
+from analysis.video_reader import VideoReader
+
 
 class YoloLocalAnalyzer:
     """
@@ -12,7 +14,7 @@ class YoloLocalAnalyzer:
 
     SAMPLE_INTERVAL = 1.0  # seconds between sampled frames
 
-    def __init__(self, game_id="arc_raiders", model_path=None):
+    def __init__(self, game_id="league_of_legends", model_path=None):
         self.profile = get_profile(game_id)
         # Default: look for best.pt in the models/ folder
         if model_path is None:
@@ -22,7 +24,10 @@ class YoloLocalAnalyzer:
 
     def analyze_video(self, video_path, progress_callback=None):
         """
-        Run local YOLO inference on video frames and build highlights.
+        Run local YOLO inference on sampled video frames and build highlights.
+
+        Uses VideoReader.iter_sampled() so skipped source frames are advanced
+        with grab() rather than fully decoded.
 
         Args:
             video_path: Path to the video file
@@ -44,65 +49,142 @@ class YoloLocalAnalyzer:
                 f"Place your best.pt file in the models/ folder."
             )
 
-        model = YOLO(self.model_path)
+        # DirectML setup for AMD GPU.
+        try:
+            import onnxruntime as ort
 
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            raise RuntimeError(f"Cannot open video: {video_path}")
+            _orig_session = ort.InferenceSession
 
-        from analysis.video_utils import probe_video, frame_interval_for
-        fps, total_frames, duration = probe_video(cap)
-        frame_skip = frame_interval_for(fps, sample_interval_sec=self.SAMPLE_INTERVAL)
+            def _dml_session(path_or_bytes, *args, **kwargs):
+                kwargs["providers"] = [
+                    "DmlExecutionProvider",
+                    "CPUExecutionProvider"
+                ]
+                kwargs["provider_options"] = [
+                    {"device_id": 0},
+                    {}
+                ]
 
-        print(f"  [YoloLocal] Analyzing {video_path} ({duration:.0f}s, sampling every {self.SAMPLE_INTERVAL}s)")
-        print(f"  [YoloLocal] Using model: {self.model_path}")
+                return _orig_session(
+                    path_or_bytes,
+                    *args,
+                    **kwargs
+                )
+
+            ort.InferenceSession = _dml_session
+
+        except Exception:
+            pass
+
+        model = YOLO(
+            self.model_path
+            if self.model_path.endswith(".onnx")
+            else "models/best.onnx"
+        )
+
+        reader = VideoReader(video_path)
+
+        fps = reader.fps
+        total_frames = reader.frame_count
+        duration = reader.duration
+
+        from analysis.video_utils import frame_interval_for
+
+        frame_skip = frame_interval_for(
+            fps,
+            sample_interval_sec=self.SAMPLE_INTERVAL
+        )
+
+        frames_to_analyze = max(
+            1,
+            total_frames // frame_skip
+        )
+
+        print(
+            f"  [YoloLocal] Analyzing {video_path} "
+            f"({duration:.0f}s, sampling every "
+            f"{self.SAMPLE_INTERVAL}s)"
+        )
+
+        print(
+            f"  [YoloLocal] Using model: "
+            f"{self.model_path}"
+        )
 
         frame_results = []
-        frame_idx = 0
+        analyzed = 0
 
-        try:
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    break
+        with reader:
 
-                if frame_idx % frame_skip == 0:
-                    timestamp = frame_idx / fps
+            # Skip unused source frames with grab() and decode only
+            # the frames that will actually be sent to YOLO.
+            for video_frame in reader.iter_sampled(frame_skip):
 
-                    try:
-                        results = model(frame, verbose=False)
-                        score = self._score_result(results)
-                        label = self._label_result(results)
-                    except Exception as e:
-                        print(f"  [YoloLocal] Inference error at {timestamp:.1f}s: {e}")
-                        score = 0.0
-                        label = "error"
+                frame = video_frame.image
+                frame_idx = video_frame.index
+                timestamp = frame_idx / fps
 
-                    frame_results.append({
-                        "timestamp": timestamp,
-                        "score": score,
-                        "label": label,
-                    })
+                try:
+                    results = model(
+                        frame,
+                        verbose=False
+                    )
 
-                    if frame_idx % (frame_skip * 10) == 0:
-                        print(f"  [YoloLocal] {timestamp:.1f}s - score:{score:.2f} label:{label}")
+                    score = self._score_result(
+                        results
+                    )
 
-                if progress_callback and total_frames > 0:
-                    progress_callback(min(frame_idx / total_frames, 1.0))
+                    label = self._label_result(
+                        results
+                    )
 
-                frame_idx += 1
-        finally:
-            cap.release()
+                except Exception as e:
+                    print(
+                        f"  [YoloLocal] Inference error "
+                        f"at {timestamp:.1f}s: {e}"
+                    )
+
+                    score = 0.0
+                    label = "error"
+
+                frame_results.append({
+                    "timestamp": timestamp,
+                    "score": score,
+                    "label": label,
+                })
+
+                analyzed += 1
+
+                # Keep approximately the same 10-second diagnostic
+                # reporting cadence as the original implementation.
+                if analyzed % 10 == 0:
+                    print(
+                        f"  [YoloLocal] {timestamp:.1f}s - "
+                        f"score:{score:.2f} label:{label}"
+                    )
+
+                if progress_callback:
+                    progress_callback(
+                        min(
+                            analyzed / frames_to_analyze,
+                            1.0
+                        )
+                    )
 
         if progress_callback:
             progress_callback(1.0)
 
-        print(f"  [YoloLocal] Done: {len(frame_results)} frames analyzed")
+        print(
+            f"  [YoloLocal] Done: "
+            f"{len(frame_results)} frames analyzed"
+        )
 
         if not frame_results:
             return []
 
-        return self._build_highlights(frame_results)
+        return self._build_highlights(
+            frame_results
+        )
 
     def _score_result(self, results):
         """Score a frame based on YOLO detection results."""

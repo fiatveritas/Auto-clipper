@@ -3,6 +3,7 @@ import numpy as np
 
 from analysis.game_profiles import get_profile
 
+from analysis.video_reader import VideoReader
 
 class SceneChangeDetector:
     """
@@ -19,7 +20,7 @@ class SceneChangeDetector:
     An explosion might not move many pixels but massively shifts the histogram.
     """
 
-    def __init__(self, game_id="arc_raiders", sample_fps=4):
+    def __init__(self, game_id="league_of_legends", sample_fps=4):
         self.profile = get_profile(game_id)
         self.sample_fps = sample_fps
         self.intensity_threshold = self.profile.get("intensity_threshold", 0.35)
@@ -28,86 +29,182 @@ class SceneChangeDetector:
         """
         Analyze video using histogram-based scene change detection.
 
+        Frames are sampled efficiently with VideoReader.iter_sampled()
+        and downscaled to half resolution before histogram and brightness
+        calculations.
+
         Returns:
             List of highlight dicts with timestamp, duration, label, confidence.
         """
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            raise Exception(f"Cannot open video: {video_path}")
+        reader = VideoReader(video_path)
 
-        from analysis.video_utils import probe_video
-        fps, total_frames, duration = probe_video(cap)
+        fps = reader.fps
+        total_frames = reader.frame_count
+        duration = reader.duration
 
-        frame_interval = max(1, int(fps / self.sample_fps))
+        frame_interval = max(
+            1,
+            int(fps / self.sample_fps)
+        )
+
         frames_to_analyze = total_frames // frame_interval
 
         prev_hists = None
         prev_brightness = None
         scores = []
-        frame_idx = 0
         analyzed = 0
 
-        print(f"  [Scene] Analyzing {duration:.0f}s video for scene changes...")
+        print(
+            f"  [Scene] Analyzing {duration:.0f}s video "
+            f"for scene changes..."
+        )
 
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
+        with reader:
 
-            if frame_idx % frame_interval == 0:
+            # Skip unused source frames with grab() and decode only
+            # frames that SceneChangeDetector actually analyzes.
+            for video_frame in reader.iter_sampled(frame_interval):
+
+                frame = video_frame.image
+                frame_idx = video_frame.index
                 timestamp = frame_idx / fps
 
-                # Compute color histograms for each channel
+                # ------------------------------------------------------
+                # Downscale before histogram / brightness analysis.
+                #
+                # 1920x1080 -> 960x540
+                # 2560x1440 -> 1280x720
+                #
+                # This preserves the original aspect ratio while
+                # reducing the working pixel count by 75%.
+                # ------------------------------------------------------
+                h, w = frame.shape[:2]
+
+                small_frame = cv2.resize(
+                    frame,
+                    (w // 2, h // 2),
+                    interpolation=cv2.INTER_AREA
+                )
+
+                # ------------------------------------------------------
+                # Compute color histograms from the downscaled frame.
+                # ------------------------------------------------------
                 hists = []
+
                 for ch in range(3):
-                    hist = cv2.calcHist([frame], [ch], None, [64], [0, 256])
-                    cv2.normalize(hist, hist)
+                    hist = cv2.calcHist(
+                        [small_frame],
+                        [ch],
+                        None,
+                        [64],
+                        [0, 256]
+                    )
+
+                    cv2.normalize(
+                        hist,
+                        hist
+                    )
+
                     hists.append(hist)
 
-                # Compute overall brightness
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                brightness = np.mean(gray) / 255.0
+                # ------------------------------------------------------
+                # Compute brightness from the downscaled frame.
+                # ------------------------------------------------------
+                gray = cv2.cvtColor(
+                    small_frame,
+                    cv2.COLOR_BGR2GRAY
+                )
+
+                brightness = (
+                    float(np.mean(gray)) / 255.0
+                )
 
                 scene_score = 0.0
                 label = "Stable"
 
                 if prev_hists is not None:
-                    # Compare histograms using correlation
-                    # correlation = 1.0 means identical, 0.0 means completely different
+
+                    # --------------------------------------------------
+                    # Histogram correlation.
+                    # --------------------------------------------------
                     diffs = []
+
                     for i in range(3):
-                        corr = cv2.compareHist(prev_hists[i], hists[i], cv2.HISTCMP_CORREL)
-                        # Convert: 1.0 (same) -> 0.0, 0.0 (different) -> 1.0
-                        diffs.append(1.0 - max(corr, 0.0))
+                        corr = cv2.compareHist(
+                            prev_hists[i],
+                            hists[i],
+                            cv2.HISTCMP_CORREL
+                        )
 
-                    # Average color shift across channels
-                    color_shift = sum(diffs) / len(diffs)
+                        diffs.append(
+                            1.0 - max(corr, 0.0)
+                        )
 
-                    # Brightness flash detection
+                    color_shift = (
+                        sum(diffs) / len(diffs)
+                    )
+
+                    # --------------------------------------------------
+                    # Brightness flash detection.
+                    # --------------------------------------------------
                     flash_score = 0.0
+
                     if prev_brightness is not None:
-                        brightness_delta = abs(brightness - prev_brightness)
-                        # Explosions/muzzle flash cause sudden brightness spikes
+                        brightness_delta = abs(
+                            brightness - prev_brightness
+                        )
+
                         if brightness_delta > 0.08:
-                            flash_score = min(brightness_delta * 5.0, 0.5)
+                            flash_score = min(
+                                brightness_delta * 5.0,
+                                0.5
+                            )
 
-                    # Chi-square distance (more sensitive to distribution changes)
+                    # --------------------------------------------------
+                    # Chi-square histogram distance.
+                    # --------------------------------------------------
                     chi_scores = []
-                    for i in range(3):
-                        chi = cv2.compareHist(prev_hists[i], hists[i], cv2.HISTCMP_CHISQR)
-                        chi_scores.append(min(chi / 10.0, 1.0))  # Normalize
-                    chi_shift = sum(chi_scores) / len(chi_scores)
 
-                    # Combine signals
-                    raw_score = (color_shift * 3.0) + (chi_shift * 2.0) + flash_score
-                    scene_score = min(raw_score, 1.0)
+                    for i in range(3):
+                        chi = cv2.compareHist(
+                            prev_hists[i],
+                            hists[i],
+                            cv2.HISTCMP_CHISQR
+                        )
+
+                        chi_scores.append(
+                            min(chi / 10.0, 1.0)
+                        )
+
+                    chi_shift = (
+                        sum(chi_scores) / len(chi_scores)
+                    )
+
+                    # --------------------------------------------------
+                    # Combine signals.
+                    #
+                    # Scoring weights and thresholds remain unchanged.
+                    # --------------------------------------------------
+                    raw_score = (
+                        (color_shift * 3.0)
+                        + (chi_shift * 2.0)
+                        + flash_score
+                    )
+
+                    scene_score = min(
+                        raw_score,
+                        1.0
+                    )
 
                     if scene_score >= 0.7:
                         label = "Major Scene Change"
+
                     elif scene_score >= 0.45:
                         label = "Visual Disruption"
+
                     elif scene_score >= 0.25:
                         label = "Scene Shift"
+
                     else:
                         label = "Stable"
 
@@ -118,33 +215,63 @@ class SceneChangeDetector:
                 })
 
                 if scene_score >= self.intensity_threshold * 0.5:
+
                     mins = int(timestamp) // 60
                     secs = int(timestamp) % 60
-                    print(f"  [Scene] {mins}:{secs:02d} - score:{scene_score:.3f} - {label}")
+
+                    print(
+                        f"  [Scene] {mins}:{secs:02d} - "
+                        f"score:{scene_score:.3f} - {label}"
+                    )
 
                 prev_hists = hists
                 prev_brightness = brightness
+
                 analyzed += 1
 
                 if progress_callback and analyzed % 20 == 0:
-                    progress_callback(analyzed / max(frames_to_analyze, 1))
-
-            frame_idx += 1
-
-        cap.release()
+                    progress_callback(
+                        analyzed / max(frames_to_analyze, 1)
+                    )
 
         if progress_callback:
             progress_callback(1.0)
 
-        top = sorted(scores, key=lambda s: s["score"], reverse=True)[:5]
-        print(f"  [Scene] Analyzed {analyzed} frames over {duration:.0f}s")
-        score_strs = [f'{s["score"]:.3f}@{int(s["timestamp"])}s' for s in top]
-        print(f"  [Scene] Top: {score_strs}")
+        top = sorted(
+            scores,
+            key=lambda s: s["score"],
+            reverse=True
+        )[:5]
 
-        highlights = self._find_highlights(scores, duration)
-        print(f"  [Scene] Found {len(highlights)} highlights")
+        print(
+            f"  [Scene] Analyzed {analyzed} frames "
+            f"over {duration:.0f}s"
+        )
+
+        score_strs = [
+            f'{s["score"]:.3f}@{int(s["timestamp"])}s'
+            for s in top
+        ]
+
+        print(
+            f"  [Scene] Top: {score_strs}"
+        )
+
+        highlights = self._find_highlights(
+            scores,
+            duration
+        )
+
+        print(
+            f"  [Scene] Found {len(highlights)} highlights"
+        )
+
         for h in highlights:
-            print(f"  [Scene]   -> {h['label']} at {int(h['timestamp'])}s ({h['duration']}s)")
+            print(
+                f"  [Scene]   -> {h['label']} at "
+                f"{int(h['timestamp'])}s "
+                f"({h['duration']}s)"
+            )
 
         return highlights
 

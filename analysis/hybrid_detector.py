@@ -1,8 +1,10 @@
 import cv2
 import numpy as np
 import subprocess
+import concurrent.futures
 
 from analysis.game_profiles import get_profile
+from analysis.video_reader import VideoReader
 
 
 class HybridDetector:
@@ -19,7 +21,7 @@ class HybridDetector:
     things that any single detector would miss on its own.
     """
 
-    def __init__(self, game_id="arc_raiders", sample_fps=4):
+    def __init__(self, game_id="league_of_legends", sample_fps=4):
         self.profile = get_profile(game_id)
         self.sample_fps = sample_fps
         self.intensity_threshold = self.profile.get("intensity_threshold", 0.35)
@@ -28,55 +30,217 @@ class HybridDetector:
 
     def analyze_video(self, video_path, progress_callback=None):
         """
-        Run all three analyses and fuse the results.
+        Run audio analysis and visual analysis concurrently, then fuse
+        audio + motion + scene scores after both processing paths complete.
 
         Returns:
-            List of highlight dicts with timestamp, duration, label, confidence.
+            List of highlight dicts with timestamp, duration, label,
+            confidence.
         """
         if progress_callback:
             progress_callback(0.02)
 
-        # Phase 1: Audio (fast, no video decoding)
-        print("  [Hybrid] Phase 1/3: Audio analysis...")
-        audio_levels = self._extract_audio_levels(video_path)
-        if progress_callback:
-            progress_callback(0.20)
+        print(
+            "  [Hybrid] Starting concurrent audio + visual analysis..."
+        )
 
-        # Phase 2+3: Motion + Scene change in a single video pass
-        print("  [Hybrid] Phase 2/3: Motion + Scene change (single pass)...")
-        scores = self._analyze_video_pass(video_path, audio_levels, progress_callback)
+        # --------------------------------------------------------------
+        # Start FFmpeg audio extraction in a background thread.
+        # --------------------------------------------------------------
+        executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=1
+        )
 
-        if progress_callback:
-            progress_callback(0.95)
+        audio_future = executor.submit(
+            self._extract_audio_levels,
+            video_path
+        )
 
-        duration = scores[-1]["timestamp"] + 1 if scores else 0
-        highlights = self._find_highlights(scores, duration)
+        try:
+            # ----------------------------------------------------------
+            # Run Motion + Scene analysis immediately on the main thread.
+            #
+            # This pass intentionally does NOT need audio_levels.
+            # ----------------------------------------------------------
+            print(
+                "  [Hybrid] Motion + Scene analysis..."
+            )
 
-        if progress_callback:
-            progress_callback(1.0)
+            scores = self._analyze_video_pass(
+                video_path,
+                progress_callback
+            )
 
-        print(f"  [Hybrid] Found {len(highlights)} highlights")
-        for h in highlights:
-            print(f"  [Hybrid]   -> {h['label']} at {int(h['timestamp'])}s ({h['duration']}s, conf:{h['confidence']})")
+            # ----------------------------------------------------------
+            # Wait only for whatever portion of audio extraction remains.
+            # ----------------------------------------------------------
+            audio_levels = audio_future.result()
 
-        return highlights
+            # ----------------------------------------------------------
+            # Fuse audio into the completed visual scores.
+            # ----------------------------------------------------------
+            for item in scores:
+
+                timestamp = item["timestamp"]
+
+                motion_score = item.get(
+                    "motion_score",
+                    0.0
+                )
+
+                scene_score = item.get(
+                    "scene_score",
+                    0.0
+                )
+
+                # Preserve menu suppression.
+                if item.get("is_menu", False):
+                    item["audio_score"] = 0.0
+                    item["score"] = 0.0
+                    item["label"] = "Menu/UI"
+                    continue
+
+                audio_score = self._db_to_score(
+                    audio_levels.get(
+                        int(timestamp),
+                        -100
+                    )
+                )
+
+                # ------------------------------------------------------
+                # Original Hybrid fusion behavior.
+                # ------------------------------------------------------
+                max_score = max(
+                    audio_score,
+                    motion_score,
+                    scene_score
+                )
+
+                signals_active = sum(
+                    1
+                    for s in [
+                        audio_score,
+                        motion_score,
+                        scene_score
+                    ]
+                    if s >= 0.2
+                )
+
+                if signals_active >= 3:
+                    fused = min(
+                        max_score * 1.3,
+                        1.0
+                    )
+
+                elif signals_active >= 2:
+                    fused = min(
+                        max_score * 1.15,
+                        1.0
+                    )
+
+                else:
+                    fused = max_score
+
+                # ------------------------------------------------------
+                # Original Hybrid classification behavior.
+                # ------------------------------------------------------
+                if fused < 0.2:
+                    label = "Idle"
+
+                elif (
+                    audio_score >= motion_score
+                    and audio_score >= scene_score
+                ):
+                    label = (
+                        "Loud Combat"
+                        if audio_score >= 0.6
+                        else "Combat Audio"
+                    )
+
+                elif motion_score >= scene_score:
+                    label = (
+                        "Intense Action"
+                        if motion_score >= 0.6
+                        else "Active Movement"
+                    )
+
+                else:
+                    label = (
+                        "Visual Disruption"
+                        if scene_score >= 0.6
+                        else "Scene Shift"
+                    )
+
+                item["audio_score"] = audio_score
+                item["score"] = fused
+                item["label"] = label
+
+            if progress_callback:
+                progress_callback(0.95)
+
+            duration = (
+                scores[-1]["timestamp"] + 1
+                if scores
+                else 0
+            )
+
+            highlights = self._find_highlights(
+                scores,
+                duration
+            )
+
+            if progress_callback:
+                progress_callback(1.0)
+
+            print(
+                f"  [Hybrid] Found "
+                f"{len(highlights)} highlights"
+            )
+
+            for h in highlights:
+                print(
+                    f"  [Hybrid]   -> "
+                    f"{h['label']} at "
+                    f"{int(h['timestamp'])}s "
+                    f"({h['duration']}s, "
+                    f"conf:{h['confidence']})"
+                )
+
+            return highlights
+
+        finally:
+            executor.shutdown(wait=True)
 
     def _extract_audio_levels(self, video_path):
         """Extract per-second peak audio levels using ffmpeg."""
         cmd = [
-            "ffmpeg", "-i", video_path,
-            "-af", "astats=metadata=1:reset=48000,"
-                   "ametadata=print:key=lavfi.astats.Overall.Peak_level:file=-",
-            "-f", "null", "-",
+            "ffmpeg",
+            "-hide_banner",
+            "-i", video_path,
+            "-vn",
+            "-af",
+            "astats=metadata=1:reset=48000,"
+            "ametadata=print:file=-",
+            "-f", "null",
+            "-",
         ]
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=600
+            )
         except (subprocess.TimeoutExpired, FileNotFoundError) as e:
             print(f"  [Hybrid] ffmpeg failed: {e}")
             return {}
 
         if result.returncode != 0:
+            print(
+                f"  [Hybrid] ffmpeg error: "
+                f"{result.stderr[:200]}"
+            )
             return {}
 
         levels = {}
@@ -84,22 +248,52 @@ class HybridDetector:
 
         for line in result.stdout.splitlines():
             line = line.strip()
-            if line.startswith("pts_time:"):
+
+            if "pts_time:" in line:
                 try:
-                    current_time = float(line.split(":", 1)[1])
-                except (ValueError, IndexError):
-                    pass
-            elif line.startswith("lavfi.astats.Overall.Peak_level="):
-                try:
-                    level = float(line.split("=", 1)[1])
-                    sec = int(current_time)
-                    if sec not in levels or level > levels[sec]:
-                        levels[sec] = level
+                    time_part = (
+                        line
+                        .split("pts_time:", 1)[1]
+                        .split()[0]
+                    )
+                    current_time = float(time_part)
+
                 except (ValueError, IndexError):
                     pass
 
-        loud = sum(1 for v in levels.values() if v >= self.audio_threshold_db)
-        print(f"  [Hybrid] Audio: {len(levels)}s analyzed, {loud} loud seconds")
+            elif line.startswith(
+                "lavfi.astats.Overall.Peak_level="
+            ):
+                try:
+                    value = line.split("=", 1)[1]
+
+                    if value.lower() == "-inf":
+                        continue
+
+                    level = float(value)
+                    sec = int(current_time)
+
+                    if (
+                        sec not in levels
+                        or level > levels[sec]
+                    ):
+                        levels[sec] = level
+
+                except (ValueError, IndexError):
+                    pass
+
+        loud = sum(
+            1
+            for v in levels.values()
+            if v >= self.audio_threshold_db
+        )
+
+        print(
+            f"  [Hybrid] Audio: "
+            f"{len(levels)}s analyzed, "
+            f"{loud} loud seconds"
+        )
+
         return levels
 
     def _db_to_score(self, level_db):
@@ -145,149 +339,367 @@ class HybridDetector:
 
         return False
 
-    def _analyze_video_pass(self, video_path, audio_levels, progress_callback):
-        """Single pass through video computing motion + scene change + audio fusion."""
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            raise Exception(f"Cannot open video: {video_path}")
+    def _analyze_video_pass(
+        self,
+        video_path,
+        progress_callback
+    ):
+        """
+        Single visual pass computing Motion + Scene signals.
 
-        from analysis.video_utils import probe_video, frame_interval_for
-        fps, total_frames, _duration = probe_video(cap)
-        frame_interval = frame_interval_for(fps, sample_fps=self.sample_fps)
-        frames_to_analyze = total_frames // frame_interval
+        Audio extraction runs independently in a background thread and is
+        fused after this pass completes.
+
+        Uses efficient sampled decoding and half-resolution working
+        buffers for Motion + Scene processing.
+        """
+        reader = VideoReader(video_path)
+
+        from analysis.video_utils import frame_interval_for
+
+        fps = reader.fps
+        total_frames = reader.frame_count
+
+        frame_interval = frame_interval_for(
+            fps,
+            sample_fps=self.sample_fps
+        )
+
+        frames_to_analyze = (
+            total_frames // frame_interval
+        )
 
         prev_gray = None
         prev_hists = None
         prev_brightness = None
         prev_motion_energy = 0.0
+
         scores = []
-        frame_idx = 0
         analyzed = 0
 
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
+        with reader:
 
-            if frame_idx % frame_interval == 0:
+            for video_frame in reader.iter_sampled(
+                frame_interval
+            ):
+
+                frame = video_frame.image
+                frame_idx = video_frame.index
                 timestamp = frame_idx / fps
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                gray_blur = cv2.GaussianBlur(gray, (5, 5), 0)
-                brightness = np.mean(gray) / 255.0
 
-                # Menu/inventory suppression — skip UI frames entirely
-                if self.profile.get("menu_suppress", "on") != "off" and self._is_menu_frame(frame, gray):
+                # ------------------------------------------------------
+                # Preserve full-resolution menu behavior.
+                # ------------------------------------------------------
+                menu_gray = cv2.cvtColor(
+                    frame,
+                    cv2.COLOR_BGR2GRAY
+                )
+
+                if (
+                    self.profile.get(
+                        "menu_suppress",
+                        "on"
+                    ) != "off"
+                    and self._is_menu_frame(
+                        frame,
+                        menu_gray
+                    )
+                ):
                     scores.append({
                         "score": 0.0,
                         "label": "Menu/UI",
                         "timestamp": timestamp,
+                        "motion_score": 0.0,
+                        "scene_score": 0.0,
+                        "is_menu": True,
                     })
-                    prev_gray = gray_blur
-                    prev_brightness = brightness
+
                     analyzed += 1
-                    if progress_callback and analyzed % 20 == 0:
-                        progress_callback(0.20 + (analyzed / max(frames_to_analyze, 1)) * 0.70)
-                    frame_idx += 1
+
+                    if (
+                        progress_callback
+                        and analyzed % 20 == 0
+                    ):
+                        progress_callback(
+                            0.05
+                            + (
+                                analyzed
+                                / max(
+                                    frames_to_analyze,
+                                    1
+                                )
+                            )
+                            * 0.85
+                        )
+
                     continue
 
-                # Color histograms for scene change
+                # ------------------------------------------------------
+                # Shared half-resolution working frame.
+                # ------------------------------------------------------
+                h, w = frame.shape[:2]
+
+                small_frame = cv2.resize(
+                    frame,
+                    (w // 2, h // 2),
+                    interpolation=cv2.INTER_AREA
+                )
+
+                # ------------------------------------------------------
+                # Motion buffer.
+                # ------------------------------------------------------
+                gray = cv2.cvtColor(
+                    small_frame,
+                    cv2.COLOR_BGR2GRAY
+                )
+
+                gray_blur = cv2.GaussianBlur(
+                    gray,
+                    (5, 5),
+                    0
+                )
+
+                brightness = (
+                    float(np.mean(gray)) / 255.0
+                )
+
+                # ------------------------------------------------------
+                # Scene histograms.
+                # ------------------------------------------------------
                 hists = []
+
                 for ch in range(3):
-                    hist = cv2.calcHist([frame], [ch], None, [64], [0, 256])
-                    cv2.normalize(hist, hist)
+
+                    hist = cv2.calcHist(
+                        [small_frame],
+                        [ch],
+                        None,
+                        [64],
+                        [0, 256]
+                    )
+
+                    cv2.normalize(
+                        hist,
+                        hist
+                    )
+
                     hists.append(hist)
 
-                # --- Signal 1: Audio ---
-                audio_score = self._db_to_score(audio_levels.get(int(timestamp), -100))
-
-                # --- Signal 2: Motion ---
+                # ------------------------------------------------------
+                # Motion signal.
+                # ------------------------------------------------------
                 motion_score = 0.0
+
                 if prev_gray is not None:
-                    diff = cv2.absdiff(gray_blur, prev_gray)
-                    motion_energy = np.mean(diff) / 255.0
-                    diff_std = np.std(diff) / 255.0
 
-                    # Acceleration bonus
+                    diff = cv2.absdiff(
+                        gray_blur,
+                        prev_gray
+                    )
+
+                    motion_energy = (
+                        float(np.mean(diff))
+                        / 255.0
+                    )
+
+                    diff_std = (
+                        float(np.std(diff))
+                        / 255.0
+                    )
+
                     accel = 0.0
-                    if motion_energy > prev_motion_energy * 1.5 and motion_energy > 0.02:
-                        accel = min((motion_energy - prev_motion_energy) * 5.0, 0.3)
 
-                    motion_score = min((motion_energy * 8.0) + (diff_std * 4.0) + accel, 1.0)
-                    prev_motion_energy = motion_energy
+                    if (
+                        motion_energy
+                        > prev_motion_energy * 1.5
+                        and motion_energy > 0.02
+                    ):
+                        accel = min(
+                            (
+                                motion_energy
+                                - prev_motion_energy
+                            )
+                            * 5.0,
+                            0.3
+                        )
 
-                # --- Signal 3: Scene change ---
+                    motion_score = min(
+                        (motion_energy * 8.0)
+                        + (diff_std * 4.0)
+                        + accel,
+                        1.0
+                    )
+
+                    prev_motion_energy = (
+                        motion_energy
+                    )
+
+                # ------------------------------------------------------
+                # Scene signal.
+                # ------------------------------------------------------
                 scene_score = 0.0
+
                 if prev_hists is not None:
+
                     diffs = []
                     chi_scores = []
-                    for i in range(3):
-                        corr = cv2.compareHist(prev_hists[i], hists[i], cv2.HISTCMP_CORREL)
-                        diffs.append(1.0 - max(corr, 0.0))
-                        chi = cv2.compareHist(prev_hists[i], hists[i], cv2.HISTCMP_CHISQR)
-                        chi_scores.append(min(chi / 10.0, 1.0))
 
-                    color_shift = sum(diffs) / len(diffs)
-                    chi_shift = sum(chi_scores) / len(chi_scores)
+                    for i in range(3):
+
+                        corr = cv2.compareHist(
+                            prev_hists[i],
+                            hists[i],
+                            cv2.HISTCMP_CORREL
+                        )
+
+                        diffs.append(
+                            1.0 - max(
+                                corr,
+                                0.0
+                            )
+                        )
+
+                        chi = cv2.compareHist(
+                            prev_hists[i],
+                            hists[i],
+                            cv2.HISTCMP_CHISQR
+                        )
+
+                        chi_scores.append(
+                            min(
+                                chi / 10.0,
+                                1.0
+                            )
+                        )
+
+                    color_shift = (
+                        sum(diffs)
+                        / len(diffs)
+                    )
+
+                    chi_shift = (
+                        sum(chi_scores)
+                        / len(chi_scores)
+                    )
 
                     flash = 0.0
+
                     if prev_brightness is not None:
-                        bd = abs(brightness - prev_brightness)
+
+                        bd = abs(
+                            brightness
+                            - prev_brightness
+                        )
+
                         if bd > 0.08:
-                            flash = min(bd * 5.0, 0.5)
+                            flash = min(
+                                bd * 5.0,
+                                0.5
+                            )
 
-                    scene_score = min((color_shift * 3.0) + (chi_shift * 2.0) + flash, 1.0)
+                    scene_score = min(
+                        (color_shift * 3.0)
+                        + (chi_shift * 2.0)
+                        + flash,
+                        1.0
+                    )
 
-                # --- Fusion ---
-                # Take the max of any signal, then boost if multiple agree
-                max_score = max(audio_score, motion_score, scene_score)
-                signals_active = sum(1 for s in [audio_score, motion_score, scene_score] if s >= 0.2)
+                # ------------------------------------------------------
+                # Store raw visual signals.
+                #
+                # Temporary visual-only score/label make diagnostics
+                # possible before final audio fusion.
+                # ------------------------------------------------------
+                visual_score = max(
+                    motion_score,
+                    scene_score
+                )
 
-                # Multi-signal agreement bonus: if 2+ signals fire, boost confidence
-                if signals_active >= 3:
-                    fused = min(max_score * 1.3, 1.0)
-                elif signals_active >= 2:
-                    fused = min(max_score * 1.15, 1.0)
-                else:
-                    fused = max_score
+                if visual_score < 0.2:
+                    visual_label = "Idle"
 
-                # Classify based on which signal dominated
-                if fused < 0.2:
-                    label = "Idle"
-                elif audio_score >= motion_score and audio_score >= scene_score:
-                    label = "Loud Combat" if audio_score >= 0.6 else "Combat Audio"
                 elif motion_score >= scene_score:
-                    label = "Intense Action" if motion_score >= 0.6 else "Active Movement"
+                    visual_label = (
+                        "Intense Action"
+                        if motion_score >= 0.6
+                        else "Active Movement"
+                    )
+
                 else:
-                    label = "Visual Disruption" if scene_score >= 0.6 else "Scene Shift"
+                    visual_label = (
+                        "Visual Disruption"
+                        if scene_score >= 0.6
+                        else "Scene Shift"
+                    )
 
                 scores.append({
-                    "score": fused,
-                    "label": label,
+                    "score": visual_score,
+                    "label": visual_label,
                     "timestamp": timestamp,
+                    "motion_score": motion_score,
+                    "scene_score": scene_score,
+                    "is_menu": False,
                 })
 
-                if fused >= self.intensity_threshold * 0.5:
+                if (
+                    visual_score
+                    >= self.intensity_threshold * 0.5
+                ):
                     mins = int(timestamp) // 60
                     secs = int(timestamp) % 60
-                    parts = f"a:{audio_score:.2f} m:{motion_score:.2f} s:{scene_score:.2f}"
-                    print(f"  [Hybrid] {mins}:{secs:02d} - fused:{fused:.3f} ({parts}) - {label}")
+
+                    print(
+                        f"  [Hybrid] "
+                        f"{mins}:{secs:02d} - "
+                        f"visual:{visual_score:.3f} "
+                        f"(m:{motion_score:.2f} "
+                        f"s:{scene_score:.2f}) - "
+                        f"{visual_label}"
+                    )
 
                 prev_gray = gray_blur
                 prev_hists = hists
                 prev_brightness = brightness
+
                 analyzed += 1
 
-                if progress_callback and analyzed % 20 == 0:
-                    progress_callback(0.20 + (analyzed / max(frames_to_analyze, 1)) * 0.70)
+                if (
+                    progress_callback
+                    and analyzed % 20 == 0
+                ):
+                    progress_callback(
+                        0.05
+                        + (
+                            analyzed
+                            / max(
+                                frames_to_analyze,
+                                1
+                            )
+                        )
+                        * 0.85
+                    )
 
-            frame_idx += 1
+        top = sorted(
+            scores,
+            key=lambda s: s["score"],
+            reverse=True
+        )[:5]
 
-        cap.release()
+        print(
+            f"  [Hybrid] Visual pass analyzed "
+            f"{analyzed} frames"
+        )
 
-        top = sorted(scores, key=lambda s: s["score"], reverse=True)[:5]
-        print(f"  [Hybrid] Analyzed {analyzed} frames")
-        score_strs = [f'{s["score"]:.3f}@{int(s["timestamp"])}s' for s in top]
-        print(f"  [Hybrid] Top: {score_strs}")
+        score_strs = [
+            f'{s["score"]:.3f}@'
+            f'{int(s["timestamp"])}s'
+            for s in top
+        ]
+
+        print(
+            f"  [Hybrid] Visual Top: "
+            f"{score_strs}"
+        )
 
         return scores
 
